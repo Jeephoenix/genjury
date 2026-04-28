@@ -374,13 +374,28 @@ const useGameStore = create((set, get) => ({
         entryFeeWei,
       })
       rememberRoom(addr)
-            set({ roomCode: addr, myId: me })
+      // Seed the store with what we already know about the freshly-deployed
+      // contract so the Lobby renders with the correct entry fee / round count
+      // immediately, instead of flashing default 0-GEN "free-play" copy until
+      // the first chain poll completes after the join confirms.
+      set({
+        roomCode:     addr,
+        myId:         me,
+        phase:        PHASES.LOBBY,
+        maxRounds,
+        entryFeeWei,
+        prizePoolWei: 0n,
+        houseAddress: me,           // deployer is always the house
+        houseCutBps:  300,          // hardcoded 3% in the contract
+      })
+      // Start polling immediately — the contract is live, so the lobby can
+      // already pull authoritative state while the join tx is in flight.
+      startPolling(get)
       pushToast('success', 'Contract deployed — joining…')
       await callMethod(addr, 'join', [name], entryFeeWei,
         entryFeeWei > 0n ? 'Join room (paying entry fee)' : 'Join room')
       pushToast('success', 'Room created!')
       set({ loading: false })
-      startPolling(get)
     } catch (e) {
       console.error(e)
       set({ loading: false, roomCode: null })
@@ -405,13 +420,19 @@ const useGameStore = create((set, get) => ({
       const fee = safeBigInt(raw?.entryFee)
       const playersMap = raw?.players || {}
       const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
+      // Seed the store with the room's real economics + phase BEFORE awaiting
+      // the join transaction, so the lobby shows the correct entry fee and
+      // prize pool right away instead of flashing default 0-GEN values.
+      applyContractState(get, raw)
+      // Start polling immediately so the lobby keeps refreshing while the
+      // join tx is pending.
+      startPolling(get)
       if (!alreadyIn) {
         await callMethod(addr, 'join', [name], fee,
           fee > 0n ? 'Join room (paying entry fee)' : 'Join room')
       }
       pushToast('success', 'Joined room!')
       set({ loading: false })
-      startPolling(get)
     } catch (e) {
       console.error(e)
       set({ loading: false, roomCode: null })
