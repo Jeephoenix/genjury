@@ -14,13 +14,14 @@ export default function ScoreboardPage() {
   const resetGame    = useGameStore(s => s.resetGame)
   const startGame    = useGameStore(s => s.startGame)
 
-  const winnerAddress            = useGameStore(s => s.winnerAddress)
-  const winnerWinningsWei        = useGameStore(s => s.winnerWinningsWei)
-  const prizeDistributed         = useGameStore(s => s.prizeDistributed)
-  const platformOwner            = useGameStore(s => s.platformOwner)
-  const platformFeesCollectedWei = useGameStore(s => s.platformFeesCollectedWei)
-  const claimPrize               = useGameStore(s => s.claimPrize)
-  const claimPlatformFees        = useGameStore(s => s.claimPlatformFees)
+  const winnerAddress         = useGameStore(s => s.winnerAddress)
+  const winnerWinningsWei     = useGameStore(s => s.winnerWinningsWei)
+  const prizeDistributed      = useGameStore(s => s.prizeDistributed)
+  const houseAddress          = useGameStore(s => s.houseAddress)
+  const houseCutBps           = useGameStore(s => s.houseCutBps)
+  const houseFeesCollectedWei = useGameStore(s => s.houseFeesCollectedWei)
+  const claimPrize            = useGameStore(s => s.claimPrize)
+  const claimHouseFees        = useGameStore(s => s.claimHouseFees)
 
   const symbol = getChainNativeSymbol()
 
@@ -30,15 +31,17 @@ export default function ScoreboardPage() {
   const myRank = sorted.findIndex(p => p.id === myId) + 1
 
   const iAmWinner = !!winnerAddress && winnerAddress === myId
-  const iAmOwner  = !!platformOwner && platformOwner === myId
+  const iAmHouse  = !!houseAddress && houseAddress === myId
   const hasUnclaimedPrize = !prizeDistributed && winnerWinningsWei > 0n
-  const hasUnclaimedFees  = platformFeesCollectedWei > 0n
+  const hasUnclaimedFees  = houseFeesCollectedWei > 0n
+  // Pretty-print the cut as a percentage (300 bps -> "3.00%").
+  const houseCutPct = (Number(houseCutBps || 0) / 100).toFixed(2)
 
   const playAgainBlocked = hasUnclaimedPrize || hasUnclaimedFees
   const playAgainTitle = hasUnclaimedPrize
     ? 'Winner must claim the prize before resetting'
     : hasUnclaimedFees
-      ? 'Platform owner must sweep fees before resetting'
+      ? 'House must sweep fees before resetting'
       : ''
 
   return (
@@ -65,7 +68,7 @@ export default function ScoreboardPage() {
         )}
 
         {/* Settlement panel */}
-        {(winnerWinningsWei > 0n || hasUnclaimedFees || iAmOwner) && (
+        {(winnerWinningsWei > 0n || hasUnclaimedFees || iAmHouse) && (
           <div className="card mb-6 space-y-4">
             <h3 className="font-display font-700 text-white">Settlement</h3>
 
@@ -98,29 +101,38 @@ export default function ScoreboardPage() {
               )}
             </div>
 
-            {/* Platform fees */}
-            {(hasUnclaimedFees || iAmOwner) && (
+            {/* House fees — visible to the house wallet, or when there's
+                anything to sweep */}
+            {(hasUnclaimedFees || iAmHouse) && (
               <div className="rounded-xl bg-plasma/8 border border-plasma/25 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-white/60 text-sm font-mono uppercase tracking-wider">Platform fees</span>
+                  <span className="text-white/60 text-sm font-mono uppercase tracking-wider">
+                    House cut · {houseCutPct}%
+                  </span>
                   <span className="text-plasma font-display font-700 text-lg">
-                    {formatGen(platformFeesCollectedWei, 6)} {symbol}
+                    {formatGen(houseFeesCollectedWei, 6)} {symbol}
                   </span>
                 </div>
                 <div className="text-white/40 text-xs">
-                  Owner: <span className="font-mono text-white/70">{short(platformOwner)}</span>
+                  House: <span className="font-mono text-white/70">{short(houseAddress)}</span>
+                  {iAmHouse && <span className="ml-2 badge bg-plasma/20 text-plasma border border-plasma/30 text-[10px]">YOU</span>}
                 </div>
                 {hasUnclaimedFees && (
                   <button
-                    className={`btn ${iAmOwner ? 'btn-plasma' : 'btn-ghost'} w-full mt-3 py-3 text-sm`}
-                    disabled={!iAmOwner}
-                    title={iAmOwner ? '' : 'Only the platform owner can sweep fees'}
-                    onClick={claimPlatformFees}
+                    className={`btn ${iAmHouse ? 'btn-plasma' : 'btn-ghost'} w-full mt-3 py-3 text-sm`}
+                    disabled={!iAmHouse}
+                    title={iAmHouse ? '' : 'Only the house wallet can sweep fees'}
+                    onClick={claimHouseFees}
                   >
-                    {iAmOwner
-                      ? `💸 Sweep ${formatGen(platformFeesCollectedWei, 6)} ${symbol}`
-                      : 'Waiting for owner to sweep'}
+                    {iAmHouse
+                      ? `💸 Sweep ${formatGen(houseFeesCollectedWei, 6)} ${symbol}`
+                      : 'Waiting for the house to sweep'}
                   </button>
+                )}
+                {!hasUnclaimedFees && iAmHouse && (
+                  <div className="text-white/30 text-xs mt-3 italic">
+                    No fees to claim yet. You'll earn {houseCutPct}% of every entry fee.
+                  </div>
                 )}
               </div>
             )}
