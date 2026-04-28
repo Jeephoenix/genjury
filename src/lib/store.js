@@ -354,8 +354,13 @@ const useGameStore = create((set, get) => ({
    * @param {string} [opts.platformOwner]     Optional platform-owner address;
    *                                          defaults to the deployer.
    */
-  createRoom: async (name, opts = {}) => {
+    createRoom: async (name, opts = {}) => {
     if (get().loading) return
+    const me = norm(myAddress())
+    if (!me) {
+      pushToast('error', 'Connect your wallet first to create a room')
+      return
+    }
     set({ loading: true, chatMessages: [] })
     pushToast('info', 'Deploying contract to GenLayer…')
     try {
@@ -373,8 +378,7 @@ const useGameStore = create((set, get) => ({
         platformOwner,
       })
       rememberRoom(addr)
-      const me = norm(myAddress())
-      set({ roomCode: addr, myId: me })
+            set({ roomCode: addr, myId: me })
       pushToast('success', 'Contract deployed — joining…')
       await callMethod(addr, 'join', [name], entryFeeWei,
         entryFeeWei > 0n ? 'Join room (paying entry fee)' : 'Join room')
@@ -389,11 +393,15 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  joinRoom: async (code, name) => {
+    joinRoom: async (code, name) => {
     if (get().loading) return
+    const me = norm(myAddress())
+    if (!me) {
+      pushToast('error', 'Connect your wallet first to join a room')
+      return
+    }
     set({ loading: true, chatMessages: [] })
     const addr = code.trim()
-    const me = norm(myAddress())
     set({ roomCode: addr, myId: me })
     rememberRoom(addr)
     try {
