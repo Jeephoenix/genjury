@@ -1,40 +1,131 @@
 import React from 'react'
 import useGameStore from '../lib/store'
+import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 
-const RANK_ICONS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
-const RANK_LABELS = ['Champion', 'Runner-Up', 'Third Place', '4th Place', '5th Place']
+const RANK_ICONS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣']
+const RANK_LABELS = ['Champion', 'Runner-Up', 'Third Place', '4th Place', '5th Place', '6th Place', '7th Place', '8th Place']
+
+const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—')
 
 export default function ScoreboardPage() {
-  const players = useGameStore(s => s.players)
-  const myId = useGameStore(s => s.myId)
+  const players      = useGameStore(s => s.players)
+  const myId         = useGameStore(s => s.myId)
   const scoreHistory = useGameStore(s => s.scoreHistory)
-  const resetGame = useGameStore(s => s.resetGame)
+  const resetGame    = useGameStore(s => s.resetGame)
+  const startGame    = useGameStore(s => s.startGame)
+
+  const winnerAddress            = useGameStore(s => s.winnerAddress)
+  const winnerWinningsWei        = useGameStore(s => s.winnerWinningsWei)
+  const prizeDistributed         = useGameStore(s => s.prizeDistributed)
+  const platformOwner            = useGameStore(s => s.platformOwner)
+  const platformFeesCollectedWei = useGameStore(s => s.platformFeesCollectedWei)
+  const claimPrize               = useGameStore(s => s.claimPrize)
+  const claimPlatformFees        = useGameStore(s => s.claimPlatformFees)
+
+  const symbol = getChainNativeSymbol()
 
   const sorted = [...players].sort((a, b) => b.xp - a.xp)
   const winner = sorted[0]
   const me = players.find(p => p.id === myId)
   const myRank = sorted.findIndex(p => p.id === myId) + 1
 
+  const iAmWinner = !!winnerAddress && winnerAddress === myId
+  const iAmOwner  = !!platformOwner && platformOwner === myId
+  const hasUnclaimedPrize = !prizeDistributed && winnerWinningsWei > 0n
+  const hasUnclaimedFees  = platformFeesCollectedWei > 0n
+
+  const playAgainBlocked = hasUnclaimedPrize || hasUnclaimedFees
+  const playAgainTitle = hasUnclaimedPrize
+    ? 'Winner must claim the prize before resetting'
+    : hasUnclaimedFees
+      ? 'Platform owner must sweep fees before resetting'
+      : ''
+
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-16 gap-8 animate-slide-up">
       <div className="w-full max-w-lg">
         {/* Winner */}
-        <div className="text-center mb-10">
-          <div className="relative inline-block mb-4">
-            <div className="avatar w-24 h-24 text-4xl mx-auto" style={{ background: winner.color + '22', color: winner.color }}>
-              {winner.avatar}
+        {winner && (
+          <div className="text-center mb-10">
+            <div className="relative inline-block mb-4">
+              <div className="avatar w-24 h-24 text-4xl mx-auto" style={{ background: winner.color + '22', color: winner.color }}>
+                {winner.avatar}
+              </div>
+              <div className="absolute -top-3 -right-3 text-3xl">👑</div>
+              <div className="absolute inset-0 rounded-full blur-2xl opacity-30" style={{ background: winner.color }} />
             </div>
-            <div className="absolute -top-3 -right-3 text-3xl">👑</div>
-            <div className="absolute inset-0 rounded-full blur-2xl opacity-30" style={{ background: winner.color }} />
+            <h2 className="font-display text-4xl font-800 text-white mb-1">
+              <span style={{ color: winner.color }}>{winner.name}</span> wins!
+            </h2>
+            <p className="text-white/40 text-sm">{winner.xp} XP · Level {winner.level}</p>
+            <div className="badge bg-gold/20 text-gold border border-gold/30 mt-3 mx-auto text-sm">
+              🏆 Genjury Champion
+            </div>
           </div>
-          <h2 className="font-display text-4xl font-800 text-white mb-1">
-            <span style={{ color: winner.color }}>{winner.name}</span> wins!
-          </h2>
-          <p className="text-white/40 text-sm">{winner.xp} XP · Level {winner.level}</p>
-          <div className="badge bg-gold/20 text-gold border border-gold/30 mt-3 mx-auto text-sm">
-            🏆 Genjury Champion
+        )}
+
+        {/* Settlement panel */}
+        {(winnerWinningsWei > 0n || hasUnclaimedFees || iAmOwner) && (
+          <div className="card mb-6 space-y-4">
+            <h3 className="font-display font-700 text-white">Settlement</h3>
+
+            {/* Prize */}
+            <div className="rounded-xl bg-gold/8 border border-gold/25 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-white/60 text-sm font-mono uppercase tracking-wider">Prize pool</span>
+                <span className="text-gold font-display font-700 text-2xl">
+                  {formatGen(winnerWinningsWei, 6)} {symbol}
+                </span>
+              </div>
+              <div className="text-white/40 text-xs">
+                {hasUnclaimedPrize
+                  ? <>Awarded to <span className="font-mono text-white/70">{short(winnerAddress)}</span> — awaiting claim.</>
+                  : winnerWinningsWei === 0n && winner
+                    ? 'Free-play room — no prize to distribute.'
+                    : <>Claimed by <span className="font-mono text-white/70">{short(winnerAddress)}</span>.</>}
+              </div>
+              {hasUnclaimedPrize && (
+                <button
+                  className={`btn ${iAmWinner ? 'btn-gold' : 'btn-ghost'} w-full mt-3 py-3 text-sm`}
+                  disabled={!iAmWinner}
+                  title={iAmWinner ? '' : 'Only the winner can claim'}
+                  onClick={claimPrize}
+                >
+                  {iAmWinner
+                    ? `🏆 Claim ${formatGen(winnerWinningsWei, 6)} ${symbol}`
+                    : 'Waiting for winner to claim'}
+                </button>
+              )}
+            </div>
+
+            {/* Platform fees */}
+            {(hasUnclaimedFees || iAmOwner) && (
+              <div className="rounded-xl bg-plasma/8 border border-plasma/25 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white/60 text-sm font-mono uppercase tracking-wider">Platform fees</span>
+                  <span className="text-plasma font-display font-700 text-lg">
+                    {formatGen(platformFeesCollectedWei, 6)} {symbol}
+                  </span>
+                </div>
+                <div className="text-white/40 text-xs">
+                  Owner: <span className="font-mono text-white/70">{short(platformOwner)}</span>
+                </div>
+                {hasUnclaimedFees && (
+                  <button
+                    className={`btn ${iAmOwner ? 'btn-plasma' : 'btn-ghost'} w-full mt-3 py-3 text-sm`}
+                    disabled={!iAmOwner}
+                    title={iAmOwner ? '' : 'Only the platform owner can sweep fees'}
+                    onClick={claimPlatformFees}
+                  >
+                    {iAmOwner
+                      ? `💸 Sweep ${formatGen(platformFeesCollectedWei, 6)} ${symbol}`
+                      : 'Waiting for owner to sweep'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Leaderboard */}
         <div className="space-y-3 mb-8">
@@ -49,23 +140,19 @@ export default function ScoreboardPage() {
                 animationDelay: `${i * 0.08}s`,
               }}
             >
-              {/* Rank */}
-              <div className="text-2xl flex-shrink-0 w-8 text-center">{RANK_ICONS[i]}</div>
+              <div className="text-2xl flex-shrink-0 w-8 text-center">{RANK_ICONS[i] || `#${i + 1}`}</div>
 
-              {/* Avatar */}
               <div className="avatar" style={{ background: p.color + '22', color: p.color }}>
                 {p.avatar}
               </div>
 
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-display font-700 text-white">{p.name}</span>
                   {p.id === myId && <span className="badge bg-plasma/20 text-plasma border border-plasma/30 text-xs">YOU</span>}
                 </div>
-                <div className="text-white/30 text-xs font-mono mt-0.5">{RANK_LABELS[i]}</div>
+                <div className="text-white/30 text-xs font-mono mt-0.5">{RANK_LABELS[i] || `${i + 1}th`}</div>
 
-                {/* XP bar */}
                 <div className="mt-2 progress-bar">
                   <div
                     className="progress-fill transition-all duration-1000"
@@ -74,7 +161,6 @@ export default function ScoreboardPage() {
                 </div>
               </div>
 
-              {/* XP */}
               <div className="text-right flex-shrink-0">
                 <div className="font-display font-800 text-xl" style={{ color: p.color }}>{p.xp}</div>
                 <div className="text-white/30 text-xs font-mono">XP</div>
@@ -110,8 +196,8 @@ export default function ScoreboardPage() {
                       </td>
                       {scoreHistory.map((rnd, i) => (
                         <td key={i} className="py-2 text-center">
-                          <span className={`text-xs font-mono ${(rnd.xpGained[p.id] || 0) > 0 ? 'text-gold' : 'text-white/20'}`}>
-                            {(rnd.xpGained[p.id] || 0) > 0 ? `+${rnd.xpGained[p.id]}` : '—'}
+                          <span className={`text-xs font-mono ${(rnd.xpGained?.[p.id] || 0) > 0 ? 'text-gold' : 'text-white/20'}`}>
+                            {(rnd.xpGained?.[p.id] || 0) > 0 ? `+${rnd.xpGained[p.id]}` : '—'}
                           </span>
                         </td>
                       ))}
@@ -129,7 +215,7 @@ export default function ScoreboardPage() {
           <div className="card text-center mb-6" style={{ borderColor: me.color + '33', background: me.color + '08' }}>
             <p className="text-white/50 text-sm">Your result</p>
             <p className="font-display text-2xl font-700 mt-1" style={{ color: me.color }}>
-              {RANK_ICONS[myRank - 1]} {RANK_LABELS[myRank - 1]}
+              {RANK_ICONS[myRank - 1] || `#${myRank}`} {RANK_LABELS[myRank - 1] || `${myRank}th place`}
             </p>
             <p className="text-white/30 text-xs mt-1">{me.xp} XP · Level {me.level}</p>
           </div>
@@ -142,13 +228,16 @@ export default function ScoreboardPage() {
           </button>
           <button
             className="btn btn-neon py-4"
-            onClick={() => {
-              useGameStore.getState().startGame()
-            }}
+            onClick={startGame}
+            disabled={playAgainBlocked}
+            title={playAgainTitle}
           >
             🔄 Play Again
           </button>
         </div>
+        {playAgainBlocked && (
+          <p className="text-white/40 text-xs text-center mt-3">{playAgainTitle}</p>
+        )}
 
         <div className="text-center mt-8 text-white/15 text-xs font-mono">
           Genjury · Built on GenLayer · Intelligent Contracts + Optimistic Democracy
