@@ -124,8 +124,12 @@ export default function LandingPage() {
       <div className="text-center mb-10 animate-slide-up">
         <div className="flex items-center justify-center gap-3 mb-6">
           <div className="relative">
-            <div className="text-6xl">⚖️</div>
-            <div className="absolute -inset-2 bg-plasma/20 rounded-full blur-xl animate-pulse" />
+            <img
+              src="/logo.png"
+              alt="Genjury logo"
+              className="w-28 h-28 object-contain drop-shadow-[0_0_20px_rgba(167,139,250,0.35)]"
+            />
+            <div className="absolute -inset-2 bg-plasma/20 rounded-full blur-xl animate-pulse pointer-events-none" />
           </div>
         </div>
 
