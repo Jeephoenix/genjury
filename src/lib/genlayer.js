@@ -1,22 +1,12 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // GenLayer JS SDK wrapper for the Genjury frontend.
 //
-// Two wallet modes are supported:
-//
-//   * "burner"   — a private key generated in-browser and stored in
-//                  localStorage. Frictionless for demos and single-device play.
-//   * "injected" — a real Web3 wallet (MetaMask et al.) reached through
-//                  window.ethereum. The user signs every transaction.
-//
-// The active mode is persisted in localStorage so refreshes keep the same
-// identity. The SDK client is rebuilt whenever the mode or address changes.
+// Wallet model: a real Web3 wallet (MetaMask et al.) reached through
+// window.ethereum. The user signs every transaction. There is no burner
+// fallback — the app refuses to deploy/call/read on behalf of "no one."
 // ──────────────────────────────────────────────────────────────────────────────
 
-import {
-  createClient,
-  createAccount,
-  generatePrivateKey,
-} from 'genlayer-js'
+import { createClient } from 'genlayer-js'
 import {
   studionet,
   localnet,
@@ -27,13 +17,10 @@ import {
 import contractSource from '../../contracts/genjury.py?raw'
 
 // ── localStorage keys ───────────────────────────────────────────────────────
-const STORAGE_PK       = 'genjury_account_pk'
 const STORAGE_ROOM     = 'genjury_last_room'
-const STORAGE_MODE     = 'genjury_wallet_mode'        // 'burner' | 'injected'
 const STORAGE_INJECTED = 'genjury_injected_address'   // last connected EOA
 
 // ── Module-level cache ──────────────────────────────────────────────────────
-let _burnerAccount   = null
 let _injectedAddress = null
 let _client          = null
 const _listeners     = new Set()
@@ -41,22 +28,8 @@ const _txListeners   = new Set()
 let _txSeq           = 0
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Wallet mode
+// Wallet event bus
 // ──────────────────────────────────────────────────────────────────────────────
-export function getWalletMode() {
-  try {
-    const m = localStorage.getItem(STORAGE_MODE)
-    if (m === 'injected' || m === 'burner') return m
-  } catch {}
-  return 'burner'
-}
-
-function setWalletMode(mode) {
-  try { localStorage.setItem(STORAGE_MODE, mode) } catch {}
-  _client = null
-  notify()
-}
-
 export function subscribeWallet(fn) {
   _listeners.add(fn)
   return () => _listeners.delete(fn)
@@ -82,48 +55,6 @@ function emitTx(evt) {
   for (const fn of _txListeners) {
     try { fn(evt) } catch {}
   }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Burner wallet
-// ──────────────────────────────────────────────────────────────────────────────
-function loadBurnerAccount() {
-  if (_burnerAccount) return _burnerAccount
-  let pk = null
-  try { pk = localStorage.getItem(STORAGE_PK) } catch {}
-  if (!pk) {
-    pk = generatePrivateKey()
-    try { localStorage.setItem(STORAGE_PK, pk) } catch {}
-  }
-  _burnerAccount = createAccount(pk)
-  return _burnerAccount
-}
-
-export function burnerAddress() {
-  return loadBurnerAccount().address
-}
-
-export function getPrivateKey() {
-  try { return localStorage.getItem(STORAGE_PK) } catch { return null }
-}
-
-export function resetBurner() {
-  try { localStorage.removeItem(STORAGE_PK) } catch {}
-  _burnerAccount = null
-  _client = null
-  notify()
-}
-
-export function importPrivateKey(pk) {
-  const trimmed = (pk || '').trim()
-  if (!trimmed) throw new Error('Empty private key')
-  const normalized = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`
-  const acct = createAccount(normalized)
-  try { localStorage.setItem(STORAGE_PK, normalized) } catch {}
-  _burnerAccount = acct
-  _client = null
-  setWalletMode('burner')
-  return acct.address
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -200,7 +131,8 @@ export async function connectInjectedWallet() {
   const addr = accounts[0]
   await ensureCorrectChain()
   rememberInjected(addr)
-  setWalletMode('injected')
+  _client = null
+  notify()
 
   // Wire up account/chain change listeners exactly once.
   if (!window.ethereum.__genjuryWired) {
@@ -208,7 +140,6 @@ export async function connectInjectedWallet() {
     window.ethereum.on?.('accountsChanged', (accs) => {
       if (!accs?.length) {
         rememberInjected(null)
-        if (getWalletMode() === 'injected') setWalletMode('burner')
       } else {
         rememberInjected(accs[0])
       }
@@ -226,22 +157,20 @@ export async function connectInjectedWallet() {
 
 export function disconnectInjectedWallet() {
   rememberInjected(null)
-  setWalletMode('burner')
+  _client = null
+  notify()
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Active address — what the rest of the app sees as "me"
+// Active address — what the rest of the app sees as "me". Returns null when
+// no wallet is connected; the UI must gate gameplay accordingly.
 // ──────────────────────────────────────────────────────────────────────────────
 export function myAddress() {
-  if (getWalletMode() === 'injected') {
-    const a = injectedAddress()
-    if (a) return a
-  }
-  return burnerAddress()
+  return injectedAddress()
 }
 
-export function isInjectedActive() {
-  return getWalletMode() === 'injected' && !!injectedAddress()
+export function isWalletConnected() {
+  return !!injectedAddress()
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -276,8 +205,6 @@ const NETWORK_INFO = {
   },
 }
 
-// Normalize the env-var value into one of our canonical keys. Old configs
-// like 'testnet' or 'testnetasimov' keep working.
 function normalizeNetworkKey(raw) {
   const k = (raw || '').toLowerCase()
   if (!k)                                   return DEFAULT_NETWORK
@@ -310,10 +237,18 @@ export function getChainNativeSymbol() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Client
+// Client — requires a connected wallet
 // ──────────────────────────────────────────────────────────────────────────────
 export function getClient() {
   if (_client) return _client
+
+  const addr = injectedAddress()
+  if (!addr) {
+    throw new Error('Connect a Web3 wallet to continue.')
+  }
+  if (!hasInjectedProvider()) {
+    throw new Error('No Web3 wallet detected in this browser.')
+  }
 
   const baseChain = getChain()
   const overrideRpc = import.meta.env.VITE_GENLAYER_RPC
@@ -321,17 +256,11 @@ export function getClient() {
     ? { ...baseChain, rpcUrls: { default: { http: [overrideRpc] } } }
     : baseChain
 
-  const cfg = { chain }
-
-  if (isInjectedActive()) {
-    // Pass the address as a string so the SDK forwards signing to window.ethereum.
-    cfg.account = injectedAddress()
-    cfg.provider = window.ethereum
-  } else {
-    cfg.account = loadBurnerAccount()
-  }
-
-  _client = createClient(cfg)
+  _client = createClient({
+    chain,
+    account: addr,
+    provider: window.ethereum,
+  })
   return _client
 }
 
@@ -369,8 +298,6 @@ export async function callMethod(address, fn, args = [], valueWei = 0n, label = 
     emitTx({ id, label: description, status: 'confirmed', hash })
   } catch (e) {
     console.warn('[genjury] waitForTransactionReceipt:', e?.message || e)
-    // We optimistically treat receipt-wait failures as confirmed so the UI
-    // stops spinning — the polling loop will catch any real divergence.
     emitTx({ id, label: description, status: 'confirmed', hash })
   }
   return hash
@@ -434,11 +361,9 @@ export async function deployGenjury({
   return addr
 }
 
-// Best-effort, human-readable distillation of a wallet/SDK error.
 function friendlyTxError(e) {
   if (!e) return 'Unknown error'
   if (typeof e === 'string') return e
-  // MetaMask user rejections
   if (e.code === 4001 || /user rejected|user denied/i.test(e.message || '')) {
     return 'You rejected the request in your wallet.'
   }
@@ -446,15 +371,14 @@ function friendlyTxError(e) {
 }
 
 /**
- * Read the active wallet's GEN balance (wei) via raw eth_getBalance.
- * Falls back to 0n if anything goes wrong — the caller can decide whether to
- * surface that to the UI.
+ * Read the active wallet's GEN balance (wei). Returns 0n if no wallet is
+ * connected or anything goes wrong.
  */
 export async function getGenBalanceWei(addr) {
   const target = addr || myAddress()
   if (!target) return 0n
 
-  if (isInjectedActive() && hasInjectedProvider()) {
+  if (hasInjectedProvider()) {
     try {
       const hex = await window.ethereum.request({
         method: 'eth_getBalance',
@@ -493,15 +417,6 @@ export async function getGenBalanceWei(addr) {
 // ──────────────────────────────────────────────────────────────────────────────
 const GEN_DECIMALS = 18n
 
-/**
- * Format wei as a human-readable GEN amount.
- *
- *   formatGen(1500000000000000000n) === "1.5"
- *   formatGen(0n)                   === "0"
- *
- * @param {bigint|number|string} wei
- * @param {number} maxFractionDigits  Trim trailing zeros up to this many digits.
- */
 export function formatGen(wei, maxFractionDigits = 6) {
   let v
   try { v = typeof wei === 'bigint' ? wei : BigInt(wei || 0) }
@@ -521,12 +436,6 @@ export function formatGen(wei, maxFractionDigits = 6) {
   return `${negative ? '-' : ''}${whole.toString()}.${fracStr}`
 }
 
-/**
- * Parse a decimal GEN string into wei. Throws on malformed input.
- *
- *   parseGen("1.5")  === 1500000000000000000n
- *   parseGen("")     === 0n
- */
 export function parseGen(str) {
   const s = String(str ?? '').trim()
   if (!s) return 0n
@@ -551,4 +460,4 @@ export function getRememberedRoom() {
 }
 export function forgetRoom() {
   try { localStorage.removeItem(STORAGE_ROOM) } catch {}
-}
+      }
