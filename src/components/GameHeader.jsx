@@ -39,7 +39,7 @@ export default function GameHeader() {
     <header className="fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-ghost-border flex items-center px-4 gap-4">
       {/* Logo */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-xl">⚖️</span>
+        <img src="/logo.png" alt="" className="w-7 h-7 object-contain" />
         <span className="font-display font-800 text-lg text-white tracking-tight">
           Gen<span className="text-neon text-glow-neon">jury</span>
         </span>
