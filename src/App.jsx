@@ -10,6 +10,7 @@ import RevealPhase from './pages/RevealPhase'
 import ScoreboardPage from './pages/ScoreboardPage'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
+import WalletPanel from './components/WalletPanel'
 
 export default function App() {
   const phase = useGameStore(s => s.phase)
@@ -32,6 +33,8 @@ export default function App() {
       <div className="fixed top-1/2 left-0 w-64 h-64 bg-ice/3 rounded-full blur-3xl pointer-events-none" />
 
       {inGame && <GameHeader />}
+
+      <WalletPanel />
 
       <main className={inGame ? 'pt-16' : ''}>
         {phase === PHASES.LOBBY && !roomCode && <LandingPage />}
