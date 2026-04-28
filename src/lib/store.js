@@ -6,8 +6,7 @@
 //
 // On top of the original game state we also surface the contract economics:
 //   * entry fee (wei) every player pays to join
-//   * platform fee bps + platform owner address
-//   * accumulated prize pool + platform fees
+//   * accumulated prize pool
 //   * winner / claim status once the game ends
 //
 // Local-only state (kept on the client):
@@ -216,11 +215,8 @@ function applyContractState(get, s) {
     objectionVotes: mapObjectionVotes(s),
     revealData:     mapReveal(s),
     // ── Economics (wei kept as BigInt, owner lower-cased for compares) ──
-    entryFeeWei:              safeBigInt(s.entryFee),
-    prizePoolWei:             safeBigInt(s.prizePool),
-    platformFeeBps:           Number(s.platformFeeBps || 0),
-    platformOwner:            norm(s.platformOwner) || null,
-    platformFeesCollectedWei: safeBigInt(s.platformFeesCollected),
+    entryFeeWei:  safeBigInt(s.entryFee),
+    prizePoolWei: safeBigInt(s.prizePool),
     winnerAddress:            norm(s.winnerAddress) || null,
     winnerWinningsWei:        safeBigInt(s.winnerWinningsWei),
     prizeDistributed:         !!s.prizeDistributed,
@@ -307,14 +303,11 @@ const useGameStore = create((set, get) => ({
   scoreHistory:   [],
 
   // ── Economics (mirrors contract) ────────────────────────────────────
-  entryFeeWei:              0n,
-  prizePoolWei:             0n,
-  platformFeeBps:           0,
-  platformOwner:            null,
-  platformFeesCollectedWei: 0n,
-  winnerAddress:            null,
-  winnerWinningsWei:        0n,
-  prizeDistributed:         true,
+  entryFeeWei:       0n,
+  prizePoolWei:      0n,
+  winnerAddress:     null,
+  winnerWinningsWei: 0n,
+  prizeDistributed:  true,
 
   // ── Local-only ──────────────────────────────────────────────────────
   timer:          0,
@@ -348,11 +341,8 @@ const useGameStore = create((set, get) => ({
    *
    * @param {string} name
    * @param {object} [opts]
-   * @param {bigint} [opts.entryFeeWei=0n]    Wei each player pays to join.
-   * @param {number} [opts.platformFeeBps=0]  Basis points routed to the platform owner.
-   * @param {number} [opts.maxRounds=3]       Total rounds in the game.
-   * @param {string} [opts.platformOwner]     Optional platform-owner address;
-   *                                          defaults to the deployer.
+   * @param {bigint} [opts.entryFeeWei=0n]   Wei each player pays to join.
+   * @param {number} [opts.maxRounds=3]      Total rounds in the game.
    */
     createRoom: async (name, opts = {}) => {
     if (get().loading) return
@@ -367,15 +357,11 @@ const useGameStore = create((set, get) => ({
       const entryFeeWei = typeof opts.entryFeeWei === 'bigint'
         ? opts.entryFeeWei
         : BigInt(opts.entryFeeWei || 0)
-      const platformFeeBps = Number(opts.platformFeeBps ?? 0) | 0
       const maxRounds = Math.max(1, Number(opts.maxRounds ?? 3))
-      const platformOwner = opts.platformOwner || ''
 
       const addr = await deployGenjury({
         maxRounds,
         entryFeeWei,
-        platformFeeBps,
-        platformOwner,
       })
       rememberRoom(addr)
             set({ roomCode: addr, myId: me })
@@ -434,16 +420,13 @@ const useGameStore = create((set, get) => ({
     try {
       const raw = await readView(addr, 'get_economics')
       return {
-        address:                  addr,
-        entryFeeWei:              safeBigInt(raw?.entryFee),
-        prizePoolWei:             safeBigInt(raw?.prizePool),
-        platformFeeBps:           Number(raw?.platformFeeBps || 0),
-        platformOwner:            raw?.platformOwner || '',
-        platformFeesCollectedWei: safeBigInt(raw?.platformFeesCollected),
-        playerCount:              Number(raw?.playerCount || 0),
-        maxPlayers:               Number(raw?.maxPlayers || 0),
-        phase:                    raw?.phase || 'lobby',
-        host:                     raw?.host || '',
+        address:      addr,
+        entryFeeWei:  safeBigInt(raw?.entryFee),
+        prizePoolWei: safeBigInt(raw?.prizePool),
+        playerCount:  Number(raw?.playerCount || 0),
+        maxPlayers:   Number(raw?.maxPlayers || 0),
+        phase:        raw?.phase || 'lobby',
+        host:         raw?.host || '',
       }
     } catch (e) {
       console.warn('[genjury] previewRoom:', e?.message || e)
@@ -460,8 +443,8 @@ const useGameStore = create((set, get) => ({
     if (!roomCode) return
     try {
       // "Play Again" from the scoreboard: bring the room back to lobby first.
-      // The contract enforces that any pending prize / platform fees are
-      // claimed before this call succeeds.
+      // The contract enforces that any pending prize / dev fees are claimed
+      // before this call succeeds.
       if (phase === PHASES.SCOREBOARD) {
         await callMethod(roomCode, 'reset_to_lobby', [], 0n, 'Reset room to lobby')
       }
@@ -576,7 +559,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  // ── Settlement (winner + platform owner claims) ─────────────────────
+  // ── Settlement (winner claims the prize) ────────────────────────────
   claimPrize: async () => {
     const { roomCode } = get()
     if (!roomCode) return
@@ -586,18 +569,6 @@ const useGameStore = create((set, get) => ({
       refreshState(get)
     } catch (e) {
       pushToast('error', e?.shortMessage || e?.message || 'Could not claim prize')
-    }
-  },
-
-  claimPlatformFees: async () => {
-    const { roomCode } = get()
-    if (!roomCode) return
-    try {
-      await callMethod(roomCode, 'claim_platform_fees', [], 0n, 'Sweep platform fees')
-      pushToast('success', 'Platform fees swept to your wallet')
-      refreshState(get)
-    } catch (e) {
-      pushToast('error', e?.shortMessage || e?.message || 'Could not claim platform fees')
     }
   },
 
@@ -629,14 +600,11 @@ const useGameStore = create((set, get) => ({
       timerMax:        0,
       pendingTx:       null,
       chatMessages:    [],
-      entryFeeWei:              0n,
-      prizePoolWei:             0n,
-      platformFeeBps:           0,
-      platformOwner:            null,
-      platformFeesCollectedWei: 0n,
-      winnerAddress:            null,
-      winnerWinningsWei:        0n,
-      prizeDistributed:         true,
+      entryFeeWei:       0n,
+      prizePoolWei:      0n,
+      winnerAddress:     null,
+      winnerWinningsWei: 0n,
+      prizeDistributed:  true,
     })
   },
 }))
