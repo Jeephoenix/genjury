@@ -243,10 +243,15 @@ export function isInjectedActive() {
 // Network / chain
 // ──────────────────────────────────────────────────────────────────────────────
 const NETWORK_INFO = {
-  testnet: {
+  bradbury: {
+    label: 'GenLayer Testnet (Bradbury)',
+    explorer: 'https://explorer-bradbury.genlayer.com',
+    faucet: 'https://testnet-faucet.genlayer.foundation',
+  },
+  asimov: {
     label: 'GenLayer Testnet (Asimov)',
-    explorer: 'https://explorer.genlayer.com',
-    faucet: 'https://faucet.genlayer.com',
+    explorer: 'https://explorer-asimov.genlayer.com',
+    faucet: 'https://testnet-faucet.genlayer.foundation',
   },
   studionet: {
     label: 'GenLayer Studio (local)',
@@ -261,20 +266,29 @@ const NETWORK_INFO = {
 }
 
 export function getNetworkName() {
-  return (import.meta.env.VITE_GENLAYER_NETWORK || 'testnet').toLowerCase()
+  // Default to Bradbury — GenLayer's recommended testnet for production-like
+  // testing with real AI workloads. Older configs ('testnet' / 'testnetasimov')
+  // are normalized below.
+  return (import.meta.env.VITE_GENLAYER_NETWORK || 'bradbury').toLowerCase()
 }
 
 export function getNetworkInfo() {
-  const name = getNetworkName()
-  const key = name === 'testnetasimov' ? 'testnet' : name
-  return { key, ...(NETWORK_INFO[key] || NETWORK_INFO.testnet) }
+  const raw = getNetworkName()
+  // Normalize legacy aliases: 'testnet' (default before Bradbury existed) and
+  // 'testnetasimov' (early SDK naming) both map to their canonical keys.
+  const key =
+    raw === 'testnet' || raw === 'testnetbradbury' ? 'bradbury' :
+    raw === 'testnetasimov'                         ? 'asimov'   :
+    raw
+  return { key, ...(NETWORK_INFO[key] || NETWORK_INFO.bradbury) }
 }
 
 export function getChain() {
-  const network = getNetworkName()
-  if (network === 'studionet') return studionet
-  if (network === 'localnet') return localnet
-  return testnetAsimov
+  const { key } = getNetworkInfo()
+  if (key === 'studionet') return studionet
+  if (key === 'localnet')  return localnet
+  if (key === 'asimov')    return testnetAsimov
+  return testnetBradbury
 }
 
 export function getChainNativeSymbol() {
