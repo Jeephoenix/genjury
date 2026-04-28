@@ -39,12 +39,63 @@ export function myAddress() {
   return getAccount().address
 }
 
+export function getPrivateKey() {
+  try { return localStorage.getItem(STORAGE_PK) } catch { return null }
+}
+
+export function resetAccount() {
+  try { localStorage.removeItem(STORAGE_PK) } catch {}
+  try { localStorage.removeItem(STORAGE_ROOM) } catch {}
+  _account = null
+  _client = null
+}
+
+export function importPrivateKey(pk) {
+  const trimmed = (pk || '').trim()
+  if (!trimmed) throw new Error('Empty private key')
+  const normalized = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`
+  // Validate by attempting to create an account from it.
+  const acct = createAccount(normalized)
+  try { localStorage.setItem(STORAGE_PK, normalized) } catch {}
+  _account = acct
+  _client = null
+  return acct.address
+}
+
 // ── Client ──────────────────────────────────────────────────────────────────
+const NETWORK_INFO = {
+  testnet: {
+    label: 'GenLayer Testnet (Asimov)',
+    explorer: 'https://explorer.genlayer.com',
+    faucet: 'https://faucet.genlayer.com',
+  },
+  studionet: {
+    label: 'GenLayer Studio (local)',
+    explorer: null,
+    faucet: null,
+  },
+  localnet: {
+    label: 'GenLayer Localnet',
+    explorer: null,
+    faucet: null,
+  },
+}
+
+export function getNetworkName() {
+  return (import.meta.env.VITE_GENLAYER_NETWORK || 'testnet').toLowerCase()
+}
+
+export function getNetworkInfo() {
+  const name = getNetworkName()
+  const key = name === 'testnetasimov' ? 'testnet' : name
+  return { key, ...(NETWORK_INFO[key] || NETWORK_INFO.testnet) }
+}
+
 function getChain() {
-  const network = (import.meta.env.VITE_GENLAYER_NETWORK || 'studionet').toLowerCase()
-  if (network === 'testnet' || network === 'testnetasimov') return testnetAsimov
+  const network = getNetworkName()
+  if (network === 'studionet') return studionet
   if (network === 'localnet') return localnet
-  return studionet
+  return testnetAsimov
 }
 
 export function getClient() {
