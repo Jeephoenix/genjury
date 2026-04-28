@@ -15,6 +15,9 @@
 //   * toasts
 //   * "draft" statements + lieIndex during WRITING (typing buffer; not
 //     overwritten by polling until the deceiver actually submits)
+//   * chatMessages — in-room chat (taunts + objection coordination), backed
+//     by /api/chat (Neon). De-duped by id so optimistic sends + polled
+//     fetches don't double up.
 // ──────────────────────────────────────────────────────────────────────────────
 
 import { create } from 'zustand'
@@ -55,6 +58,7 @@ const PHASE_TIMERS = {
 }
 
 const POLL_INTERVAL_MS = 1500
+const CHAT_BUFFER_MAX  = 100
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const norm = (a) => (typeof a === 'string' ? a.toLowerCase() : a)
@@ -317,6 +321,7 @@ const useGameStore = create((set, get) => ({
   timerMax:       0,
   toasts:         [],
   pendingTx:      null,    // { id, label, status, hash, error, at }
+  chatMessages:   [],      // { id, authorId, authorName, avatar, color, text, kind, ts }
 
   // ── Toasts / timer ──────────────────────────────────────────────────
   addToast: (message, type = 'info') => pushToast(type, message),
@@ -325,6 +330,17 @@ const useGameStore = create((set, get) => ({
     const { timer } = get()
     if (timer > 0) set({ timer: timer - 1 })
   },
+
+  // ── Chat ────────────────────────────────────────────────────────────
+  pushChat: (msg) => set((s) => {
+    if (!msg || !msg.id) return s
+    if (s.chatMessages.some((m) => m.id === msg.id)) return s
+    const next = [...s.chatMessages, msg]
+    next.sort((a, b) => a.ts - b.ts)
+    if (next.length > CHAT_BUFFER_MAX) next.splice(0, next.length - CHAT_BUFFER_MAX)
+    return { chatMessages: next }
+  }),
+  clearChat: () => set({ chatMessages: [] }),
 
   // ── Room lifecycle ──────────────────────────────────────────────────
   /**
@@ -340,7 +356,7 @@ const useGameStore = create((set, get) => ({
    */
   createRoom: async (name, opts = {}) => {
     if (get().loading) return
-    set({ loading: true })
+    set({ loading: true, chatMessages: [] })
     pushToast('info', 'Deploying contract to GenLayer…')
     try {
       const entryFeeWei = typeof opts.entryFeeWei === 'bigint'
@@ -375,7 +391,7 @@ const useGameStore = create((set, get) => ({
 
   joinRoom: async (code, name) => {
     if (get().loading) return
-    set({ loading: true })
+    set({ loading: true, chatMessages: [] })
     const addr = code.trim()
     const me = norm(myAddress())
     set({ roomCode: addr, myId: me })
@@ -604,6 +620,7 @@ const useGameStore = create((set, get) => ({
       timer:           0,
       timerMax:        0,
       pendingTx:       null,
+      chatMessages:    [],
       entryFeeWei:              0n,
       prizePoolWei:             0n,
       platformFeeBps:           0,
