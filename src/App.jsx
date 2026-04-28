@@ -11,6 +11,7 @@ import ScoreboardPage from './pages/ScoreboardPage'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
 import WalletPanel from './components/WalletPanel'
+import TxStatusBanner from './components/TxStatusBanner'
 
 export default function App() {
   const phase = useGameStore(s => s.phase)
@@ -48,6 +49,7 @@ export default function App() {
       </main>
 
       <ToastContainer />
+      <TxStatusBanner />
     </div>
   )
 }
