@@ -31,7 +31,7 @@ export default function OnboardingModal() {
     {
       icon: '🦊',
       title: 'Connect a wallet',
-      body: `Use MetaMask for the full experience, or play with a one-click burner wallet stored in this browser. You're on ${net.label}.`,
+            body: `Tap the wallet pill in the top-right and connect MetaMask (or any EIP-1193 wallet). You're on ${net.label}.`,
     },
     {
       icon: '💧',
