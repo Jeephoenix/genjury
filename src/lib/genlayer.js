@@ -173,6 +173,9 @@ export function isWalletConnected() {
   return !!injectedAddress()
 }
 
+// Back-compat alias — LandingPage.jsx and NetworkBanner.jsx import this name.
+export const isInjectedActive = isWalletConnected
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Network / chain
 //
