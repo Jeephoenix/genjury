@@ -449,13 +449,47 @@ export function parseGen(str) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Default contract address (the "house room")
+//
+// Set VITE_GENJURY_DEFAULT_CONTRACT in your .env.local (locally) and in your
+// Vercel project's Environment Variables (Production / Preview / Development)
+// to point the app at a specific deployed Genjury contract by default. Players
+// will see it as a "Featured room" on the landing page and be one click away
+// from joining it without having to deploy their own.
+//
+// If the variable is empty / unset, the app behaves as before — every host
+// must deploy a fresh contract to play.
+// ──────────────────────────────────────────────────────────────────────────────
+export function getDefaultContractAddress() {
+  const raw = import.meta.env.VITE_GENJURY_DEFAULT_CONTRACT
+  if (!raw) return null
+  const trimmed = String(raw).trim()
+  // Sanity check: must look like a hex address.
+  if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+    console.warn('[genjury] VITE_GENJURY_DEFAULT_CONTRACT is set but is not a valid 0x… address — ignoring.')
+    return null
+  }
+  return trimmed
+}
+
+export function hasDefaultContract() {
+  return !!getDefaultContractAddress()
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Last-room persistence (so reloads can resume the session)
 // ──────────────────────────────────────────────────────────────────────────────
 export function rememberRoom(addr) {
   try { localStorage.setItem(STORAGE_ROOM, addr) } catch {}
 }
 export function getRememberedRoom() {
-  try { return localStorage.getItem(STORAGE_ROOM) } catch { return null }
+  try {
+    const stored = localStorage.getItem(STORAGE_ROOM)
+    if (stored) return stored
+  } catch {}
+  // Fallback: the env-configured "house room" — the default contract address
+  // baked in at build time via VITE_GENJURY_DEFAULT_CONTRACT.
+  return getDefaultContractAddress()
 }
 export function forgetRoom() {
   try { localStorage.removeItem(STORAGE_ROOM) } catch {}
