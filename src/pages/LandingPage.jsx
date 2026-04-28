@@ -8,9 +8,13 @@ import {
   hasInjectedProvider,
   connectInjectedWallet,
   subscribeWallet,
+  getDefaultContractAddress,
 } from '../lib/genlayer'
 
 const PRESET_FEES = ['0', '0.01', '0.1', '1']
+
+// The address baked in at build time via VITE_GENJURY_DEFAULT_CONTRACT, if any.
+const DEFAULT_CONTRACT = getDefaultContractAddress()
 
 export default function LandingPage() {
   const [mode, setMode] = useState(null) // 'create' | 'join' | null
@@ -21,10 +25,15 @@ export default function LandingPage() {
   const [maxRounds, setMaxRounds] = useState(3)
   const [feeError, setFeeError]   = useState(null)
 
-  // Join-room form
-  const [roomCode, setRoomCode] = useState('')
+  // Join-room form — pre-filled with the env-configured contract if one exists.
+  const [roomCode, setRoomCode] = useState(DEFAULT_CONTRACT || '')
   const [preview, setPreview]   = useState(null)
   const [previewing, setPreviewing] = useState(false)
+
+  // Featured room (the env-configured contract) — kept separate from the
+  // join-form preview so the hero card stays visible regardless of mode.
+  const [featured, setFeatured] = useState(null)
+  const [featuredLoading, setFeaturedLoading] = useState(!!DEFAULT_CONTRACT)
 
   const createRoom = useGameStore(s => s.createRoom)
   const joinRoom   = useGameStore(s => s.joinRoom)
@@ -66,6 +75,18 @@ export default function LandingPage() {
     joinRoom(roomCode.trim(), name.trim())
   }
 
+  // One-click join into the env-configured featured room.
+  const handleJoinFeatured = () => {
+    if (!DEFAULT_CONTRACT || loading) return
+    if (!name.trim()) {
+      setMode('join')
+      setRoomCode(DEFAULT_CONTRACT)
+      addToast('Enter a name above, then tap Join Game.', 'info')
+      return
+    }
+    joinRoom(DEFAULT_CONTRACT, name.trim())
+  }
+
   // Auto-preview the room economics whenever the address looks plausibly complete.
   useEffect(() => {
     const addr = roomCode.trim()
@@ -84,6 +105,23 @@ export default function LandingPage() {
     }, 350)
     return () => { cancelled = true; clearTimeout(t) }
   }, [mode, roomCode, previewRoom])
+
+  // Load the featured-room preview once on mount (and refresh every 15s so
+  // the player count / prize pool stay live without spamming the chain).
+  useEffect(() => {
+    if (!DEFAULT_CONTRACT) return
+    let cancelled = false
+    const load = async () => {
+      const p = await previewRoom(DEFAULT_CONTRACT)
+      if (!cancelled) {
+        setFeatured(p)
+        setFeaturedLoading(false)
+      }
+    }
+    load()
+    const t = setInterval(load, 15000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [previewRoom])
 
   const handleQuickConnect = async () => {
     try { await connectInjectedWallet() }
@@ -143,6 +181,76 @@ export default function LandingPage() {
               Connect
             </button>
           )}
+        </div>
+      )}
+
+      {/* Featured room — only rendered when VITE_GENJURY_DEFAULT_CONTRACT is set */}
+      {DEFAULT_CONTRACT && !mode && (
+        <div className="w-full max-w-sm mb-4 animate-slide-up" style={{ animationDelay: '0.05s' }}>
+          <div className="rounded-2xl bg-gradient-to-br from-gold/12 via-plasma/8 to-transparent border border-gold/30 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="badge bg-gold/20 text-gold border border-gold/30 text-[11px]">
+                ⭐ FEATURED ROOM
+              </span>
+              <span className="text-white/30 text-[10px] font-mono">
+                {DEFAULT_CONTRACT.slice(0, 6)}…{DEFAULT_CONTRACT.slice(-4)}
+              </span>
+            </div>
+            <h3 className="font-display font-700 text-white text-lg mb-2">The House Room</h3>
+            <p className="text-white/50 text-xs mb-3">
+              Skip the deploy step — jump straight into the official Genjury room.
+            </p>
+
+            {featuredLoading && (
+              <div className="text-white/40 text-xs font-mono">Loading room…</div>
+            )}
+            {!featuredLoading && featured && (
+              <div className="grid grid-cols-3 gap-3 mb-3 text-center">
+                <div>
+                  <div className="text-white/30 text-[10px] font-mono uppercase">Phase</div>
+                  <div className="text-white/80 text-sm capitalize">{featured.phase}</div>
+                </div>
+                <div>
+                  <div className="text-white/30 text-[10px] font-mono uppercase">Players</div>
+                  <div className="text-white/80 text-sm font-mono">
+                    {featured.playerCount}/{featured.maxPlayers}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-white/30 text-[10px] font-mono uppercase">Entry</div>
+                  <div className={`text-sm font-mono ${featured.entryFeeWei > 0n ? 'text-neon' : 'text-white/60'}`}>
+                    {featured.entryFeeWei > 0n
+                      ? `${formatGen(featured.entryFeeWei, 4)} ${symbol}`
+                      : 'Free'}
+                  </div>
+                </div>
+              </div>
+            )}
+            {!featuredLoading && !featured && (
+              <p className="text-signal/70 text-xs mb-3">
+                Couldn't reach the featured room. Double-check VITE_GENJURY_DEFAULT_CONTRACT.
+              </p>
+            )}
+
+            <button
+              className="btn btn-gold w-full py-3 text-sm"
+              onClick={handleJoinFeatured}
+              disabled={loading || (!!featured && featured.phase !== 'lobby')}
+              title={
+                featured && featured.phase !== 'lobby'
+                  ? 'Game is in progress — wait for the next round.'
+                  : ''
+              }
+            >
+              {loading
+                ? '⏳ Joining…'
+                : featured && featured.phase !== 'lobby'
+                  ? '🔒 Game in progress'
+                  : featured && featured.entryFeeWei > 0n
+                    ? `🚀 Join — Pay ${formatGen(featured.entryFeeWei, 4)} ${symbol}`
+                    : '🚀 Join the House Room'}
+            </button>
+          </div>
         </div>
       )}
 
