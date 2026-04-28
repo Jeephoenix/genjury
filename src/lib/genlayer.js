@@ -309,19 +309,17 @@ export async function callMethod(address, fn, args = [], valueWei = 0n, label = 
 /**
  * Deploy the Genjury contract.
  *
+ * The 3.00% house cut and the house wallet (= deployer) are baked into the
+ * contract, so the deployer only chooses how long the game is and how much
+ * each player pays to join.
+ *
  * @param {object} opts
  * @param {number} opts.maxRounds        Total rounds in the game (>=1).
  * @param {bigint} opts.entryFeeWei      Wei each player pays to join (0 = free).
- * @param {number} opts.platformFeeBps   Basis points (0..2000) of every entry fee
- *                                       routed to the platform owner.
- * @param {string} opts.platformOwner    EOA that may claim platform fees. Empty
- *                                       string => deployer becomes owner.
  */
 export async function deployGenjury({
   maxRounds = 3,
   entryFeeWei = 0n,
-  platformFeeBps = 0,
-  platformOwner = '',
 } = {}) {
   const client = getClient()
   const id = ++_txSeq
@@ -334,8 +332,6 @@ export async function deployGenjury({
       args: [
         Number(maxRounds),
         typeof entryFeeWei === 'bigint' ? entryFeeWei : BigInt(entryFeeWei || 0),
-        Number(platformFeeBps) | 0,
-        String(platformOwner || ''),
       ],
     })
   } catch (e) {
