@@ -17,7 +17,7 @@ import {
   createAccount,
   generatePrivateKey,
 } from 'genlayer-js'
-import { studionet, localnet, testnetAsimov } from 'genlayer-js/chains'
+import { studionet, localnet, testnetAsimov, testnetBradbury } from 'genlayer-js/chains'
 
 import contractSource from '../../contracts/genjury.py?raw'
 
