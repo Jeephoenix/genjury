@@ -214,9 +214,15 @@ function applyContractState(get, s) {
     objectionBy:    s.objectionBy ? norm(s.objectionBy) : null,
     objectionVotes: mapObjectionVotes(s),
     revealData:     mapReveal(s),
-    // ── Economics (wei kept as BigInt, owner lower-cased for compares) ──
+    // ── Economics (wei kept as BigInt, addresses lower-cased for compares) ──
     entryFeeWei:  safeBigInt(s.entryFee),
     prizePoolWei: safeBigInt(s.prizePool),
+    // House cut: the contract returns `house` + `houseCutBps` + `houseFeesCollected`,
+    // and aliases them to the legacy `platformOwner` / `platformFeeBps` /
+    // `platformFeesCollected` names so older deployments keep working.
+    houseAddress:             norm(s.house || s.platformOwner) || null,
+    houseCutBps:              Number(s.houseCutBps ?? s.platformFeeBps ?? 0),
+    houseFeesCollectedWei:    safeBigInt(s.houseFeesCollected ?? s.platformFeesCollected),
     winnerAddress:            norm(s.winnerAddress) || null,
     winnerWinningsWei:        safeBigInt(s.winnerWinningsWei),
     prizeDistributed:         !!s.prizeDistributed,
@@ -303,11 +309,15 @@ const useGameStore = create((set, get) => ({
   scoreHistory:   [],
 
   // ── Economics (mirrors contract) ────────────────────────────────────
-  entryFeeWei:       0n,
-  prizePoolWei:      0n,
-  winnerAddress:     null,
-  winnerWinningsWei: 0n,
-  prizeDistributed:  true,
+  entryFeeWei:           0n,
+  prizePoolWei:          0n,
+  // House cut — flat 3.00% of every entry fee, paid to the deployer wallet.
+  houseAddress:          null,
+  houseCutBps:           0,    // 300 once a contract is loaded; 0 means "unknown / no room"
+  houseFeesCollectedWei: 0n,
+  winnerAddress:         null,
+  winnerWinningsWei:     0n,
+  prizeDistributed:      true,
 
   // ── Local-only ──────────────────────────────────────────────────────
   timer:          0,
@@ -572,6 +582,35 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  // ── House (deployer) sweeps the accumulated 3% cut ──────────────────
+  // Calls the new `claim_house_fees` method; falls back to the legacy
+  // `claim_platform_fees` shim so older contracts deployed before the
+  // rename still work.
+  claimHouseFees: async () => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    try {
+      await callMethod(roomCode, 'claim_house_fees', [], 0n, 'Claim house fees')
+      pushToast('success', 'House fees swept — funds in your wallet')
+      refreshState(get)
+    } catch (e) {
+      const msg = e?.shortMessage || e?.message || ''
+      // Old deployments don't have claim_house_fees yet — try the alias.
+      if (/method.*not.*found|unknown method|no.*method/i.test(msg)) {
+        try {
+          await callMethod(roomCode, 'claim_platform_fees', [], 0n, 'Claim house fees')
+          pushToast('success', 'House fees swept — funds in your wallet')
+          refreshState(get)
+          return
+        } catch (e2) {
+          pushToast('error', e2?.shortMessage || e2?.message || 'Could not claim house fees')
+          return
+        }
+      }
+      pushToast('error', msg || 'Could not claim house fees')
+    }
+  },
+
   // ── Reset to landing page ───────────────────────────────────────────
   resetGame: () => {
     stopPolling()
@@ -600,11 +639,14 @@ const useGameStore = create((set, get) => ({
       timerMax:        0,
       pendingTx:       null,
       chatMessages:    [],
-      entryFeeWei:       0n,
-      prizePoolWei:      0n,
-      winnerAddress:     null,
-      winnerWinningsWei: 0n,
-      prizeDistributed:  true,
+      entryFeeWei:           0n,
+      prizePoolWei:          0n,
+      houseAddress:          null,
+      houseCutBps:           0,
+      houseFeesCollectedWei: 0n,
+      winnerAddress:         null,
+      winnerWinningsWei:     0n,
+      prizeDistributed:      true,
     })
   },
 }))
