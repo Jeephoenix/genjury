@@ -1,25 +1,37 @@
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0118" />
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0118" />
 
-  <title>Genjury — On-chain bluffing, judged by AI</title>
-  <meta name="description" content="A multiplayer bluffing game where the verdicts are rendered by an on-chain AI Judge. Write three statements, hide one lie, fool the jury." />
+    <title>Genjury — On-chain bluffing, judged by AI</title>
+    <meta name="description" content="A multiplayer bluffing game where the verdicts are rendered by an on-chain AI Judge. Write three statements, hide one lie, fool the jury." />
 
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="Genjury — On-chain bluffing, judged by AI" />
-  <meta property="og:description" content="Write three statements, hide one lie. Fool your friends and the AI Judge." />
-  <meta property="og:url" content="https://genjury.vercel.app" />
-  <meta property="og:image" content="/og.png" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Genjury — On-chain bluffing, judged by AI" />
+    <meta property="og:description" content="Write three statements, hide one lie. Fool your friends and the AI Judge." />
+    <meta property="og:url" content="https://genjury.vercel.app" />
+    <meta property="og:image" content="/og.png" />
 
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Genjury — On-chain bluffing, judged by AI" />
-  <meta name="twitter:description" content="Write three statements, hide one lie. Fool your friends and the AI Judge." />
-  <meta name="twitter:image" content="/og.png" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Genjury — On-chain bluffing, judged by AI" />
+    <meta name="twitter:description" content="Write three statements, hide one lie. Fool your friends and the AI Judge." />
+    <meta name="twitter:image" content="/og.png" />
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <link rel="manifest" href="/manifest.webmanifest" />
-</head>
+    <!-- Fonts (your Tailwind config references Syne, DM Sans, JetBrains Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
