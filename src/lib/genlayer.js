@@ -461,3 +461,15 @@ export function getRememberedRoom() {
 export function forgetRoom() {
   try { localStorage.removeItem(STORAGE_ROOM) } catch {}
       }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Backwards-compat shims — kept so leftover imports don't crash the bundle.
+// Safe to delete once `grep -rn "burnerAddress\|getPrivateKey\|resetBurner\|
+// importPrivateKey\|getWalletMode\|isInjectedActive" src/` returns nothing.
+// ──────────────────────────────────────────────────────────────────────────────
+export function burnerAddress()    { return null }
+export function getPrivateKey()    { return null }
+export function resetBurner()      {}
+export function importPrivateKey() { throw new Error('Burner wallet has been removed. Connect a Web3 wallet.') }
+export function getWalletMode()    { return 'injected' }
+export function isInjectedActive() { return isWalletConnected() }
