@@ -2,19 +2,14 @@ import React, { useState } from 'react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol, getNetworkInfo } from '../lib/genlayer'
 
-const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—')
-
 export default function LobbyPage() {
   const roomCode  = useGameStore(s => s.roomCode)
   const players   = useGameStore(s => s.players)
   const myId      = useGameStore(s => s.myId)
   const startGame = useGameStore(s => s.startGame)
   const maxRounds = useGameStore(s => s.maxRounds)
-  const entryFeeWei              = useGameStore(s => s.entryFeeWei)
-  const prizePoolWei             = useGameStore(s => s.prizePoolWei)
-  const platformFeeBps           = useGameStore(s => s.platformFeeBps)
-  const platformOwner            = useGameStore(s => s.platformOwner)
-  const platformFeesCollectedWei = useGameStore(s => s.platformFeesCollectedWei)
+  const entryFeeWei  = useGameStore(s => s.entryFeeWei)
+  const prizePoolWei = useGameStore(s => s.prizePoolWei)
 
   const [copied, setCopied] = useState(false)
   const symbol = getChainNativeSymbol()
@@ -86,11 +81,6 @@ export default function LobbyPage() {
               accent="gold"
             />
             <Stat
-              label="Platform fee"
-              value={`${(platformFeeBps / 100).toFixed(2)}%`}
-              accent="mute"
-            />
-            <Stat
               label="Rounds"
               value={`${maxRounds}`}
               accent="mute"
@@ -106,16 +96,6 @@ export default function LobbyPage() {
               This is a free-play room — no {symbol} is staked. Bragging rights only.
             </p>
           )}
-          <div className="mt-3 pt-3 border-t border-white/10 text-[11px] font-mono text-white/30 space-y-1">
-            <div>
-              Platform owner: <span className="text-white/60">{short(platformOwner)}</span>
-            </div>
-            {platformFeesCollectedWei > 0n && (
-              <div>
-                Fees collected: <span className="text-plasma">{formatGen(platformFeesCollectedWei, 6)} {symbol}</span>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Players */}
