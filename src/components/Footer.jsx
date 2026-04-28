@@ -8,10 +8,9 @@ export default function Footer() {
       <p className="text-white/30 text-xs font-mono">
         Genjury · Running on {net.label}
       </p>
-      <p className="text-white/20 text-[11px] mt-2 max-w-md mx-auto">
+            <p className="text-white/20 text-[11px] mt-2 max-w-md mx-auto">
         Testnet only. Tokens have no monetary value. Not financial advice.
-        Burner wallets are stored in your browser — clearing site data deletes
-        them permanently.
+        Bring your own Web3 wallet (MetaMask, Rabby, etc.) to play.
       </p>
     </footer>
   )
