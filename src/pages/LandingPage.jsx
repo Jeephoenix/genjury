@@ -17,11 +17,9 @@ export default function LandingPage() {
   const [name, setName] = useState('')
 
   // Create-room form
-  const [entryFee, setEntryFee]         = useState('0')
-  const [platformPct, setPlatformPct]   = useState('5')
-  const [maxRounds, setMaxRounds]       = useState(3)
-  const [feeError, setFeeError]         = useState(null)
-  const [pctError, setPctError]         = useState(null)
+  const [entryFee, setEntryFee]   = useState('0.01')
+  const [maxRounds, setMaxRounds] = useState(3)
+  const [feeError, setFeeError]   = useState(null)
 
   // Join-room form
   const [roomCode, setRoomCode] = useState('')
@@ -45,21 +43,13 @@ export default function LandingPage() {
     try { return parseGen(entryFee) } catch { return null }
   }, [entryFee])
 
-  const platformBps = useMemo(() => {
-    const n = Number(platformPct)
-    if (!Number.isFinite(n)) return null
-    return Math.round(n * 100)
-  }, [platformPct])
-
   const validateCreate = () => {
-    let ok = true
     if (entryFeeWei === null) {
-      setFeeError(`Invalid ${symbol} amount`); ok = false
-    } else { setFeeError(null) }
-    if (platformBps === null || platformBps < 0 || platformBps > 2000) {
-      setPctError('Must be between 0 and 20%'); ok = false
-    } else { setPctError(null) }
-    return ok
+      setFeeError(`Invalid ${symbol} amount`)
+      return false
+    }
+    setFeeError(null)
+    return true
   }
 
   const handleCreate = () => {
@@ -67,7 +57,6 @@ export default function LandingPage() {
     if (!validateCreate()) return
     createRoom(name.trim(), {
       entryFeeWei,
-      platformFeeBps: platformBps,
       maxRounds: Number(maxRounds),
     })
   }
@@ -230,38 +219,6 @@ export default function LandingPage() {
                   {feeError && <p className="text-signal text-xs mt-1.5">{feeError}</p>}
                 </div>
 
-                {/* Platform fee */}
-                <div>
-                  <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
-                    Platform fee (% of each entry)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="input font-mono"
-                      placeholder="0"
-                      value={platformPct}
-                      onChange={e => setPlatformPct(e.target.value.replace(',', '.'))}
-                      inputMode="decimal"
-                    />
-                    <span className="text-white/40 font-mono text-sm flex-shrink-0">%</span>
-                  </div>
-                  <p className="text-white/30 text-xs mt-1.5">
-                    Routed to your wallet (the deployer). Capped at 20%.
-                    {entryFeeWei && entryFeeWei > 0n && platformBps !== null && (
-                      <>
-                        {' '}Per entry → owner takes{' '}
-                        <span className="text-plasma font-mono">
-                          {formatGen((entryFeeWei * BigInt(platformBps)) / 10000n, 6)} {symbol}
-                        </span>, pot gets{' '}
-                        <span className="text-neon font-mono">
-                          {formatGen(entryFeeWei - (entryFeeWei * BigInt(platformBps)) / 10000n, 6)} {symbol}
-                        </span>.
-                      </>
-                    )}
-                  </p>
-                  {pctError && <p className="text-signal text-xs mt-1.5">{pctError}</p>}
-                </div>
-
                 {/* Max rounds */}
                 <div>
                   <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
@@ -325,11 +282,6 @@ export default function LandingPage() {
                         {formatGen(preview.prizePoolWei, 6)} {symbol}
                       </span>
                     </Row>
-                    <Row label="Platform fee">
-                      <span className="font-mono text-white/60">
-                        {(preview.platformFeeBps / 100).toFixed(2)}%
-                      </span>
-                    </Row>
                     {preview.entryFeeWei > 0n && (
                       <p className="pt-1.5 mt-1.5 border-t border-white/10 text-white/50">
                         Joining will charge your wallet{' '}
@@ -355,7 +307,7 @@ export default function LandingPage() {
                 loading
                 || !name.trim()
                 || (mode === 'join' && roomCode.length < 10)
-                || (mode === 'create' && (entryFeeWei === null || platformBps === null || platformBps < 0 || platformBps > 2000))
+                || (mode === 'create' && entryFeeWei === null)
               }
             >
               {loading
