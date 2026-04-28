@@ -29,6 +29,7 @@ export default {
         'spin-slow': 'spin 3s linear infinite',
         'count-down': 'countDown 1s ease-in-out',
         'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+        'tx-progress': 'txProgress 1.6s ease-in-out infinite',
       },
       keyframes: {
         pulseNeon: {
@@ -59,6 +60,11 @@ export default {
         glowPulse: {
           '0%, 100%': { textShadow: '0 0 8px #a259ff, 0 0 20px #a259ff44' },
           '50%': { textShadow: '0 0 20px #a259ff, 0 0 50px #a259ff88' },
+        },
+        txProgress: {
+          '0%':   { transform: 'translateX(-100%)', width: '40%' },
+          '50%':  { transform: 'translateX(50%)',   width: '60%' },
+          '100%': { transform: 'translateX(250%)',  width: '40%' },
         },
       },
     },
