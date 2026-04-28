@@ -3,12 +3,23 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/"
+    }
   ],
   "crons": [
     {
       "path": "/api/chat-cleanup",
-      "schedule": "0 * * * *"
+      "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/chat.js": {
+      "maxDuration": 10
+    },
+    "api/chat-cleanup.js": {
+      "maxDuration": 10
+    }
+  }
 }
