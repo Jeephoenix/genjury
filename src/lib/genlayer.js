@@ -17,7 +17,12 @@ import {
   createAccount,
   generatePrivateKey,
 } from 'genlayer-js'
-import { studionet, localnet, testnetAsimov, testnetBradbury } from 'genlayer-js/chains'
+import {
+  studionet,
+  localnet,
+  testnetAsimov,
+  testnetBradbury,
+} from 'genlayer-js/chains'
 
 import contractSource from '../../contracts/genjury.py?raw'
 
@@ -241,50 +246,59 @@ export function isInjectedActive() {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Network / chain
+//
+// We default to GenLayer Testnet (Bradbury) — the network GenLayer recommends
+// for production-like testing with real AI workloads. Asimov stays available
+// for infrastructure testing if you set VITE_GENLAYER_NETWORK=asimov.
 // ──────────────────────────────────────────────────────────────────────────────
+const DEFAULT_NETWORK = 'bradbury'
+
 const NETWORK_INFO = {
   bradbury: {
-    label: 'GenLayer Testnet (Bradbury)',
+    label:    'GenLayer Testnet (Bradbury)',
     explorer: 'https://explorer-bradbury.genlayer.com',
-    faucet: 'https://testnet-faucet.genlayer.foundation',
+    faucet:   'https://testnet-faucet.genlayer.foundation',
   },
   asimov: {
-    label: 'GenLayer Testnet (Asimov)',
+    label:    'GenLayer Testnet (Asimov)',
     explorer: 'https://explorer-asimov.genlayer.com',
-    faucet: 'https://testnet-faucet.genlayer.foundation',
+    faucet:   'https://testnet-faucet.genlayer.foundation',
   },
   studionet: {
-    label: 'GenLayer Studio (local)',
+    label:    'GenLayer Studio (local)',
     explorer: null,
-    faucet: null,
+    faucet:   null,
   },
   localnet: {
-    label: 'GenLayer Localnet',
+    label:    'GenLayer Localnet',
     explorer: null,
-    faucet: null,
+    faucet:   null,
   },
+}
+
+// Normalize the env-var value into one of our canonical keys. Old configs
+// like 'testnet' or 'testnetasimov' keep working.
+function normalizeNetworkKey(raw) {
+  const k = (raw || '').toLowerCase()
+  if (!k)                                   return DEFAULT_NETWORK
+  if (k === 'testnet')                      return DEFAULT_NETWORK   // legacy alias → bradbury
+  if (k === 'testnetbradbury')              return 'bradbury'
+  if (k === 'testnetasimov')                return 'asimov'
+  if (NETWORK_INFO[k])                      return k
+  return DEFAULT_NETWORK
 }
 
 export function getNetworkName() {
-  // Default to Bradbury — GenLayer's recommended testnet for production-like
-  // testing with real AI workloads. Older configs ('testnet' / 'testnetasimov')
-  // are normalized below.
-  return (import.meta.env.VITE_GENLAYER_NETWORK || 'bradbury').toLowerCase()
+  return normalizeNetworkKey(import.meta.env.VITE_GENLAYER_NETWORK)
 }
 
 export function getNetworkInfo() {
-  const raw = getNetworkName()
-  // Normalize legacy aliases: 'testnet' (default before Bradbury existed) and
-  // 'testnetasimov' (early SDK naming) both map to their canonical keys.
-  const key =
-    raw === 'testnet' || raw === 'testnetbradbury' ? 'bradbury' :
-    raw === 'testnetasimov'                         ? 'asimov'   :
-    raw
-  return { key, ...(NETWORK_INFO[key] || NETWORK_INFO.bradbury) }
+  const key = getNetworkName()
+  return { key, ...(NETWORK_INFO[key] || NETWORK_INFO[DEFAULT_NETWORK]) }
 }
 
 export function getChain() {
-  const { key } = getNetworkInfo()
+  const key = getNetworkName()
   if (key === 'studionet') return studionet
   if (key === 'localnet')  return localnet
   if (key === 'asimov')    return testnetAsimov
