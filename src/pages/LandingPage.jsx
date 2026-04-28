@@ -4,9 +4,6 @@ import {
   parseGen,
   formatGen,
   getChainNativeSymbol,
-  isInjectedActive,
-  hasInjectedProvider,
-  connectInjectedWallet,
   subscribeWallet,
   getDefaultContractAddress,
 } from '../lib/genlayer'
@@ -44,9 +41,7 @@ export default function LandingPage() {
   const [, force] = useState(0)
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
 
-  const symbol     = getChainNativeSymbol()
-  const usingWallet = isInjectedActive()
-  const canConnect  = hasInjectedProvider()
+  const symbol = getChainNativeSymbol()
 
   const entryFeeWei = useMemo(() => {
     try { return parseGen(entryFee) } catch { return null }
@@ -123,11 +118,6 @@ export default function LandingPage() {
     return () => { cancelled = true; clearInterval(t) }
   }, [previewRoom])
 
-  const handleQuickConnect = async () => {
-    try { await connectInjectedWallet() }
-    catch (e) { addToast(e?.shortMessage || e?.message || 'Could not connect wallet', 'error') }
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-20 relative">
       {/* Hero */}
@@ -163,26 +153,6 @@ export default function LandingPage() {
           ))}
         </div>
       </div>
-
-      {/* Wallet status banner */}
-      {!usingWallet && (
-        <div className="w-full max-w-sm mb-4 rounded-xl bg-plasma/8 border border-plasma/25 px-4 py-3 text-xs text-white/70 flex items-center justify-between gap-3">
-          <span>
-            <span className="text-plasma font-600">Burner key active.</span>{' '}
-            {canConnect
-              ? `Connect your wallet to play with real ${symbol}.`
-              : `Install MetaMask to play with real ${symbol}.`}
-          </span>
-          {canConnect && (
-            <button
-              className="btn btn-plasma px-3 py-1.5 text-[11px] flex-shrink-0"
-              onClick={handleQuickConnect}
-            >
-              Connect
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Featured room — only rendered when VITE_GENJURY_DEFAULT_CONTRACT is set */}
       {DEFAULT_CONTRACT && !mode && (
