@@ -32,6 +32,7 @@ import {
   forgetRoom,
   subscribeWallet,
   subscribeTx,
+  parseGen,
 } from './genlayer'
 
 // ── Phase constants — must match the contract's PHASE_* string literals ─────
@@ -266,6 +267,8 @@ function applyContractState(get, s) {
     phase:          newPhase,
     round:          Number(s.round || 0),
     maxRounds:      Number(s.maxRounds || 3),
+    maxPlayers:     Number(s.maxPlayers || 8),
+    hostAddress:    norm(s.host) || null,
     category:       s.category || '',
     deceiverIndex:  Number(s.deceiverIndex || 0),
     players:        mapPlayers(s),
@@ -359,6 +362,8 @@ const useGameStore = create((set, get) => ({
   phase:          PHASES.LOBBY,
   round:          0,
   maxRounds:      3,
+  maxPlayers:     8,
+  hostAddress:    null,
   category:       '',
   players:        [],
   deceiverIndex:  0,
@@ -575,6 +580,110 @@ const useGameStore = create((set, get) => ({
       refreshState(get)
     } catch (e) {
       pushToast('error', e?.shortMessage || e?.message || 'Could not start game')
+    }
+  },
+
+  // ── Host admin actions ──────────────────────────────────────────────
+  // All of these mirror the host-only setters added in contracts/genjury.py.
+  // The contract enforces phase / role guards, so we just translate inputs,
+  // call the method, surface a toast on failure, and re-poll on success.
+
+  setEntryFee: async (humanGenStr) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    let wei
+    try {
+      wei = parseGen(humanGenStr)
+    } catch (e) {
+      pushToast('error', e?.message || 'Invalid GEN amount')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'set_entry_fee', [wei], 0n, 'Update entry fee')
+      pushToast('success', 'Entry fee updated')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not change entry fee')
+    }
+  },
+
+  setMaxRounds: async (n) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const rounds = Math.floor(Number(n))
+    if (!Number.isFinite(rounds) || rounds < 1 || rounds > 50) {
+      pushToast('error', 'Rounds must be a whole number between 1 and 50')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'set_max_rounds', [rounds], 0n, 'Update max rounds')
+      pushToast('success', `Max rounds set to ${rounds}`)
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not change max rounds')
+    }
+  },
+
+  setMaxPlayers: async (n) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const cap = Math.floor(Number(n))
+    if (!Number.isFinite(cap) || cap < 2 || cap > 12) {
+      pushToast('error', 'Player cap must be between 2 and 12')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'set_max_players', [cap], 0n, 'Update max players')
+      pushToast('success', `Max players set to ${cap}`)
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not change max players')
+    }
+  },
+
+  kickPlayer: async (addr) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const target = (addr || '').trim().toLowerCase()
+    if (!/^0x[0-9a-f]{40}$/.test(target)) {
+      pushToast('error', 'Invalid player address')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'kick_player', [target], 0n, `Kick ${target.slice(0, 6)}…`)
+      pushToast('success', 'Player kicked and refunded')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not kick player')
+    }
+  },
+
+  transferHost: async (addr) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const target = (addr || '').trim().toLowerCase()
+    if (!/^0x[0-9a-f]{40}$/.test(target)) {
+      pushToast('error', 'New host must be a valid 0x… address')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'transfer_host', [target], 0n, 'Transfer host role')
+      pushToast('success', 'Host role transferred')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not transfer host')
+    }
+  },
+
+  resetToLobby: async () => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    try {
+      await callMethod(roomCode, 'reset_to_lobby', [], 0n, 'Reset room to lobby')
+      pushToast('success', 'Room reset to lobby')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not reset room')
     }
   },
 
