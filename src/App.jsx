@@ -8,8 +8,12 @@ import AIJudgingPhase from './pages/AIJudgingPhase'
 import ObjectionPhase from './pages/ObjectionPhase'
 import RevealPhase from './pages/RevealPhase'
 import ScoreboardPage from './pages/ScoreboardPage'
+import GamesPage from './pages/GamesPage'
+import LeaderboardPage from './pages/LeaderboardPage'
+import ProfilePage from './pages/ProfilePage'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
+import TopNav from './components/TopNav'
 import WalletPanel from './components/WalletPanel'
 import TxStatusBanner from './components/TxStatusBanner'
 import ChatPanel from './components/ChatPanel'
@@ -19,8 +23,9 @@ import ErrorBoundary from './components/ErrorBoundary'
 import OnboardingModal from './components/OnboardingModal'
 
 export default function App() {
-  const phase = useGameStore(s => s.phase)
-  const roomCode = useGameStore(s => s.roomCode)
+  const phase     = useGameStore(s => s.phase)
+  const roomCode  = useGameStore(s => s.roomCode)
+  const activeTab = useGameStore(s => s.activeTab)
   const tickTimer = useGameStore(s => s.tickTimer)
 
   useEffect(() => {
@@ -28,7 +33,11 @@ export default function App() {
     return () => clearInterval(interval)
   }, [tickTimer])
 
-  const inGame = roomCode && phase !== PHASES.LOBBY
+  const inGame    = roomCode && phase !== PHASES.LOBBY
+  const inLobbyUI = phase === PHASES.LOBBY && roomCode
+  // Show the persistent top navigation everywhere except inside an active game
+  // and the in-room lobby (both have their own dedicated headers / context).
+  const showTopNav = !inGame && !inLobbyUI
 
   return (
     <ErrorBoundary>
@@ -39,18 +48,30 @@ export default function App() {
         <div className="fixed top-1/2 left-0 w-64 h-64 bg-ice/3 rounded-full blur-3xl pointer-events-none" />
 
         <NetworkBanner />
+        {showTopNav && <TopNav />}
         {inGame && <GameHeader />}
         <WalletPanel />
 
         <main className={`flex-1 ${inGame ? 'pt-16' : ''}`}>
-          {phase === PHASES.LOBBY && !roomCode && <LandingPage />}
-          {phase === PHASES.LOBBY && roomCode && <LobbyPage />}
-          {phase === PHASES.WRITING && <WritingPhase />}
-          {phase === PHASES.VOTING && <VotingPhase />}
-          {phase === PHASES.AI_JUDGING && <AIJudgingPhase />}
-          {(phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE) && <ObjectionPhase />}
-          {phase === PHASES.REVEAL && <RevealPhase />}
-          {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
+          {inGame ? (
+            <>
+              {phase === PHASES.WRITING && <WritingPhase />}
+              {phase === PHASES.VOTING && <VotingPhase />}
+              {phase === PHASES.AI_JUDGING && <AIJudgingPhase />}
+              {(phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE) && <ObjectionPhase />}
+              {phase === PHASES.REVEAL && <RevealPhase />}
+              {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
+            </>
+          ) : inLobbyUI ? (
+            <LobbyPage />
+          ) : (
+            <>
+              {activeTab === 'home'        && <LandingPage />}
+              {activeTab === 'games'       && <GamesPage />}
+              {activeTab === 'leaderboard' && <LeaderboardPage />}
+              {activeTab === 'profile'     && <ProfilePage />}
+            </>
+          )}
         </main>
 
         <Footer />
