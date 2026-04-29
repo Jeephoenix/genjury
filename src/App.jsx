@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import useGameStore, { PHASES } from './lib/store'
-import LandingPage from './pages/LandingPage'
+import HomePage from './pages/HomePage'
+import MistrialPage from './pages/MistrialPage'
 import LobbyPage from './pages/LobbyPage'
 import WritingPhase from './pages/WritingPhase'
 import VotingPhase from './pages/VotingPhase'
@@ -66,7 +67,8 @@ export default function App() {
             <LobbyPage />
           ) : (
             <>
-              {activeTab === 'home'        && <LandingPage />}
+              {activeTab === 'home'        && <HomePage />}
+              {activeTab === 'mistrial'    && <MistrialPage />}
               {activeTab === 'games'       && <GamesPage />}
               {activeTab === 'leaderboard' && <LeaderboardPage />}
               {activeTab === 'profile'     && <ProfilePage />}
