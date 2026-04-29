@@ -521,4 +521,4 @@ export function getRememberedRoom() {
 }
 export function forgetRoom() {
   try { localStorage.removeItem(STORAGE_ROOM) } catch {}
-      }
+}
