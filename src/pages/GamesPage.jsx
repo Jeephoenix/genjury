@@ -11,6 +11,7 @@ import {
   Dice5,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
+import MistrialMark from '../components/MistrialMark'
 
 const GAMES = [
   {
@@ -23,7 +24,7 @@ const GAMES = [
     players: '3 – 8',
     minStake: '0 – 1 GEN',
     accent: 'neon',
-    icon: Brain,
+    icon: MistrialMark,
   },
   {
     id: 'highstakes-poker',
