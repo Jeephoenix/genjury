@@ -172,14 +172,77 @@ function stopPolling() {
   }
 }
 
+// get_state now returns a JSON-encoded string (see contracts/genjury.py).
+// Older deploys returned a decoded object directly, so we accept both shapes
+// to keep the frontend backward-compatible during the cutover.
+function parseContractPayload(raw) {
+  if (raw == null) return null
+  if (typeof raw === 'string') {
+    if (raw.length === 0) return null
+    try { return JSON.parse(raw) } catch { return null }
+  }
+  return raw
+}
+
 async function refreshState(get) {
   const code = get().roomCode
   if (!code) return
   try {
     const raw = await readView(code, 'get_state')
-    applyContractState(get, raw)
+    const parsed = parseContractPayload(raw)
+    if (!parsed) return
+    applyContractState(get, parsed)
+    // Best-effort auto-advance: AI_JUDGING and REVEAL are inert phases that
+    // need *someone* to push the next on-chain transaction. Letting the host
+    // do it from the polling loop avoids the room stalling silently.
+    maybeAutoAdvance(get, parsed)
   } catch (err) {
     console.warn('[genjury] poll failed:', err?.message || err)
+  }
+}
+
+// ── Auto-advance: keep the room moving even if no one clicks the button ────
+let _autoAdvancing = false
+async function maybeAutoAdvance(get, s) {
+  if (_autoAdvancing) return
+  const state = get()
+  const myId = state.myId
+  const host = norm(s?.host)
+  // Only the host runs auto-advance, so we don't get N players racing the
+  // same write.
+  if (!host || !myId || host !== myId) return
+
+  const phase = s?.phase
+  try {
+    if (phase === 'ai_judging' && !s?.aiJudged) {
+      _autoAdvancing = true
+      await callMethod(state.roomCode, 'run_ai_judge', [], 0n,
+        'Summon the AI Judge')
+    } else if (phase === 'reveal') {
+      // Give players a beat to read the reveal screen before forcing the
+      // next round. We re-check phase right before sending so we don't
+      // double-advance if the host already clicked Next.
+      _autoAdvancing = true
+      setTimeout(async () => {
+        const cur = useGameStore.getState()
+        if (cur.phase === 'reveal' && cur.roomCode === state.roomCode) {
+          try {
+            await callMethod(cur.roomCode, 'next_round', [], 0n,
+              'Advance to next round')
+          } catch (e) {
+            console.warn('[genjury] auto next_round:', e?.message || e)
+          }
+        }
+        _autoAdvancing = false
+      }, 6000)
+      return
+    } else {
+      return
+    }
+  } catch (e) {
+    console.warn('[genjury] auto-advance:', e?.message || e)
+  } finally {
+    if (phase !== 'reveal') _autoAdvancing = false
   }
 }
 
@@ -429,13 +492,14 @@ const useGameStore = create((set, get) => ({
     rememberRoom(addr)
     try {
       const raw = await readView(addr, 'get_state')
-      const fee = safeBigInt(raw?.entryFee)
-      const playersMap = raw?.players || {}
+      const parsed = parseContractPayload(raw) || {}
+      const fee = safeBigInt(parsed?.entryFee)
+      const playersMap = parsed?.players || {}
       const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
       // Seed the store with the room's real economics + phase BEFORE awaiting
       // the join transaction, so the lobby shows the correct entry fee and
       // prize pool right away instead of flashing default 0-GEN values.
-      applyContractState(get, raw)
+      applyContractState(get, parsed)
       // Start polling immediately so the lobby keeps refreshing while the
       // join tx is pending.
       startPolling(get)
