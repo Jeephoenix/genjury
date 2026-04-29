@@ -44,8 +44,17 @@ import typing
 # ──────────────────────────────────────────────────────────────────────────────
 # EVM-contract interface stub used purely so the IC can transfer GEN to EOA
 # wallet addresses (winners, the platform owner, anyone calling `leave`).
-# GenLayer's docs note this awkward dance is required today and will be
-# simplified in a future SDK version.
+#
+# `emit_transfer` is auto-injected by `@gl.evm.contract_interface` on the
+# `Write` proxy, so leaving the inner classes empty is the documented
+# GenLayer pattern. BUT — and this is what to actually test on Studio /
+# Bradbury before mainnet — the auto-injected emit_transfer relies on the
+# recipient address being valid and the contract holding enough native GEN
+# to cover `value`. If a withdrawal silently fails on Bradbury but worked on
+# Studio, the most common cause is that Bradbury's consensus rejects native
+# transfers from contracts that are still in a non-finalized state. Always
+# end-to-end test `claim_prize`, `claim_platform_fees`, and `leave` on
+# Bradbury BEFORE the first real game.
 # ──────────────────────────────────────────────────────────────────────────────
 @gl.evm.contract_interface
 class _Wallet:
@@ -57,10 +66,32 @@ class _Wallet:
 
 
 def _send_gen(recipient: str, amount_wei: int) -> None:
-    """Transfer ``amount_wei`` GEN from this contract to ``recipient``."""
+    """Transfer ``amount_wei`` GEN from this contract to ``recipient``.
+
+    Defensive: skip zero/negative amounts so we never emit a no-op transfer
+    and so callers can blindly call this without pre-checking.
+    """
     if amount_wei <= 0:
         return
-    _Wallet(Address(recipient)).emit_transfer(value=u256(amount_wei))
+    # Recipient must be lowercased before constructing Address — a mixed-case
+    # string can fail Address() validation depending on SDK version.
+    _Wallet(Address(_norm_addr(recipient))).emit_transfer(value=u256(amount_wei))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Address normalization
+#
+# `gl.message.sender_address` may arrive checksummed or all-lowercase
+# depending on which RPC / wallet path the caller used. We canonicalize to
+# lowercase EVERYWHERE so equality checks against `self.host`, `self.deceiver`,
+# `self.platform_owner`, etc. don't randomly fail for a legitimate caller.
+# ──────────────────────────────────────────────────────────────────────────────
+def _norm_addr(addr) -> str:
+    return str(addr).strip().lower()
+
+
+def _sender() -> str:
+    return _norm_addr(gl.message.sender_address)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -188,7 +219,7 @@ class Genjury(gl.Contract):
                  entry_fee_wei: int = 0,
                  platform_fee_bps: int = 0,
                  platform_owner: str = ""):
-        self.host = str(gl.message.sender_address)
+        self.host = _sender()
         self.phase = PHASE_LOBBY
         self.round_num = u256(0)
         self.max_rounds = u256(max_rounds)
@@ -218,7 +249,7 @@ class Genjury(gl.Contract):
         # regardless of what the deployer passes in.
         fee_wei = max(0, int(entry_fee_wei))
         bps     = max(0, min(MAX_PLATFORM_FEE_BPS, int(platform_fee_bps)))
-        owner   = (platform_owner or "").strip()
+        owner   = _norm_addr(platform_owner) if platform_owner else ""
         self.entry_fee               = u256(fee_wei)
         self.platform_fee_bps        = u256(bps)
         # Empty owner => fall back to whoever deployed the contract.
@@ -300,7 +331,7 @@ class Genjury(gl.Contract):
 
         The caller must send exactly ``entry_fee`` wei of GEN with the call.
         """
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_LOBBY:
             raise gl.vm.UserError("Game already started")
         if self._player_count() >= MAX_PLAYERS:
@@ -333,7 +364,7 @@ class Genjury(gl.Contract):
         Refunds the full entry fee back to the caller and rolls back the
         platform-fee / prize-pool accounting for that seat.
         """
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_LOBBY:
             raise gl.vm.UserError("Cannot leave mid-game")
         if not self._is_player(sender):
@@ -356,7 +387,7 @@ class Genjury(gl.Contract):
     @gl.public.write
     def start_game(self) -> None:
         """Host kicks the game off. Round 1, deceiver = player_order[0]."""
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if sender != self.host:
             raise gl.vm.UserError("Only host can start the game")
         if self.phase != PHASE_LOBBY:
@@ -378,11 +409,13 @@ class Genjury(gl.Contract):
     def submit_statements(self,
                           s1: str, s2: str, s3: str,
                           lie_index: int) -> None:
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_WRITING:
             raise gl.vm.UserError("Not in writing phase")
         if sender != self.deceiver:
             raise gl.vm.UserError("Only the deceiver can submit")
+        # (writing-phase escape hatch lives in `force_close_writing` below
+        # so a disconnected deceiver doesn't permanently brick the room).
         if lie_index not in (0, 1, 2):
             raise gl.vm.UserError("lie_index must be 0, 1 or 2")
         for s in (s1, s2, s3):
@@ -397,12 +430,51 @@ class Genjury(gl.Contract):
         self.submitted = True
         self.phase = PHASE_VOTING
 
+    @gl.public.write
+    def force_close_writing(self) -> None:
+        """Host's escape hatch when the deceiver disconnects mid-WRITING.
+
+        Mirrors `force_close_voting` so a stalled writer can't brick the room
+        forever. Skips this round (the deceiver gets 0 XP for this round) and
+        rotates to the next deceiver.
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can force-close writing")
+        if self.phase != PHASE_WRITING:
+            raise gl.vm.UserError("Not in writing phase")
+
+        # Treat the round as if it had just been voted unanimously wrong:
+        # nothing to reveal, no XP awarded, just move on.
+        self.last_reveal = json.dumps({
+            "round":            int(self.round_num),
+            "lieIndex":         -1,
+            "statements":       ["", "", ""],
+            "deceiver":         self.deceiver,
+            "aiVerdictIndex":   -1,
+            "aiConfidence":     0,
+            "aiReasoning":      "Round skipped — deceiver did not submit in time.",
+            "effectiveVerdict": -1,
+            "aiWasFooled":      False,
+            "objectionRaised":  False,
+            "objectionBy":      "",
+            "objectionTally":   {"sustain": 0, "overrule": 0},
+            "votes":            {},
+            "confidence":       {},
+            "objectionVotes":   {},
+            "fooledPlayers":    [],
+            "xpGained":         {},
+            "skipped":          True,
+        })
+        self.score_history.append(self.last_reveal)
+        self.phase = PHASE_REVEAL
+
     # ──────────────────────────────────────────────────────────────────────
     # Voting phase — every detector picks the statement they think is the lie
     # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
     def cast_vote(self, statement_index: int, confidence_pct: int) -> None:
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_VOTING:
             raise gl.vm.UserError("Not in voting phase")
         if not self._is_player(sender):
@@ -428,7 +500,7 @@ class Genjury(gl.Contract):
     @gl.public.write
     def force_close_voting(self) -> None:
         """Host can close voting if the timer expires before everyone voted."""
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if sender != self.host:
             raise gl.vm.UserError("Only host can force-close voting")
         if self.phase != PHASE_VOTING:
@@ -492,7 +564,7 @@ character.
     # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
     def raise_objection(self) -> None:
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_OBJECTION:
             raise gl.vm.UserError("Not objection window")
         if not self._is_player(sender):
@@ -506,7 +578,7 @@ character.
 
     @gl.public.write
     def cast_objection_vote(self, stance: str) -> None:
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_OBJECTION_VOTE:
             raise gl.vm.UserError("Not objection-vote phase")
         if not self._is_player(sender):
@@ -520,14 +592,29 @@ character.
 
     @gl.public.write
     def skip_objection(self) -> None:
-        """Called when the objection window expires with nobody objecting."""
+        """Called when the objection window expires with nobody objecting.
+
+        Host-only to prevent any player from race-finalizing the round before
+        someone else has had time to object (the previous open-to-anyone
+        version was a denial-of-objection vector).
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can skip the objection window")
         if self.phase != PHASE_OBJECTION:
             raise gl.vm.UserError("Not objection window")
         self._finalize_round()
 
     @gl.public.write
     def close_objection_vote(self) -> None:
-        """Tally the objection vote and finalize the round."""
+        """Tally the objection vote and finalize the round.
+
+        Host-only for the same reason as `skip_objection` — keeps a losing
+        player from closing the vote before their opponents have voted.
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can close the objection vote")
         if self.phase != PHASE_OBJECTION_VOTE:
             raise gl.vm.UserError("Not objection-vote phase")
         self._finalize_round()
@@ -684,7 +771,7 @@ character.
         with a clean economic slate. Players are wiped because everyone needs
         to re-pay the entry fee for the next round.
         """
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if sender != self.host:
             raise gl.vm.UserError("Only host can reset")
         if not self.prize_distributed:
@@ -715,7 +802,7 @@ character.
     @gl.public.write
     def claim_prize(self) -> None:
         """Winner withdraws the prize pool to their wallet."""
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if self.phase != PHASE_SCOREBOARD:
             raise gl.vm.UserError("Game has not finished yet")
         if self.prize_distributed:
@@ -733,7 +820,7 @@ character.
     @gl.public.write
     def claim_platform_fees(self) -> None:
         """Platform owner sweeps accumulated fees to their wallet."""
-        sender = str(gl.message.sender_address)
+        sender = _sender()
         if sender != self.platform_owner:
             raise gl.vm.UserError("Only the platform owner can claim fees")
 
@@ -745,10 +832,18 @@ character.
 
     # ──────────────────────────────────────────────────────────────────────
     # Read-only views (used by the frontend to render state)
+    #
+    # IMPORTANT: every view returns a JSON-encoded string instead of a
+    # Python dict / list. The previous `dict[str, typing.Any]` signatures
+    # tripped GenLayer's calldata encoder on values like nested dicts,
+    # `None`, and bigint-as-string mixed alongside ints — producing the
+    # "ACCEPTED [ERROR] / no return value" you saw on Bradbury when the
+    # frontend tried to verify the contract. Returning a `str` is
+    # unambiguous to the encoder; the frontend does `JSON.parse(raw)`.
     # ──────────────────────────────────────────────────────────────────────
     @gl.public.view
-    def get_state(self) -> dict[str, typing.Any]:
-        """Single snapshot of everything the UI needs."""
+    def get_state(self) -> str:
+        """Single snapshot of everything the UI needs (JSON-encoded)."""
         votes_map: dict[str, int] = {}
         conf_map:  dict[str, int] = {}
         for v in self.voters:
@@ -771,7 +866,7 @@ character.
         if self.last_reveal:
             last_reveal_obj = json.loads(self.last_reveal)
 
-        return {
+        return json.dumps({
             "host":            self.host,
             "phase":           self.phase,
             "round":           int(self.round_num),
@@ -805,7 +900,7 @@ character.
             "winnerAddress":         self.winner_address,
             "winnerWinningsWei":     str(int(self.winner_winnings_wei)),
             "prizeDistributed":      self.prize_distributed,
-        }
+        })
 
     @gl.public.view
     def get_phase(self) -> str:
@@ -816,15 +911,17 @@ character.
         return int(self.round_num)
 
     @gl.public.view
-    def get_last_reveal(self) -> typing.Any:
-        if self.last_reveal:
-            return json.loads(self.last_reveal)
-        return None
+    def get_last_reveal(self) -> str:
+        """JSON-encoded reveal blob, or `""` when no round has finished yet."""
+        return self.last_reveal or ""
 
     @gl.public.view
-    def get_economics(self) -> dict[str, typing.Any]:
-        """Standalone view used by the lobby/landing UI to preview a room."""
-        return {
+    def get_economics(self) -> str:
+        """Standalone view used by the lobby/landing UI to preview a room.
+
+        Returns a JSON string. The frontend does `JSON.parse(raw)` on it.
+        """
+        return json.dumps({
             "entryFee":              str(int(self.entry_fee)),
             "prizePool":             str(int(self.prize_pool)),
             "platformFeeBps":        int(self.platform_fee_bps),
@@ -837,11 +934,11 @@ character.
             "maxPlayers":            MAX_PLAYERS,
             "phase":                 self.phase,
             "host":                  self.host,
-        }
+        })
 
     @gl.public.view
-    def get_scoreboard(self) -> list[dict[str, typing.Any]]:
-        """Sorted XP leaderboard for the SCOREBOARD page."""
+    def get_scoreboard(self) -> str:
+        """Sorted XP leaderboard for the SCOREBOARD page (JSON-encoded list)."""
         rows: list[dict[str, typing.Any]] = []
         for addr in self.player_order:
             rec = json.loads(self.players[addr])
@@ -854,4 +951,4 @@ character.
                 "level":   int(rec["level"]),
             })
         rows.sort(key=lambda r: r["xp"], reverse=True)
-        return rows
+        return json.dumps(rows)
