@@ -135,8 +135,12 @@ XP_DETECTOR_CONF_MAX = 150   # multiplied by confidence (0–100)
 XP_OBJECTION_SUCCESS = 80
 
 AVATARS = ["🦊", "🐉", "🦁", "🐺", "🦅", "🐙", "🦈", "🐆", "🦝", "🐻", "🦄", "🐬"]
+# Expanded to 12 colors so it stays collision-free if MAX_PLAYERS is ever
+# bumped beyond 8 (it currently equals the old 8-color length, which would
+# silently start aliasing avatars to duplicate colors at player 9+).
 COLORS  = ["#7fff6e", "#a259ff", "#38d9f5", "#ff6b35",
-           "#f5c842", "#ff4d8d", "#00d4aa", "#ff9500"]
+           "#f5c842", "#ff4d8d", "#00d4aa", "#ff9500",
+           "#5b8cff", "#ff5cd6", "#9aff5c", "#ffd86b"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -297,7 +301,21 @@ class Genjury(gl.Contract):
         self.last_reveal = ""
 
     def _pick_category(self, salt: int) -> str:
-        return CATEGORIES[salt % len(CATEGORIES)]
+        """Deterministic but non-trivial category picker.
+
+        The previous version was just `CATEGORIES[round_num % 7]`, which
+        meant round 1 was *always* "Pop Culture", round 2 *always*
+        "Science & Tech", etc. — across every Genjury room ever deployed.
+        Players could memorize the schedule.
+
+        We now mix in the host address so each deployment has a different
+        rotation, while staying fully deterministic (every validator picks
+        the same category, so consensus is preserved).
+        """
+        h = int(salt) * 2654435761  # Knuth multiplicative hash
+        for ch in self.host:
+            h = (h * 131 + ord(ch)) & 0xFFFFFFFFFFFFFFFF
+        return CATEGORIES[h % len(CATEGORIES)]
 
     def _new_player_record(self, name: str, slot: int) -> str:
         return json.dumps({
@@ -766,18 +784,28 @@ character.
     def reset_to_lobby(self) -> None:
         """Host returns the room to lobby for a fresh game.
 
-        We require the previous game to be fully settled (winner has claimed
-        their prize and platform fees have been swept) so the new game starts
-        with a clean economic slate. Players are wiped because everyone needs
-        to re-pay the entry fee for the next round.
+        We require the winner to have already claimed their prize so we
+        don't wipe their entitlement. Outstanding platform fees, however,
+        used to *block* reset entirely — meaning an unresponsive platform
+        owner could permanently brick the room. Now we auto-sweep those
+        fees to the platform owner as part of the reset, so the host always
+        has a clean exit path.
+
+        Players are wiped because everyone needs to re-pay the entry fee
+        for the next round.
         """
         sender = _sender()
         if sender != self.host:
             raise gl.vm.UserError("Only host can reset")
         if not self.prize_distributed:
             raise gl.vm.UserError("Winner must claim their prize before resetting")
-        if int(self.platform_fees_collected) > 0:
-            raise gl.vm.UserError("Platform owner must claim fees before resetting")
+
+        # Auto-sweep any unclaimed platform fees so the platform owner
+        # doesn't have to be online for the host to start a new game.
+        outstanding_fees = int(self.platform_fees_collected)
+        if outstanding_fees > 0:
+            self.platform_fees_collected = u256(0)
+            _send_gen(self.platform_owner, outstanding_fees)
 
         self.phase = PHASE_LOBBY
         self.round_num = u256(0)
@@ -934,6 +962,25 @@ character.
             "maxPlayers":            MAX_PLAYERS,
             "phase":                 self.phase,
             "host":                  self.host,
+        })
+
+    @gl.public.view
+    def get_xp_config(self) -> str:
+        """Authoritative XP constants used by `_finalize_round`.
+
+        Exposed so the frontend can show pre-round XP estimates that always
+        match what the contract actually awards — no more silent drift
+        between the contract and `src/lib/store.js`. JSON-encoded for the
+        same reason as the other views.
+        """
+        return json.dumps({
+            "perFooledPlayer":  XP_PER_FOOLED_PLAYER,
+            "aiFooledBonus":    XP_AI_FOOLED_BONUS,
+            "fullFoolBonus":    XP_FULL_FOOL_BONUS,
+            "detectorBase":     XP_DETECTOR_BASE,
+            "detectorConfMax":  XP_DETECTOR_CONF_MAX,
+            "objectionSuccess": XP_OBJECTION_SUCCESS,
+            "levelXp":          500,    # rec["level"] = (xp // 500) + 1
         })
 
     @gl.public.view
