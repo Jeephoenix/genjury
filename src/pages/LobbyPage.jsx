@@ -12,6 +12,7 @@ export default function LobbyPage() {
   const prizePoolWei = useGameStore(s => s.prizePoolWei)
 
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const symbol = getChainNativeSymbol()
   const explorer = getNetworkInfo().explorer
 
@@ -20,11 +21,43 @@ export default function LobbyPage() {
   const canStart = players.length >= 2
   const isPaid = (entryFeeWei || 0n) > 0n
 
+  // Build a one-tap join URL like https://genjury.vercel.app/?join=0x717D…AA14
+  const joinUrl = (() => {
+    if (!roomCode || typeof window === 'undefined') return ''
+    const u = new URL(window.location.href)
+    u.search = ''
+    u.hash = ''
+    u.searchParams.set('join', roomCode)
+    return u.toString()
+  })()
+
   const copyCode = () => {
     navigator.clipboard.writeText(roomCode).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
+  }
+
+  const shareLink = async () => {
+    if (!joinUrl) return
+    // Native share sheet on mobile if available — falls back to clipboard.
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Genjury room',
+          text: 'Tap to join my Genjury bluffing game:',
+          url: joinUrl,
+        })
+        return
+      } catch {
+        // User cancelled the share sheet — fall through to clipboard copy.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(joinUrl)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {}
   }
 
   return (
@@ -40,10 +73,16 @@ export default function LobbyPage() {
           >
             {roomCode ? `${roomCode.slice(0, 6)}…${roomCode.slice(-4)}` : ''}
           </button>
-          <div className="flex items-center justify-center gap-2 mt-4">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+            <button
+              onClick={shareLink}
+              className={`btn btn-plasma text-sm px-6 ${linkCopied ? 'opacity-80' : ''}`}
+            >
+              {linkCopied ? '✓ Link copied!' : '🔗 Share Join Link'}
+            </button>
             <button
               onClick={copyCode}
-              className={`btn btn-ghost text-sm px-6 ${copied ? 'text-neon border-neon/30' : ''}`}
+              className={`btn btn-ghost text-sm px-4 ${copied ? 'text-neon border-neon/30' : ''}`}
             >
               {copied ? '✓ Copied!' : '📋 Copy Address'}
             </button>
@@ -58,7 +97,7 @@ export default function LobbyPage() {
               </a>
             )}
           </div>
-          <p className="text-white/30 text-xs mt-3">Share this contract address with friends to join</p>
+          <p className="text-white/30 text-xs mt-3">Tap “Share Join Link” to send a one-tap invite — or share just the contract address.</p>
         </div>
 
         {/* Stakes */}
