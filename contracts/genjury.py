@@ -168,6 +168,7 @@ class Genjury(gl.Contract):
     phase:       str
     round_num:   u256
     max_rounds:  u256
+    max_players: u256   # runtime-tunable cap, defaults to MAX_PLAYERS
     category:    str
 
     # ── Players ────────────────────────────────────────────────────────────
@@ -227,6 +228,7 @@ class Genjury(gl.Contract):
         self.phase = PHASE_LOBBY
         self.round_num = u256(0)
         self.max_rounds = u256(max_rounds)
+        self.max_players = u256(MAX_PLAYERS)   # host can later resize via set_max_players
         self.category = ""
 
         self.deceiver_index = u256(0)
@@ -352,7 +354,7 @@ class Genjury(gl.Contract):
         sender = _sender()
         if self.phase != PHASE_LOBBY:
             raise gl.vm.UserError("Game already started")
-        if self._player_count() >= MAX_PLAYERS:
+        if self._player_count() >= int(self.max_players):
             raise gl.vm.UserError("Lobby full")
         if self._is_player(sender):
             raise gl.vm.UserError("Already joined")
@@ -824,6 +826,193 @@ character.
         self.winner_winnings_wei = u256(0)
         self.prize_distributed   = True
 
+    @gl.public.write
+    def set_entry_fee(self, new_fee_wei: int) -> None:
+        """Host changes the entry fee for the *next* game.
+
+        Only callable in LOBBY and only while no players have joined yet,
+        so we never silently change the price under someone who already
+        paid the old rate. If players have already joined, the host should
+        either start the game with the existing fee, or call
+        `reset_to_lobby()` first (which wipes the roster) and then change
+        the fee before reopening signups.
+
+        Negative values are clamped to 0; there is no upper bound (the
+        host is trusted to set a sensible price for their own room).
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can change the entry fee")
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("Entry fee can only be changed in LOBBY")
+        if self._player_count() > 0:
+            raise gl.vm.UserError(
+                "Players have already paid the current fee; "
+                "reset_to_lobby() first to change it"
+            )
+        self.entry_fee = u256(max(0, int(new_fee_wei)))
+
+    @gl.public.write
+    def set_max_rounds(self, n: int) -> None:
+        """Host changes how many rounds the next game will run.
+
+        LOBBY-only and only while no players have joined yet — same
+        reasoning as `set_entry_fee`. Clamped to 1..50 so a typo can't
+        brick the room (`max_rounds=0` would settle the game on
+        `start_game`, and absurdly large values would just waste time).
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can change max_rounds")
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("max_rounds can only be changed in LOBBY")
+        if self._player_count() > 0:
+            raise gl.vm.UserError(
+                "Players have already joined; reset_to_lobby() first"
+            )
+        n = int(n)
+        if n < 1 or n > 50:
+            raise gl.vm.UserError("max_rounds must be between 1 and 50")
+        self.max_rounds = u256(n)
+
+    @gl.public.write
+    def set_platform_fee_bps(self, new_bps: int) -> None:
+        """Platform owner adjusts their own cut between games.
+
+        Callable only by the **current platform_owner** — never the
+        host — so a host can't dial the dev's cut down to 0% on their
+        own room. Same LOBBY + no-players-joined-yet guard as
+        `set_entry_fee` so we don't change the rate under players who
+        already paid in. Silently clamped to [0, MAX_PLATFORM_FEE_BPS]
+        so the platform can never exceed the documented 20% cap, even
+        with a fat-fingered call.
+        """
+        sender = _sender()
+        if sender != self.platform_owner:
+            raise gl.vm.UserError(
+                "Only the platform owner can change platform_fee_bps"
+            )
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("platform_fee_bps can only be changed in LOBBY")
+        if self._player_count() > 0:
+            raise gl.vm.UserError(
+                "Players have already paid the current fee; "
+                "reset_to_lobby() first"
+            )
+        bps = max(0, min(MAX_PLATFORM_FEE_BPS, int(new_bps)))
+        self.platform_fee_bps = u256(bps)
+
+    @gl.public.write
+    def set_platform_owner(self, new_owner: str) -> None:
+        """Hand off the platform-fee recipient role to a new address.
+
+        Only callable by the **current** platform_owner — never the
+        host — so the host can't silently redirect fees to themselves
+        on an active room. Any unclaimed fees are auto-swept to the
+        *outgoing* owner first so the handoff doesn't accidentally
+        transfer pending balances to the new recipient.
+        """
+        sender = _sender()
+        if sender != self.platform_owner:
+            raise gl.vm.UserError(
+                "Only the current platform owner can transfer this role"
+            )
+        new_owner_norm = _norm_addr(new_owner)
+        if not new_owner_norm:
+            raise gl.vm.UserError("New platform owner must be a valid address")
+
+        # Pay out anything pending to the *current* owner before swapping.
+        outstanding = int(self.platform_fees_collected)
+        if outstanding > 0:
+            self.platform_fees_collected = u256(0)
+            _send_gen(self.platform_owner, outstanding)
+
+        self.platform_owner = new_owner_norm
+
+    @gl.public.write
+    def transfer_host(self, new_host: str) -> None:
+        """Hand the host (room admin) role to another address.
+
+        LOBBY-only — handing it off mid-game would let a fresh host
+        disrupt an ongoing round via `force_close_voting` etc.
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can transfer the host role")
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("Host can only be transferred in LOBBY")
+        new_host_norm = _norm_addr(new_host)
+        if not new_host_norm:
+            raise gl.vm.UserError("New host must be a valid address")
+        self.host = new_host_norm
+
+    @gl.public.write
+    def kick_player(self, addr: str) -> None:
+        """Host removes a player from the lobby and refunds their entry fee.
+
+        For dealing with AFK or troll joiners that won't `leave()` on
+        their own. Mirrors the refund accounting in `leave()` exactly:
+        rolls back the platform-fee / prize-pool slices, deletes the
+        player record, compacts `player_order`, and sends the entry
+        fee back to the kicked address.
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can kick players")
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("Players can only be kicked in LOBBY")
+        target = _norm_addr(addr)
+        if not target:
+            raise gl.vm.UserError("Invalid player address")
+        if target == sender:
+            raise gl.vm.UserError(
+                "Host cannot kick themselves; use transfer_host or leave"
+            )
+        if not self._is_player(target):
+            raise gl.vm.UserError("Address is not in the lobby")
+
+        required = int(self.entry_fee)
+        if required > 0:
+            fee, share = self._split_entry(required)
+            self.platform_fees_collected = u256(int(self.platform_fees_collected) - fee)
+            self.prize_pool              = u256(int(self.prize_pool) - share)
+
+        del self.players[target]
+        kept = [a for a in self.player_order if a != target]
+        _clear_arr(self.player_order)
+        for a in kept:
+            self.player_order.append(a)
+
+        if required > 0:
+            _send_gen(target, required)
+
+    @gl.public.write
+    def set_max_players(self, n: int) -> None:
+        """Host raises or lowers the per-room player cap.
+
+        Bounded by `MIN_PLAYERS` on the low end and the avatar/color
+        list length (12) on the high end so we never hand out duplicate
+        avatars or colors. Allowed any time during LOBBY, as long as
+        the new cap is at least the current player count — we never
+        want more players seated than the cap allows.
+        """
+        sender = _sender()
+        if sender != self.host:
+            raise gl.vm.UserError("Only host can change max_players")
+        if self.phase != PHASE_LOBBY:
+            raise gl.vm.UserError("max_players can only be changed in LOBBY")
+        n = int(n)
+        cap = min(len(AVATARS), len(COLORS))
+        if n < MIN_PLAYERS or n > cap:
+            raise gl.vm.UserError(
+                f"max_players must be between {MIN_PLAYERS} and {cap}"
+            )
+        if n < self._player_count():
+            raise gl.vm.UserError(
+                "max_players cannot be set below the current player count"
+            )
+        self.max_players = u256(n)
+
     # ──────────────────────────────────────────────────────────────────────
     # Settlement — claims for prize and platform fees
     # ──────────────────────────────────────────────────────────────────────
@@ -959,7 +1148,7 @@ character.
             "winnerWinningsWei":     str(int(self.winner_winnings_wei)),
             "prizeDistributed":      self.prize_distributed,
             "playerCount":           self._player_count(),
-            "maxPlayers":            MAX_PLAYERS,
+            "maxPlayers":            int(self.max_players),
             "phase":                 self.phase,
             "host":                  self.host,
         })
