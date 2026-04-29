@@ -27,6 +27,7 @@ import {
   deployGenjury,
   callMethod,
   readView,
+  diagnoseAddress,
   rememberRoom,
   forgetRoom,
   subscribeWallet,
@@ -286,6 +287,11 @@ const useGameStore = create((set, get) => ({
   myId:     null,
   loading:  false,
 
+  // ── Last Join-Room preview diagnostic ───────────────────────────────
+  // Populated by `previewRoom` so the Join screen can show a precise,
+  // actionable error (vs. a single generic "no room found" line).
+  lastPreviewDiagnostic: null,
+
   // ── Game state (mirrors contract) ───────────────────────────────────
   phase:          PHASES.LOBBY,
   round:          0,
@@ -447,20 +453,36 @@ const useGameStore = create((set, get) => ({
    */
   previewRoom: async (code) => {
     const addr = (code || '').trim()
-    if (!addr) return null
+    if (!addr) {
+      set({ lastPreviewDiagnostic: null })
+      return null
+    }
     try {
-      const raw = await readView(addr, 'get_economics')
-      return {
-        address:      addr,
-        entryFeeWei:  safeBigInt(raw?.entryFee),
-        prizePoolWei: safeBigInt(raw?.prizePool),
-        playerCount:  Number(raw?.playerCount || 0),
-        maxPlayers:   Number(raw?.maxPlayers || 0),
-        phase:        raw?.phase || 'lobby',
-        host:         raw?.host || '',
+      const diag = await diagnoseAddress(addr)
+      set({ lastPreviewDiagnostic: diag })
+      if (diag.kind === 'ok') {
+        const raw = diag.data
+        return {
+          address:      addr,
+          entryFeeWei:  safeBigInt(raw?.entryFee),
+          prizePoolWei: safeBigInt(raw?.prizePool),
+          playerCount:  Number(raw?.playerCount || 0),
+          maxPlayers:   Number(raw?.maxPlayers || 0),
+          phase:        raw?.phase || 'lobby',
+          host:         raw?.host || '',
+        }
       }
+      console.warn('[genjury] previewRoom diagnostic:', diag)
+      return null
     } catch (e) {
       console.warn('[genjury] previewRoom:', e?.message || e)
+      set({
+        lastPreviewDiagnostic: {
+          kind: 'rpc_error',
+          address: addr,
+          message: e?.shortMessage || e?.message || String(e),
+        },
+      })
       return null
     }
   },
