@@ -306,6 +306,80 @@ export async function readView(address, fn, args = []) {
   })
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Address diagnostics
+//
+// When a Join Room read fails, the user sees a generic "no room found" error
+// even though several very different things may have gone wrong:
+//
+//   - Nothing is deployed at the address at all (typo, wrong network).
+//   - There IS bytecode at the address (e.g. a GhostBlueprint proxy that the
+//     GhostFactory created), but the GenLayer consensus layer never finalized
+//     the contract registration — usually because the host's deploy reverted
+//     or is still pending. The RPC then returns "contract not found at
+//     address" from gen_call even though eth_getCode shows real bytecode.
+//   - The RPC errored out for some unrelated reason.
+//
+// `diagnoseAddress` distinguishes these cases so the UI can give a precise,
+// actionable message + an "Open in Explorer" link.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function diagnoseAddress(addr) {
+  const address = (addr || '').trim()
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return { kind: 'rpc_error', address, message: 'Address is not a valid 0x… hex string.' }
+  }
+
+  try {
+    const data = await getReadClient().readContract({
+      address,
+      functionName: 'get_economics',
+      args: [],
+    })
+    return { kind: 'ok', address, data }
+  } catch (e) {
+    const message = (e?.shortMessage || e?.message || String(e || '')).toString()
+
+    if (/contract not found at address/i.test(message)) {
+      const hasBytecode = await addressHasCode(address)
+      return hasBytecode
+        ? { kind: 'not_registered', address, hasBytecode: true }
+        : { kind: 'no_bytecode', address }
+    }
+    return { kind: 'rpc_error', address, message }
+  }
+}
+
+async function addressHasCode(address) {
+  try {
+    const chain = buildChain()
+    const rpc = chain?.rpcUrls?.default?.http?.[0]
+    if (!rpc) return false
+    const res = await fetch(rpc, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'eth_getCode',
+        params: [address, 'latest'],
+      }),
+    })
+    const data = await res.json()
+    const code = (data?.result || '').toLowerCase()
+    return !!code && code !== '0x' && code !== '0x0'
+  } catch {
+    return false
+  }
+}
+
+// Build an explorer URL for a contract address on the configured chain. Returns
+// null when the chain doesn't have an explorer configured (localnet / studio).
+export function explorerAddressUrl(address) {
+  const info = getNetworkInfo()
+  if (!info?.explorer || !address) return null
+  return `${info.explorer.replace(/\/$/, '')}/address/${address}`
+}
+
 export async function callMethod(address, fn, args = [], valueWei = 0n, label = null) {
   const client = getClient()
   const id = ++_txSeq
@@ -521,4 +595,4 @@ export function getRememberedRoom() {
 }
 export function forgetRoom() {
   try { localStorage.removeItem(STORAGE_ROOM) } catch {}
-}
+      }
