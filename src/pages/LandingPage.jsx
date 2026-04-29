@@ -6,6 +6,8 @@ import {
   getChainNativeSymbol,
   subscribeWallet,
   getDefaultContractAddress,
+  explorerAddressUrl,
+  getNetworkInfo,
 } from '../lib/genlayer'
 
 const PRESET_FEES = ['0', '0.01', '0.1', '1']
@@ -37,6 +39,7 @@ export default function LandingPage() {
   const previewRoom = useGameStore(s => s.previewRoom)
   const addToast   = useGameStore(s => s.addToast)
   const loading    = useGameStore(s => s.loading)
+  const lastDiag   = useGameStore(s => s.lastPreviewDiagnostic)
 
   const [, force] = useState(0)
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
@@ -447,9 +450,10 @@ export default function LandingPage() {
                   </div>
                 )}
                 {!previewing && isValidAddress(roomCode) && preview === null && (
-                  <p className="text-signal/70 text-xs mt-2">
-                    No room found at this address on the current network. Double-check the contract address and that your wallet is on the same chain as the host.
-                  </p>
+                  <PreviewDiagnostic
+                    address={roomCode}
+                    diagnostic={lastDiag && lastDiag.address?.toLowerCase() === roomCode.toLowerCase() ? lastDiag : null}
+                  />
                 )}
               </div>
             )}
@@ -497,6 +501,60 @@ function Row({ label, children }) {
     <div className="flex items-center justify-between gap-3">
       <span className="text-white/40 font-mono uppercase tracking-wider text-[10px]">{label}</span>
       {children}
+    </div>
+  )
+}
+
+// Render a precise, actionable error when the Join-Room preview comes back
+// empty. Falls back to the original generic message when no diagnostic is
+// available yet (e.g. before the first preview attempt completes).
+function PreviewDiagnostic({ address, diagnostic }) {
+  const network = getNetworkInfo()
+  const explorerUrl = explorerAddressUrl(address)
+  const kind = diagnostic?.kind || 'rpc_error'
+
+  const headline =
+    kind === 'no_bytecode'
+      ? `Nothing is deployed at this address on ${network.label}.`
+      : kind === 'not_registered'
+        ? `An address exists here on ${network.label}, but it isn't a finalized GenLayer contract.`
+        : kind === 'rpc_error'
+          ? `Couldn't reach ${network.label} to check this address.`
+          : `No room found at this address on ${network.label}.`
+
+  const detail =
+    kind === 'no_bytecode'
+      ? 'Double-check the address with the host and confirm you are both on the same chain.'
+      : kind === 'not_registered'
+        ? "The host's deployment likely reverted or hasn't reached consensus yet. Ask the host to verify the deploy succeeded — or, if it just happened, give it a minute and try again."
+        : kind === 'rpc_error'
+          ? 'The network may be temporarily unavailable. Try again in a moment.'
+          : 'Double-check the contract address and that your wallet is on the same chain as the host.'
+
+  return (
+    <div className="mt-2 rounded-lg border border-signal/30 bg-signal/5 px-3 py-3 text-xs space-y-2">
+      <p className="text-signal/90 leading-snug">
+        <span className="font-semibold">{headline}</span>{' '}
+        <span className="text-signal/70">{detail}</span>
+      </p>
+      {diagnostic?.message && kind === 'rpc_error' && (
+        <p className="font-mono text-[10px] text-signal/60 break-all">
+          {diagnostic.message}
+        </p>
+      )}
+      {explorerUrl && (
+        <div className="flex items-center gap-2 pt-1">
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-colors text-[11px] font-mono"
+          >
+            🔍 View on Explorer
+          </a>
+          <span className="text-white/30 text-[10px] font-mono">to verify the deploy</span>
+        </div>
+      )}
     </div>
   )
 }
