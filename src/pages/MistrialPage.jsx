@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Drama, Brain, Vote, Coins, ArrowLeft } from 'lucide-react'
 import useGameStore from '../lib/store'
+import MistrialMark from '../components/MistrialMark'
 import {
   parseGen,
   formatGen,
@@ -182,7 +183,7 @@ export default function LandingPage() {
         <div className="flex items-center justify-center gap-3 mb-6">
           <div className="relative">
             <div className="w-28 h-28 rounded-2xl bg-neon/10 border border-neon/30 flex items-center justify-center text-neon drop-shadow-[0_0_20px_rgba(127,255,110,0.35)]">
-              <Brain className="w-14 h-14" strokeWidth={1.75} />
+              <MistrialMark className="w-16 h-16" />
             </div>
             <div className="absolute -inset-2 bg-neon/20 rounded-full blur-xl animate-pulse pointer-events-none" />
           </div>
