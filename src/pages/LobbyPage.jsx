@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol, getNetworkInfo } from '../lib/genlayer'
 import HostDashboard from '../components/HostDashboard'
+import PlatformOwnerPanel from '../components/PlatformOwnerPanel'
 
 export default function LobbyPage() {
   const roomCode  = useGameStore(s => s.roomCode)
@@ -11,6 +12,7 @@ export default function LobbyPage() {
   const maxRounds = useGameStore(s => s.maxRounds)
   const entryFeeWei  = useGameStore(s => s.entryFeeWei)
   const prizePoolWei = useGameStore(s => s.prizePoolWei)
+  const houseAddress = useGameStore(s => s.houseAddress)
 
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -205,6 +207,9 @@ export default function LobbyPage() {
 
         {/* Host-only admin panel */}
         {isHost && <HostDashboard />}
+
+        {/* Platform-owner-only admin panel (independent of host role) */}
+        {myId && houseAddress && myId === houseAddress && <PlatformOwnerPanel />}
 
         {/* Start Button */}
         {isHost && (
