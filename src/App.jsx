@@ -52,7 +52,7 @@ export default function App() {
         {inGame && <GameHeader />}
         <WalletPanel />
 
-        <main className={`flex-1 ${inGame ? 'pt-16' : ''}`}>
+        <main className={`flex-1 ${inGame ? 'pt-16' : ''} ${showTopNav ? 'pb-20 md:pb-0' : ''}`}>
           {inGame ? (
             <>
               {phase === PHASES.WRITING && <WritingPhase />}
