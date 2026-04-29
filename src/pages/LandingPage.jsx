@@ -41,6 +41,34 @@ export default function LandingPage() {
   const [, force] = useState(0)
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
 
+  // Deep-link support: if the URL contains ?join=<contractAddress>, jump
+  // straight into the Join Room screen with the address pre-filled. Then
+  // strip the param from the URL so refreshes/back-navigation don't keep
+  // re-triggering. Lets hosts share a one-tap "Join my room" link.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const joinParam = params.get('join')
+    if (!joinParam) return
+    const cleaned = (() => {
+      let s = String(joinParam).trim()
+      if (s.toLowerCase().startsWith('0x')) s = s.slice(2)
+      s = s.replace(/[^0-9a-fA-F]/g, '').toLowerCase().slice(0, 40)
+      return s ? `0x${s}` : ''
+    })()
+    if (/^0x[0-9a-f]{40}$/.test(cleaned)) {
+      setMode('join')
+      setRoomCode(cleaned)
+    }
+    params.delete('join')
+    const qs = params.toString()
+    window.history.replaceState(
+      {},
+      '',
+      window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash,
+    )
+  }, [])
+
   const symbol = getChainNativeSymbol()
 
   const entryFeeWei = useMemo(() => {
@@ -64,6 +92,19 @@ export default function LandingPage() {
       maxRounds: Number(maxRounds),
     })
   }
+
+  // Normalize a pasted contract address: strip whitespace and any leading "0x",
+  // keep only hex chars, lowercase, then re-prepend "0x". Tolerates messy
+  // copies from chat apps (line breaks, surrounding quotes, missing prefix).
+  const normalizeAddress = (raw) => {
+    if (!raw) return ''
+    let s = String(raw).trim()
+    if (s.toLowerCase().startsWith('0x')) s = s.slice(2)
+    s = s.replace(/[^0-9a-fA-F]/g, '').toLowerCase().slice(0, 40)
+    return s ? `0x${s}` : ''
+  }
+
+  const isValidAddress = (s) => /^0x[0-9a-f]{40}$/.test(s || '')
 
   const handleJoin = () => {
     if (!name.trim() || !roomCode.trim() || loading) return
@@ -329,15 +370,46 @@ export default function LandingPage() {
             {mode === 'join' && (
               <div>
                 <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">Contract Address</label>
-                <input
-                  className="input font-mono text-xs"
+                <textarea
+                  className="input font-mono text-xs leading-snug resize-none break-all whitespace-pre-wrap"
+                  rows={2}
                   placeholder="0x…"
                   value={roomCode}
-                  onChange={e => setRoomCode(e.target.value.trim())}
-                  maxLength={66}
-                  onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                  onChange={e => setRoomCode(normalizeAddress(e.target.value))}
+                  onPaste={e => {
+                    e.preventDefault()
+                    setRoomCode(normalizeAddress(e.clipboardData.getData('text')))
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleJoin()
+                    }
+                  }}
                 />
                 <p className="text-white/30 text-xs mt-1">Paste the GenLayer contract address from the host.</p>
+
+                {/* Always-visible address confirmation: lets the user verify both ends
+                    of the address even if the input is too narrow to show it all. */}
+                {roomCode && (() => {
+                  const valid = isValidAddress(roomCode)
+                  const tooShort = roomCode.length < 42
+                  return (
+                    <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-mono break-all ${
+                      valid
+                        ? 'border-neon/30 bg-neon/5 text-neon/90'
+                        : 'border-signal/30 bg-signal/5 text-signal/80'
+                    }`}>
+                      <div className="flex items-center justify-between gap-2 mb-1 font-sans not-italic">
+                        <span className="text-[10px] uppercase tracking-wider text-white/40">
+                          {valid ? '✓ Valid address' : tooShort ? 'Looks incomplete' : 'Invalid characters'}
+                        </span>
+                        <span className="text-[10px] text-white/30">{roomCode.length} / 42</span>
+                      </div>
+                      {roomCode}
+                    </div>
+                  )
+                })()}
 
                 {previewing && (
                   <div className="mt-3 rounded-lg bg-white/5 border border-white/10 px-3 py-3 text-xs text-white/40">
@@ -374,9 +446,9 @@ export default function LandingPage() {
                     )}
                   </div>
                 )}
-                {!previewing && roomCode.length >= 20 && preview === null && (
+                {!previewing && isValidAddress(roomCode) && preview === null && (
                   <p className="text-signal/70 text-xs mt-2">
-                    Could not load this room. Double-check the address.
+                    No room found at this address on the current network. Double-check the contract address and that your wallet is on the same chain as the host.
                   </p>
                 )}
               </div>
@@ -388,7 +460,7 @@ export default function LandingPage() {
               disabled={
                 loading
                 || !name.trim()
-                || (mode === 'join' && roomCode.length < 10)
+                || (mode === 'join' && !isValidAddress(roomCode))
                 || (mode === 'create' && entryFeeWei === null)
               }
             >
