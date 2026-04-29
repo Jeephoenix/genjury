@@ -333,7 +333,7 @@ const useGameStore = create((set, get) => ({
   chatMessages:   [],      // { id, authorId, authorName, avatar, color, text, kind, ts }
 
   // ── Navigation (out-of-game tabs) ───────────────────────────────────
-  activeTab:        'home',           // 'home' | 'games' | 'leaderboard' | 'profile'
+  activeTab:        'home',           // 'home' | 'mistrial' | 'games' | 'leaderboard' | 'profile'
   walletPanelOpen:  false,
   setActiveTab:       (tab)  => set({ activeTab: tab }),
   setWalletPanelOpen: (open) => set({ walletPanelOpen: !!open }),
