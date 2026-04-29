@@ -332,6 +332,12 @@ const useGameStore = create((set, get) => ({
   pendingTx:      null,    // { id, label, status, hash, error, at }
   chatMessages:   [],      // { id, authorId, authorName, avatar, color, text, kind, ts }
 
+  // ── Navigation (out-of-game tabs) ───────────────────────────────────
+  activeTab:        'home',           // 'home' | 'games' | 'leaderboard' | 'profile'
+  walletPanelOpen:  false,
+  setActiveTab:       (tab)  => set({ activeTab: tab }),
+  setWalletPanelOpen: (open) => set({ walletPanelOpen: !!open }),
+
   // ── Toasts / timer ──────────────────────────────────────────────────
   addToast: (message, type = 'info') => pushToast(type, message),
 
