@@ -1,6 +1,7 @@
 import React from 'react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
+import Confetti from '../components/Confetti'
 
 const RANK_ICONS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣']
 const RANK_LABELS = ['Champion', 'Runner-Up', 'Third Place', '4th Place', '5th Place', '6th Place', '7th Place', '8th Place']
@@ -44,8 +45,11 @@ export default function ScoreboardPage() {
       ? 'House must sweep fees before resetting'
       : ''
 
+  const iAmTopPlayer = myRank === 1
+
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-16 gap-8 animate-slide-up">
+    <div className="min-h-screen flex flex-col items-center px-4 py-16 gap-8 animate-slide-up relative">
+      {iAmTopPlayer && <Confetti duration={5000} />}
       <div className="w-full max-w-lg">
         {/* Winner */}
         {winner && (
