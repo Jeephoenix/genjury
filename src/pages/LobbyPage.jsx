@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol, getNetworkInfo } from '../lib/genlayer'
+import HostDashboard from '../components/HostDashboard'
 
 export default function LobbyPage() {
   const roomCode  = useGameStore(s => s.roomCode)
@@ -201,6 +202,9 @@ export default function LobbyPage() {
             ))}
           </div>
         </div>
+
+        {/* Host-only admin panel */}
+        {isHost && <HostDashboard />}
 
         {/* Start Button */}
         {isHost && (
