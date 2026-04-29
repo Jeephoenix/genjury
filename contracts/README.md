@@ -21,32 +21,37 @@ LOBBY  →  WRITING  →  VOTING  →  AI_JUDGING  →  OBJECTION
 | `leave()`                                               | player           | LOBBY               |
 | `start_game()`                                          | host             | LOBBY               |
 | `submit_statements(s1, s2, s3, lie_index)`              | deceiver         | WRITING             |
+| `force_close_writing()`                                 | host             | WRITING             |
 | `cast_vote(statement_index, confidence_pct)`            | detector         | VOTING              |
 | `force_close_voting()`                                  | host             | VOTING              |
 | `run_ai_judge()`                                        | anyone           | AI_JUDGING          |
 | `raise_objection()`                                     | any player       | OBJECTION           |
 | `cast_objection_vote("sustain" \| "overrule")`          | any player       | OBJECTION_VOTE      |
-| `skip_objection()`                                      | anyone           | OBJECTION (timeout) |
-| `close_objection_vote()`                                | anyone           | OBJECTION_VOTE      |
+| `skip_objection()`                                      | host             | OBJECTION (timeout) |
+| `close_objection_vote()`                                | host             | OBJECTION_VOTE      |
 | `next_round()`                                          | anyone           | REVEAL              |
-| `reset_to_lobby()`                                      | host             | any                 |
+| `reset_to_lobby()`                                      | host             | any (auto-sweeps platform fees) |
 
 ## View methods (free reads)
 
-- `get_state()`          — full UI snapshot, JSON
-- `get_players()`        — { address: player record }
-- `get_phase()`          — current phase string
-- `get_round()`          — current round number
-- `get_last_reveal()`    — JSON for the REVEAL screen
-- `get_score_history()`  — array of past round reveals
-- `get_scoreboard()`     — XP leaderboard for the SCOREBOARD page
+All views return JSON-encoded **strings** — call `JSON.parse(raw)` on the
+client. (Returning typed dicts confused the calldata encoder on
+Bradbury and produced "ACCEPTED [ERROR] / no return value" on join.)
+
+- `get_state()`          — full UI snapshot (JSON string)
+- `get_phase()`          — current phase string (plain string)
+- `get_round()`          — current round number (int)
+- `get_last_reveal()`    — JSON string for the REVEAL screen (or `""` when none)
+- `get_economics()`      — lobby/landing room preview (JSON string)
+- `get_scoreboard()`     — XP leaderboard for the SCOREBOARD page (JSON string of list)
+- `get_xp_config()`      — authoritative XP constants for pre-round estimates (JSON string)
 
 ## How the AI Judge works
 
 `run_ai_judge()` builds a prompt with the three statements and calls the
-LLM through `gl.eq_principle_prompt_comparative`. The Equivalence
-Principle requires every validator to agree on which statement is the
-lie, so consensus is reached even though the LLM output is
+LLM through `gl.eq_principle.strict_eq`. The Equivalence Principle
+requires every validator to agree on which single digit (1, 2, or 3) the
+LLM returned, so consensus is reached even though the LLM output is
 non-deterministic. The verdict, confidence, and a short reasoning
 sentence are stored on-chain, then the contract advances to the
 `OBJECTION` phase to give players a window to challenge it.
