@@ -240,8 +240,39 @@ export function getChainNativeSymbol() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Client — requires a connected wallet
+// Clients
+//
+// Two separate clients:
+//
+//   - getReadClient(): a wallet-less, provider-less client bound to the
+//     configured GenLayer chain's HTTP RPC. Used for ALL view calls
+//     (previewRoom, polling, lobby refreshes). Works without a connected
+//     wallet, and — critically — works regardless of which chain the user's
+//     injected wallet (MetaMask) is currently switched to. Without this,
+//     `readContract` would tunnel through `window.ethereum` and fail
+//     whenever the wallet was on the wrong chain (e.g. Ethereum mainnet),
+//     surfacing as the dreaded "Could not load this room" error even when
+//     the contract address is perfectly valid.
+//
+//   - getClient(): the wallet-bound client used for writes (deploy, join,
+//     submit, vote, etc.). Requires a connected wallet on the correct chain.
 // ──────────────────────────────────────────────────────────────────────────────
+let _readClient = null
+
+function buildChain() {
+  const baseChain = getChain()
+  const overrideRpc = import.meta.env.VITE_GENLAYER_RPC
+  return overrideRpc
+    ? { ...baseChain, rpcUrls: { default: { http: [overrideRpc] } } }
+    : baseChain
+}
+
+export function getReadClient() {
+  if (_readClient) return _readClient
+  _readClient = createClient({ chain: buildChain() })
+  return _readClient
+}
+
 export function getClient() {
   if (_client) return _client
 
@@ -253,14 +284,8 @@ export function getClient() {
     throw new Error('No Web3 wallet detected in this browser.')
   }
 
-  const baseChain = getChain()
-  const overrideRpc = import.meta.env.VITE_GENLAYER_RPC
-  const chain = overrideRpc
-    ? { ...baseChain, rpcUrls: { default: { http: [overrideRpc] } } }
-    : baseChain
-
   _client = createClient({
-    chain,
+    chain: buildChain(),
     account: addr,
     provider: window.ethereum,
   })
@@ -271,7 +296,10 @@ export function getClient() {
 // Reads / writes / deploys
 // ──────────────────────────────────────────────────────────────────────────────
 export async function readView(address, fn, args = []) {
-  return await getClient().readContract({
+  // Reads always go through the read-only client so they:
+  //   1. Don't require a connected wallet (preview before joining).
+  //   2. Aren't affected by the wallet's currently selected chain.
+  return await getReadClient().readContract({
     address,
     functionName: fn,
     args,
