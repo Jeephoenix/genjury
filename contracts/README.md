@@ -31,6 +31,13 @@ LOBBY  →  WRITING  →  VOTING  →  AI_JUDGING  →  OBJECTION
 | `close_objection_vote()`                                | host             | OBJECTION_VOTE      |
 | `next_round()`                                          | anyone           | REVEAL              |
 | `reset_to_lobby()`                                      | host             | any (auto-sweeps platform fees) |
+| `set_entry_fee(new_fee_wei)`                            | host             | LOBBY (no players joined yet) |
+| `set_max_rounds(n)`                                     | host             | LOBBY (no players joined yet); 1 ≤ n ≤ 50 |
+| `set_platform_fee_bps(new_bps)`                         | **current platform_owner** | LOBBY (no players joined yet); clamped to [0, 2000] |
+| `set_platform_owner(new_owner)`                         | **current platform_owner** | any (auto-sweeps pending fees to outgoing owner) |
+| `transfer_host(new_host)`                               | host             | LOBBY |
+| `kick_player(addr)`                                     | host             | LOBBY (refunds the kicked player's entry fee) |
+| `set_max_players(n)`                                    | host             | LOBBY; MIN_PLAYERS ≤ n ≤ 12 and ≥ current player count |
 
 ## View methods (free reads)
 
