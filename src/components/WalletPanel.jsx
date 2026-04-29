@@ -17,7 +17,8 @@ import useGameStore from '../lib/store'
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
 
 export default function WalletPanel() {
-  const [open, setOpen] = useState(false)
+  const open    = useGameStore((s) => s.walletPanelOpen)
+  const setOpen = useGameStore((s) => s.setWalletPanelOpen)
   const [, force] = useState(0)
   const [balanceWei, setBalanceWei] = useState(null)
   const [balanceLoading, setBalanceLoading] = useState(false)
@@ -88,31 +89,6 @@ export default function WalletPanel() {
 
   return (
     <>
-      {/* Trigger pill — fixed top-right */}
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed top-3 right-3 z-[60] badge bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-colors px-3 py-2 cursor-pointer"
-        aria-label="Open wallet panel"
-      >
-        <span
-          className={`w-2 h-2 rounded-full ${
-            connected ? 'bg-plasma glow-plasma' : 'bg-signal glow-signal'
-          }`}
-        />
-        {connected ? (
-          <>
-            <span className="font-mono">{short(address)}</span>
-            <span className="text-white/30 text-[10px] uppercase tracking-widest ml-1">
-              wallet
-            </span>
-          </>
-        ) : (
-          <span className="font-semibold text-xs uppercase tracking-wider">
-            Connect wallet
-          </span>
-        )}
-      </button>
-
       {/* Modal */}
       {open && (
         <div
