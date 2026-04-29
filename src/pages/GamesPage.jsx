@@ -14,8 +14,8 @@ import useGameStore from '../lib/store'
 
 const GAMES = [
   {
-    id: 'genjury',
-    name: 'Genjury',
+    id: 'mistrial',
+    name: 'Mistrial',
     tagline: 'Bluffing meets an on-chain AI Judge.',
     description:
       'Three statements, one lie. Detectors vote, the AI Judge deliberates on-chain, and objections can flip the verdict.',
@@ -148,7 +148,7 @@ export default function GamesPage() {
               <div className="mt-5">
                 {live ? (
                   <button
-                    onClick={() => setActiveTab('home')}
+                    onClick={() => setActiveTab(g.id)}
                     className="btn btn-neon w-full py-2.5 text-sm inline-flex items-center justify-center gap-2"
                   >
                     Play now
