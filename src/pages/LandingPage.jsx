@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Drama, Brain, Vote, Coins } from 'lucide-react'
 import useGameStore from '../lib/store'
 import {
   parseGen,
@@ -190,13 +191,17 @@ export default function LandingPage() {
         {/* Mechanic pills */}
         <div className="flex flex-wrap gap-2 justify-center mt-6">
           {[
-            { icon: '🎭', label: 'Deceiver vs Detectors' },
-            { icon: '🤖', label: 'AI Judge' },
-            { icon: '🗳️', label: 'Optimistic Democracy' },
-            { icon: '💰', label: `Winner takes the ${symbol} pot` },
-          ].map(p => (
-            <span key={p.label} className="badge bg-white/5 border border-white/10 text-white/60 text-sm py-1.5 px-3">
-              {p.icon} {p.label}
+            { Icon: Drama, label: 'Deceiver vs Detectors' },
+            { Icon: Brain, label: 'AI Judge' },
+            { Icon: Vote,  label: 'Optimistic Democracy' },
+            { Icon: Coins, label: `Winner takes the ${symbol} pot` },
+          ].map(({ Icon, label }) => (
+            <span
+              key={label}
+              className="inline-flex items-center gap-1.5 badge bg-white/5 border border-white/10 text-white/65 text-sm py-1.5 px-3"
+            >
+              <Icon className="w-3.5 h-3.5 text-white/55" strokeWidth={2.25} />
+              {label}
             </span>
           ))}
         </div>
