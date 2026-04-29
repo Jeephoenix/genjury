@@ -687,6 +687,60 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  // ── Platform owner actions ──────────────────────────────────────────
+  // These mirror the platform-owner-only methods in contracts/genjury.py.
+  // The contract enforces sender == platform_owner, so the UI just needs
+  // to translate inputs and surface errors via toasts.
+
+  setPlatformFeeBps: async (percentStr) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const pct = Number(percentStr)
+    if (!Number.isFinite(pct) || pct < 0 || pct > 20) {
+      pushToast('error', 'Platform fee must be between 0% and 20%')
+      return
+    }
+    // Convert percent → basis points (1% = 100 bps). Round to nearest int
+    // so "1.5" becomes 150 bps cleanly.
+    const bps = Math.round(pct * 100)
+    try {
+      await callMethod(roomCode, 'set_platform_fee_bps', [bps], 0n, 'Update platform fee')
+      pushToast('success', `Platform fee set to ${(bps / 100).toFixed(2)}%`)
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not change platform fee')
+    }
+  },
+
+  setPlatformOwner: async (addr) => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    const target = (addr || '').trim().toLowerCase()
+    if (!/^0x[0-9a-f]{40}$/.test(target)) {
+      pushToast('error', 'New platform owner must be a valid 0x… address')
+      return
+    }
+    try {
+      await callMethod(roomCode, 'set_platform_owner', [target], 0n, 'Transfer platform ownership')
+      pushToast('success', 'Platform ownership transferred (any pending fees were swept first)')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not transfer ownership')
+    }
+  },
+
+  claimPlatformFees: async () => {
+    const { roomCode } = get()
+    if (!roomCode) return
+    try {
+      await callMethod(roomCode, 'claim_platform_fees', [], 0n, 'Claim platform fees')
+      pushToast('success', 'Platform fees claimed')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not claim fees')
+    }
+  },
+
   // ── Writing phase ───────────────────────────────────────────────────
   setStatement: (i, val) => {
     const next = [...get().statements]
