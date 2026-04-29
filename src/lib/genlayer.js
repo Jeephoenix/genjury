@@ -330,11 +330,15 @@ export async function diagnoseAddress(addr) {
   }
 
   try {
-    const data = await getReadClient().readContract({
+    const raw = await getReadClient().readContract({
       address,
       functionName: 'get_economics',
       args: [],
     })
+    // get_economics now returns a JSON-encoded string from the contract
+    // (see contracts/genjury.py — the previous dict[str, Any] return type
+    // tripped GenLayer's calldata encoder and produced "ACCEPTED [ERROR]").
+    const data = typeof raw === 'string' ? JSON.parse(raw) : raw
     return { kind: 'ok', address, data }
   } catch (e) {
     const message = (e?.shortMessage || e?.message || String(e || '')).toString()
