@@ -1,50 +1,7 @@
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import useGameStore from '../lib/store'
 import StatementCard from '../components/StatementCard'
-
-function Confetti() {
-  const canvasRef = useRef(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
-
-    const particles = Array.from({ length: 80 }, () => ({
-      x: Math.random() * canvas.width,
-      y: -20,
-      vx: (Math.random() - 0.5) * 4,
-      vy: Math.random() * 3 + 2,
-      color: ['#7fff6e', '#a259ff', '#38d9f5', '#f5c842', '#ff6b35'][Math.floor(Math.random() * 5)],
-      size: Math.random() * 8 + 4,
-      rot: Math.random() * 360,
-      rotSpeed: (Math.random() - 0.5) * 8,
-    }))
-
-    let frame
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      particles.forEach(p => {
-        p.x += p.vx
-        p.y += p.vy
-        p.rot += p.rotSpeed
-        ctx.save()
-        ctx.translate(p.x, p.y)
-        ctx.rotate((p.rot * Math.PI) / 180)
-        ctx.fillStyle = p.color
-        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2)
-        ctx.restore()
-      })
-      frame = requestAnimationFrame(animate)
-    }
-    animate()
-    return () => cancelAnimationFrame(frame)
-  }, [])
-
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-30" />
-}
+import Confetti from '../components/Confetti'
 
 export default function RevealPhase() {
   const players = useGameStore(s => s.players)
@@ -71,7 +28,7 @@ export default function RevealPhase() {
   const totalVotes = Object.keys(votes).length
   const votesPerStatement = [0, 1, 2].map(i => Object.values(votes).filter(v => v === i).length)
 
-  const showConfetti = myXP > 150
+  const showConfetti = iWasRight || myXP > 100
 
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-8 gap-6 animate-slide-up relative">
