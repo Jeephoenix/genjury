@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import { getChainNativeSymbol } from '../lib/genlayer'
+import MistrialMark from '../components/MistrialMark'
 
 const HOW_IT_WORKS = [
   {
@@ -38,7 +39,7 @@ const ALL_GAMES = [
     name: 'Mistrial',
     tagline: 'Bluffing meets an on-chain AI Judge.',
     accent: 'neon',
-    icon: Brain,
+    icon: MistrialMark,
     status: 'live',
   },
   {
