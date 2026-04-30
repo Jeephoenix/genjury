@@ -1,4 +1,5 @@
 import React from 'react'
+import Avatar from './Avatar'
 
 export default function PlayerCard({ player, showXP = false, xpGained = 0, isDeceiver = false, rank = null }) {
   const xpToNextLevel = 500
@@ -23,9 +24,12 @@ export default function PlayerCard({ player, showXP = false, xpGained = 0, isDec
         </div>
       )}
 
-      <div className="avatar" style={{ background: player.color + '22', color: player.color }}>
-        {player.avatar}
-      </div>
+      <Avatar
+        name={player.name}
+        src={player.avatar && String(player.avatar).startsWith('data:') ? player.avatar : ''}
+        color={player.color}
+        size={40}
+      />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
