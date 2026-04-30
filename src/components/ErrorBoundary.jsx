@@ -1,4 +1,5 @@
 import React from 'react'
+import { AlertOctagon } from 'lucide-react'
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -19,7 +20,9 @@ export default class ErrorBoundary extends React.Component {
     return (
       <div className="min-h-screen bg-void flex items-center justify-center px-6">
         <div className="max-w-md w-full card glass space-y-4 text-center">
-          <div className="text-4xl">💥</div>
+          <div className="flex justify-center">
+            <AlertOctagon className="w-12 h-12 text-signal" strokeWidth={1.75} />
+          </div>
           <h1 className="font-display font-700 text-xl text-white">
             Something broke
           </h1>
