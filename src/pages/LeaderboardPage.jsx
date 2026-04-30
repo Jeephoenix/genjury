@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Trophy, Medal, Award, Crown, Flame, RefreshCw } from 'lucide-react'
 import {
-  readView,
+  readContractView,
   myAddress,
   isWalletConnected,
+  hasContractAddress,
 } from '../lib/genlayer'
 import {
   listJoinedRooms,
@@ -66,6 +67,7 @@ export default function LeaderboardPage() {
   const address = myAddress()
 
   const refresh = async () => {
+    if (!hasContractAddress()) { setRoomStates([]); return }
     if (!rooms.length) {
       setRoomStates([])
       return
@@ -74,8 +76,10 @@ export default function LeaderboardPage() {
     try {
       const states = await Promise.all(rooms.map(async (r) => {
         try {
-          const raw = await readView(r.address, 'get_state')
-          return typeof raw === 'string' ? JSON.parse(raw) : raw
+          const raw = await readContractView('get_room_state', [r.code])
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+          if (!parsed?.roomCode) return null
+          return parsed
         } catch {
           return null
         }
