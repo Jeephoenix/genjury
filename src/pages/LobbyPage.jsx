@@ -1,8 +1,13 @@
 import React, { useState } from 'react'
+import {
+  Share2, Copy, ExternalLink, Coins, Drama, Eye, Bot, Hand,
+  Sparkles, Trophy, Rocket, Check,
+} from 'lucide-react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol, getNetworkInfo } from '../lib/genlayer'
 import HostDashboard from '../components/HostDashboard'
 import PlatformOwnerPanel from '../components/PlatformOwnerPanel'
+import Avatar from '../components/Avatar'
 
 export default function LobbyPage() {
   const roomCode  = useGameStore(s => s.roomCode)
@@ -79,24 +84,24 @@ export default function LobbyPage() {
           <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
             <button
               onClick={shareLink}
-              className={`btn btn-plasma text-sm px-6 ${linkCopied ? 'opacity-80' : ''}`}
+              className={`btn btn-plasma text-sm px-6 inline-flex items-center gap-1.5 ${linkCopied ? 'opacity-80' : ''}`}
             >
-              {linkCopied ? '✓ Link copied!' : '🔗 Share Join Link'}
+              {linkCopied ? <><Check className="w-4 h-4" /> Link copied!</> : <><Share2 className="w-4 h-4" /> Share Join Link</>}
             </button>
             <button
               onClick={copyCode}
-              className={`btn btn-ghost text-sm px-4 ${copied ? 'text-neon border-neon/30' : ''}`}
+              className={`btn btn-ghost text-sm px-4 inline-flex items-center gap-1.5 ${copied ? 'text-neon border-neon/30' : ''}`}
             >
-              {copied ? '✓ Copied!' : '📋 Copy Address'}
+              {copied ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy Address</>}
             </button>
             {explorer && (
               <a
                 href={`${explorer}/address/${roomCode}`}
                 target="_blank"
                 rel="noopener"
-                className="btn btn-ghost text-sm px-4"
+                className="btn btn-ghost text-sm px-4 inline-flex items-center gap-1.5"
               >
-                ↗ Explorer
+                <ExternalLink className="w-4 h-4" /> Explorer
               </a>
             )}
           </div>
@@ -106,7 +111,7 @@ export default function LobbyPage() {
         {/* Stakes */}
         <div className="card">
           <h3 className="font-display font-700 text-white mb-4 flex items-center gap-2">
-            💰 Stakes
+            <Coins className="w-4 h-4 text-gold" /> Stakes
             {isPaid && (
               <span className="badge bg-neon/15 text-neon border border-neon/30 text-[10px]">PAID</span>
             )}
@@ -153,9 +158,12 @@ export default function LobbyPage() {
                 key={p.id}
                 className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-slide-up"
               >
-                <div className="avatar text-lg" style={{ background: p.color + '22', color: p.color }}>
-                  {p.avatar}
-                </div>
+                <Avatar
+                  name={p.name}
+                  src={p.avatar && String(p.avatar).startsWith('data:') ? p.avatar : ''}
+                  color={p.color}
+                  size={36}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="font-display font-600 text-sm text-white truncate">{p.name}</div>
                   <div className="text-white/30 text-[10px] font-mono truncate">{p.id}</div>
@@ -187,15 +195,15 @@ export default function LobbyPage() {
           <h3 className="font-display font-700 text-white mb-4">How to Play</h3>
           <div className="space-y-3">
             {[
-              { icon: '🎭', title: 'Deceiver writes', desc: '2 truths and 1 lie about themselves or the category' },
-              { icon: '👁️', title: 'Detectors vote', desc: 'Pick which statement is the lie — bet your confidence' },
-              { icon: '🤖', title: 'AI Judge rules', desc: 'The Intelligent Contract delivers its verdict on GenLayer' },
-              { icon: '✊', title: 'Object!', desc: 'Raise an Objection to trigger Optimistic Democracy — players vote to sustain or overrule' },
-              { icon: '⭐', title: 'XP is awarded', desc: 'For fooling players, fooling the AI, and successful objections' },
-              ...(isPaid ? [{ icon: '🏆', title: `Highest XP wins the ${symbol} pot`, desc: 'Winner claims the prize pool from the contract on the scoreboard' }] : []),
+              { Icon: Drama, color: 'text-plasma', title: 'Deceiver writes', desc: '2 truths and 1 lie about themselves or the category' },
+              { Icon: Eye, color: 'text-neon', title: 'Detectors vote', desc: 'Pick which statement is the lie — bet your confidence' },
+              { Icon: Bot, color: 'text-signal', title: 'AI Judge rules', desc: 'The Intelligent Contract delivers its verdict on GenLayer' },
+              { Icon: Hand, color: 'text-warning', title: 'Object!', desc: 'Raise an Objection to trigger Optimistic Democracy — players vote to sustain or overrule' },
+              { Icon: Sparkles, color: 'text-gold', title: 'XP is awarded', desc: 'For fooling players, fooling the AI, and successful objections' },
+              ...(isPaid ? [{ Icon: Trophy, color: 'text-gold', title: `Highest XP wins the ${symbol} pot`, desc: 'Winner claims the prize pool from the contract on the scoreboard' }] : []),
             ].map(item => (
               <div key={item.title} className="flex gap-3 text-sm">
-                <span className="text-lg flex-shrink-0">{item.icon}</span>
+                <item.Icon className={`w-5 h-5 flex-shrink-0 ${item.color}`} strokeWidth={2} />
                 <div>
                   <span className="text-white/80 font-600">{item.title} — </span>
                   <span className="text-white/40">{item.desc}</span>
@@ -214,11 +222,15 @@ export default function LobbyPage() {
         {/* Start Button */}
         {isHost && (
           <button
-            className="btn btn-neon w-full py-5 text-lg"
+            className="btn btn-neon w-full py-5 text-lg inline-flex items-center justify-center gap-2"
             disabled={!canStart}
             onClick={startGame}
           >
-            {canStart ? '🚀 Start Genjury' : `Need ${2 - players.length} more player${players.length === 1 ? '' : 's'}`}
+            {canStart ? (
+              <>
+                <Rocket className="w-5 h-5" strokeWidth={2.25} /> Start Genjury
+              </>
+            ) : `Need ${2 - players.length} more player${players.length === 1 ? '' : 's'}`}
           </button>
         )}
 
