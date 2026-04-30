@@ -70,37 +70,49 @@ Replace the mocked `callAIJudge` and the in-memory zustand store in
 (`genlayer-js`):
 
 ```js
-import { createClient, simulator } from "genlayer-js";
+import { createClient } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
 
-const client = createClient({
-  chain: simulator,                       // or testnetAsimov
-  endpoint: import.meta.env.VITE_GENLAYER_RPC,
-});
+const client = createClient({ chain: testnetBradbury });
+const CONTRACT = import.meta.env.VITE_GENJURY_CONTRACT;   // singleton
 
-// Read
+// Read — every gameplay view takes the room code as the first arg.
 const state = JSON.parse(await client.readContract({
-  address: import.meta.env.VITE_CONTRACT_ADDRESS,
-  functionName: "get_state",
+  address: CONTRACT,
+  functionName: "get_room_state",
+  args: ["TRIAL9"],
 }));
 
-// Write — e.g. submit statements
+// Create a room (returns the new code; deployer collects fees globally).
 await client.writeContract({
-  address: import.meta.env.VITE_CONTRACT_ADDRESS,
+  address: CONTRACT,
+  functionName: "create_room",
+  args: ["Alice", 3 /* maxRounds */, 0n /* entryFeeWei */, 8 /* maxPlayers */],
+});
+
+// Submit statements — every gameplay write takes the room code first.
+await client.writeContract({
+  address: CONTRACT,
   functionName: "submit_statements",
-  args: [s1, s2, s3, lieIndex],
+  args: ["TRIAL9", s1, s2, s3, lieIndex],
 });
 ```
 
-Add these to your Vercel project as env vars:
+Add these env vars to the Replit project (see `artifacts/genjury/.env.example`):
 
-- `VITE_GENLAYER_RPC`        — GenLayer RPC endpoint
-- `VITE_CONTRACT_ADDRESS`    — deployed contract address
+- `VITE_GENJURY_CONTRACT`    — REQUIRED — deployed singleton contract address
+- `VITE_GENLAYER_NETWORK`    — `bradbury` (default) | `asimov` | `studionet` | `localnet`
+- `VITE_GENLAYER_RPC`        — optional read-side RPC override
 
 ## Deploying
 
+The contract is a **singleton**: the platform owner deploys it ONCE and pastes
+the resulting address into `VITE_GENJURY_CONTRACT`. End users never deploy
+contracts; they create rooms inside the singleton via `create_room`.
+
 ```bash
 # from the GenLayer CLI / Studio
-genlayer deploy contracts/genjury.py --constructor-args 3
+genlayer deploy contracts/genjury.py
 ```
 
 The constructor takes `max_rounds` (default 3).
