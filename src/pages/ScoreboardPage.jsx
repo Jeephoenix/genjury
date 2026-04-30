@@ -1,10 +1,27 @@
 import React from 'react'
+import {
+  Crown, Trophy, Medal, Award, Home, RotateCcw, Coins, Banknote,
+} from 'lucide-react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 import Confetti from '../components/Confetti'
+import Avatar from '../components/Avatar'
 
-const RANK_ICONS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣']
 const RANK_LABELS = ['Champion', 'Runner-Up', 'Third Place', '4th Place', '5th Place', '6th Place', '7th Place', '8th Place']
+
+function RankBadge({ rank }) {
+  const cls = rank === 1
+    ? 'text-gold'
+    : rank === 2
+      ? 'text-white/70'
+      : rank === 3
+        ? 'text-signal'
+        : 'text-white/40'
+  if (rank === 1) return <Crown className={`w-6 h-6 ${cls}`} strokeWidth={2} />
+  if (rank === 2) return <Trophy className={`w-6 h-6 ${cls}`} strokeWidth={2} />
+  if (rank === 3) return <Medal className={`w-6 h-6 ${cls}`} strokeWidth={2} />
+  return <span className={`font-display font-700 text-base ${cls}`}>#{rank}</span>
+}
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—')
 
@@ -55,18 +72,23 @@ export default function ScoreboardPage() {
         {winner && (
           <div className="text-center mb-10">
             <div className="relative inline-block mb-4">
-              <div className="avatar w-24 h-24 text-4xl mx-auto" style={{ background: winner.color + '22', color: winner.color }}>
-                {winner.avatar}
+              <Avatar
+                name={winner.name}
+                src={winner.avatar && String(winner.avatar).startsWith('data:') ? winner.avatar : ''}
+                color={winner.color}
+                size={96}
+              />
+              <div className="absolute -top-3 -right-3 text-gold">
+                <Crown className="w-7 h-7 drop-shadow-[0_0_10px_rgba(245,200,66,0.7)]" strokeWidth={2} />
               </div>
-              <div className="absolute -top-3 -right-3 text-3xl">👑</div>
-              <div className="absolute inset-0 rounded-full blur-2xl opacity-30" style={{ background: winner.color }} />
+              <div className="absolute inset-0 rounded-full blur-2xl opacity-30 -z-10" style={{ background: winner.color }} />
             </div>
             <h2 className="font-display text-4xl font-800 text-white mb-1">
               <span style={{ color: winner.color }}>{winner.name}</span> wins!
             </h2>
             <p className="text-white/40 text-sm">{winner.xp} XP · Level {winner.level}</p>
-            <div className="badge bg-gold/20 text-gold border border-gold/30 mt-3 mx-auto text-sm">
-              🏆 Genjury Champion
+            <div className="badge bg-gold/20 text-gold border border-gold/30 mt-3 mx-auto text-sm inline-flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5" /> Genjury Champion
             </div>
           </div>
         )}
@@ -98,9 +120,12 @@ export default function ScoreboardPage() {
                   title={iAmWinner ? '' : 'Only the winner can claim'}
                   onClick={claimPrize}
                 >
-                  {iAmWinner
-                    ? `🏆 Claim ${formatGen(winnerWinningsWei, 6)} ${symbol}`
-                    : 'Waiting for winner to claim'}
+                  {iAmWinner ? (
+                    <span className="inline-flex items-center gap-1.5 justify-center">
+                      <Trophy className="w-4 h-4" strokeWidth={2.25} />
+                      Claim {formatGen(winnerWinningsWei, 6)} {symbol}
+                    </span>
+                  ) : 'Waiting for winner to claim'}
                 </button>
               )}
             </div>
@@ -128,9 +153,12 @@ export default function ScoreboardPage() {
                     title={iAmHouse ? '' : 'Only the house wallet can sweep fees'}
                     onClick={claimHouseFees}
                   >
-                    {iAmHouse
-                      ? `💸 Sweep ${formatGen(houseFeesCollectedWei, 6)} ${symbol}`
-                      : 'Waiting for the house to sweep'}
+                    {iAmHouse ? (
+                      <span className="inline-flex items-center gap-1.5 justify-center">
+                        <Banknote className="w-4 h-4" strokeWidth={2.25} />
+                        Sweep {formatGen(houseFeesCollectedWei, 6)} {symbol}
+                      </span>
+                    ) : 'Waiting for the house to sweep'}
                   </button>
                 )}
                 {!hasUnclaimedFees && iAmHouse && (
@@ -156,11 +184,16 @@ export default function ScoreboardPage() {
                 animationDelay: `${i * 0.08}s`,
               }}
             >
-              <div className="text-2xl flex-shrink-0 w-8 text-center">{RANK_ICONS[i] || `#${i + 1}`}</div>
-
-              <div className="avatar" style={{ background: p.color + '22', color: p.color }}>
-                {p.avatar}
+              <div className="flex-shrink-0 w-8 flex items-center justify-center">
+                <RankBadge rank={i + 1} />
               </div>
+
+              <Avatar
+                name={p.name}
+                src={p.avatar && String(p.avatar).startsWith('data:') ? p.avatar : ''}
+                color={p.color}
+                size={40}
+              />
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -206,7 +239,12 @@ export default function ScoreboardPage() {
                     <tr key={p.id} className="border-b border-white/[0.04]">
                       <td className="py-2 pr-3">
                         <div className="flex items-center gap-2">
-                          <span style={{ color: p.color }}>{p.avatar}</span>
+                          <Avatar
+                            name={p.name}
+                            src={p.avatar && String(p.avatar).startsWith('data:') ? p.avatar : ''}
+                            color={p.color}
+                            size={20}
+                          />
                           <span className="text-white/70 text-xs">{p.name}</span>
                         </div>
                       </td>
@@ -230,8 +268,9 @@ export default function ScoreboardPage() {
         {me && (
           <div className="card text-center mb-6" style={{ borderColor: me.color + '33', background: me.color + '08' }}>
             <p className="text-white/50 text-sm">Your result</p>
-            <p className="font-display text-2xl font-700 mt-1" style={{ color: me.color }}>
-              {RANK_ICONS[myRank - 1] || `#${myRank}`} {RANK_LABELS[myRank - 1] || `${myRank}th place`}
+            <p className="font-display text-2xl font-700 mt-1 inline-flex items-center gap-2 justify-center" style={{ color: me.color }}>
+              <RankBadge rank={myRank} />
+              {RANK_LABELS[myRank - 1] || `${myRank}th place`}
             </p>
             <p className="text-white/30 text-xs mt-1">{me.xp} XP · Level {me.level}</p>
           </div>
@@ -239,16 +278,16 @@ export default function ScoreboardPage() {
 
         {/* Actions */}
         <div className="grid grid-cols-2 gap-4">
-          <button className="btn btn-ghost py-4" onClick={resetGame}>
-            🏠 Main Menu
+          <button className="btn btn-ghost py-4 inline-flex items-center justify-center gap-2" onClick={resetGame}>
+            <Home className="w-4 h-4" strokeWidth={2.25} /> Main Menu
           </button>
           <button
-            className="btn btn-neon py-4"
+            className="btn btn-neon py-4 inline-flex items-center justify-center gap-2"
             onClick={startGame}
             disabled={playAgainBlocked}
             title={playAgainTitle}
           >
-            🔄 Play Again
+            <RotateCcw className="w-4 h-4" strokeWidth={2.25} /> Play Again
           </button>
         </div>
         {playAgainBlocked && (
