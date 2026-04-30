@@ -23,7 +23,8 @@ import {
   subscribeWallet,
   getNetworkInfo,
   explorerAddressUrl,
-  readView,
+  readContractView,
+  hasContractAddress,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
 import {
@@ -64,7 +65,7 @@ export default function ProfilePage() {
   // address in the players map. Sum xp / wins / games. This gives a real
   // on-chain reputation snapshot without inventing achievements.
   const [stats, setStats] = useState({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
-  const [history, setHistory] = useState([])  // [{address, phase, players, fee, pool, role}]
+  const [history, setHistory] = useState([])  // [{code, phase, players, fee, pool, role}]
 
   useEffect(() => {
     let cancelled = false
@@ -78,10 +79,16 @@ export default function ProfilePage() {
       let games = 0, wins = 0, xp = 0, level = 1
       const hist = []
       const me = address.toLowerCase()
+      if (!hasContractAddress()) {
+        setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
+        setHistory([])
+        return
+      }
       await Promise.all(rooms.map(async (r) => {
         try {
-          const raw = await readView(r.address, 'get_state')
+          const raw = await readContractView('get_room_state', [r.code])
           const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+          if (!parsed?.roomCode) return
           const players = parsed?.players || {}
           const rec = players[me] || players[address] || null
           if (rec) {
@@ -91,13 +98,13 @@ export default function ProfilePage() {
             const won = (parsed?.winnerAddress || '').toLowerCase() === me
             if (won) wins += 1
             hist.push({
-              address: r.address,
+              code: r.code,
               phase: parsed?.phase || 'unknown',
               playerCount: Number(parsed?.playerCount || 0),
               maxPlayers: Number(parsed?.maxPlayers || 0),
               entryFee: parsed?.entryFee || '0',
               prizePool: parsed?.prizePool || '0',
-              role: r.isHost ? 'Host' : 'Player',
+              role: r.isHost ? 'Host' : 'Juror',
               won,
               xpInRoom: Number(rec.xp || 0),
             })
@@ -125,10 +132,10 @@ export default function ProfilePage() {
     }
   }
 
-  const handleResume = (addr) => {
+  const handleResume = (code) => {
     if (loading) return
     if (!isWalletConnected()) { setOpenWallet(true); return }
-    joinRoom(addr)
+    joinRoom(code)
   }
 
   return (
@@ -291,7 +298,7 @@ export default function ProfilePage() {
         ) : (
           <div className="divide-y divide-white/5">
             {history.map((h) => (
-              <div key={h.address} className="py-3 flex items-center gap-3">
+              <div key={h.code} className="py-3 flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
                   h.won ? 'bg-gold/15 border-gold/40 text-gold' : 'bg-white/5 border-white/10 text-white/55'
                 }`}>
@@ -301,8 +308,8 @@ export default function ProfilePage() {
                   <div className="text-white text-sm font-medium truncate">
                     {h.role} · <span className="capitalize">{h.phase}</span>
                   </div>
-                  <div className="text-white/40 text-xs font-mono truncate">
-                    {h.address.slice(0, 10)}…{h.address.slice(-8)}
+                  <div className="text-white/40 text-xs font-mono truncate tracking-wider">
+                    Case <span className="text-white/70">{h.code}</span>
                   </div>
                 </div>
                 <div className="text-right">
@@ -310,7 +317,7 @@ export default function ProfilePage() {
                   <div className="text-sm font-mono text-white">{h.xpInRoom}</div>
                 </div>
                 <button
-                  onClick={() => handleResume(h.address)}
+                  onClick={() => handleResume(h.code)}
                   disabled={loading}
                   className="ml-2 px-3 py-1.5 rounded-lg border border-plasma/40 bg-plasma/10 text-plasma text-xs font-semibold hover:bg-plasma/20 disabled:opacity-50"
                 >
