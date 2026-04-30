@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
+import { Eye, Check, Drama } from 'lucide-react'
 import useGameStore from '../lib/store'
 import StatementCard from '../components/StatementCard'
+import Avatar from '../components/Avatar'
 
 export default function VotingPhase() {
   const players = useGameStore(s => s.players)
@@ -44,9 +46,7 @@ export default function VotingPhase() {
             Which statement is the lie?
           </h2>
           <div className="flex items-center justify-center gap-2">
-            <div className="avatar w-8 h-8 text-sm" style={{ background: deceiver?.color + '22', color: deceiver?.color }}>
-              {deceiver?.avatar}
-            </div>
+            <Avatar name={deceiver?.name} color={deceiver?.color} size={28} />
             <p className="text-white/50 text-sm">
               <span style={{ color: deceiver?.color }}>{deceiver?.name}</span> wrote these. Spot the lie.
             </p>
@@ -96,20 +96,24 @@ export default function VotingPhase() {
         {/* Submit / Status */}
         {isDeceiver ? (
           <div className="card text-center bg-signal/5 border-signal/20">
-            <p className="text-signal text-sm">🎭 You're the Deceiver — sit back and watch them squirm</p>
+            <p className="text-signal text-sm inline-flex items-center gap-1.5 justify-center">
+              <Drama className="w-4 h-4" /> You're the Deceiver — sit back and watch them squirm
+            </p>
           </div>
         ) : submitted ? (
           <div className="card text-center bg-neon/5 border-neon/20">
-            <p className="text-neon text-sm mb-1">✓ Vote submitted at {Math.round(myConfidence * 100)}% confidence</p>
+            <p className="text-neon text-sm mb-1 inline-flex items-center gap-1.5 justify-center">
+              <Check className="w-4 h-4" /> Vote submitted at {Math.round(myConfidence * 100)}% confidence
+            </p>
             <p className="text-white/30 text-xs">Waiting for other players…</p>
           </div>
         ) : (
           <button
-            className="btn btn-plasma w-full py-4 text-base"
+            className="btn btn-plasma w-full py-4 text-base inline-flex items-center justify-center gap-2"
             disabled={myVote === null}
             onClick={handleSubmit}
           >
-            👁️ Lock in My Vote
+            <Eye className="w-4 h-4" strokeWidth={2.25} /> Lock in My Vote
           </button>
         )}
 
@@ -135,11 +139,11 @@ export default function VotingPhase() {
                   border: `1px solid ${votes[p.id] !== undefined ? p.color + '44' : 'rgba(255,255,255,0.06)'}`,
                 }}
               >
-                <span>{p.avatar}</span>
+                <Avatar name={p.name} color={p.color} size={16} />
                 <span style={{ color: votes[p.id] !== undefined ? p.color : 'rgba(255,255,255,0.3)' }}>
                   {p.name}
                 </span>
-                {votes[p.id] !== undefined && <span>✓</span>}
+                {votes[p.id] !== undefined && <Check className="w-3 h-3" strokeWidth={2.5} />}
               </div>
             ))}
           </div>
