@@ -18,18 +18,18 @@ import MistrialMark from '../components/MistrialMark'
 const HOW_IT_WORKS = [
   {
     Icon: Gamepad2,
-    title: 'Pick a game',
-    body: 'Browse the on-chain catalog. Every title is provably fair and judged by an AI on GenLayer.',
+    title: 'Pick a case',
+    body: 'Browse the docket. Every game is provably fair and presided over by an AI Judge on GenLayer.',
   },
   {
     Icon: Wallet,
-    title: 'Stake to play',
-    body: 'Connect your wallet, stake the entry fee, and join a room with friends — or strangers.',
+    title: 'Take a seat',
+    body: 'Connect your wallet, stake the entry fee, and join the jury — invite friends or jump into a public case.',
   },
   {
     Icon: Trophy,
-    title: 'Win the pot',
-    body: 'The AI Judge settles the round on-chain. Winners claim the prize pool — no middleman, no edge.',
+    title: 'Claim the purse',
+    body: 'The AI Judge rules on-chain. The winning juror sweeps the purse — no clerks, no house edge beyond the small AI fee.',
   },
 ]
 
@@ -102,8 +102,8 @@ export default function HomePage() {
           <span className="shimmer-text">judged on-chain.</span>
         </h1>
         <p className="text-white/55 text-base sm:text-lg max-w-xl mx-auto mt-6 leading-relaxed">
-          Genjury is an arcade of on-chain games settled by an AI Judge.
-          Stake {symbol}, play with friends, and let the chain decide the winner.
+          Genjury is a courthouse of on-chain games where an AI Judge rules every case.
+          Stake {symbol}, summon a jury, and let the chain hand down the verdict.
         </p>
 
         {/* Mechanic pills */}
@@ -111,7 +111,7 @@ export default function HomePage() {
           {[
             { Icon: Brain,        label: 'AI-judged' },
             { Icon: ShieldCheck,  label: 'Provably fair' },
-            { Icon: Coins,        label: `Stake ${symbol}, win the pot` },
+            { Icon: Coins,        label: `Stake ${symbol}, win the purse` },
           ].map(({ Icon, label }) => (
             <span
               key={label}
@@ -250,7 +250,7 @@ export default function HomePage() {
             How it works
           </div>
           <h2 className="font-display font-700 text-2xl sm:text-3xl text-white">
-            Three steps to play
+            Three steps to a verdict
           </h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -287,7 +287,7 @@ export default function HomePage() {
           Ready to take the stand?
         </h3>
         <p className="text-white/55 text-sm sm:text-base mt-2 max-w-lg mx-auto">
-          Jump into a live room or browse the catalog. New games ship monthly.
+          Walk into a live courtroom or browse the catalog. New games ship monthly.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6 max-w-md mx-auto">
           <button
