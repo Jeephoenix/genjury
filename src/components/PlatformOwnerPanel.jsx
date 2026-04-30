@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Banknote, ChevronDown, ChevronRight } from 'lucide-react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 
@@ -47,12 +48,14 @@ export default function PlatformOwnerPanel() {
         className="w-full flex items-center justify-between text-left"
       >
         <span className="font-display font-700 text-white flex items-center gap-2">
-          💰 Platform Owner
+          <Banknote className="w-4 h-4 text-gold" /> Platform Owner
           <span className="badge bg-gold/15 text-gold border border-gold/30 text-[10px]">
             DEV ONLY
           </span>
         </span>
-        <span className="text-white/40 text-sm">{open ? '▾' : '▸'}</span>
+        {open
+          ? <ChevronDown className="w-4 h-4 text-white/40" />
+          : <ChevronRight className="w-4 h-4 text-white/40" />}
       </button>
 
       {open && (
