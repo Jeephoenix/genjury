@@ -10,6 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Gavel,
+  Wallet,
+  Trophy,
+  Building2,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import MistrialMark from '../components/MistrialMark'
@@ -20,25 +24,33 @@ import {
   getChainNativeSymbol,
   subscribeWallet,
   isWalletConnected,
+  hasContractAddress,
+  isValidRoomCode,
+  normalizeRoomCode,
+  readContractView,
 } from '../lib/genlayer'
 import { getProfile, subscribeProfile } from '../lib/profile'
 import { rememberJoinedRoom } from '../lib/joinedRooms'
 
 const PRESET_FEES = ['0', '0.01', '0.1', '1']
+const HOUSE_CUT_BPS_DEFAULT = 500   // 5% — used until the contract reports its real cut
 
 export default function MistrialPage() {
-  const [showCreate, setShowCreate]   = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [advancedAddr, setAdvancedAddr] = useState('')
+  const [showCreate, setShowCreate]     = useState(false)
+  const [showJoinByCode, setShowJoinByCode] = useState(false)
+  const [joinCodeInput, setJoinCodeInput]   = useState('')
 
   // Create-room form
   const [entryFee, setEntryFee]   = useState('0.01')
   const [maxRounds, setMaxRounds] = useState(3)
+  const [maxPlayers, setMaxPlayers] = useState(8)
   const [feeError, setFeeError]   = useState(null)
+
+  // House cut, fetched once from the contract so the money map is honest.
+  const [houseCutBps, setHouseCutBps] = useState(HOUSE_CUT_BPS_DEFAULT)
 
   const createRoom    = useGameStore(s => s.createRoom)
   const joinRoom      = useGameStore(s => s.joinRoom)
-  const previewRoom   = useGameStore(s => s.previewRoom)
   const loading       = useGameStore(s => s.loading)
   const setActiveTab  = useGameStore(s => s.setActiveTab)
   const setOpenWallet = useGameStore(s => s.setWalletPanelOpen)
@@ -47,15 +59,32 @@ export default function MistrialPage() {
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
   useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])
 
-  // Deep-link: ?join=<addr> → remember it & let OpenRoundsList show it.
+  // Pull the live house cut so the money map is accurate.
+  useEffect(() => {
+    if (!hasContractAddress()) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await readContractView('get_house_info', [])
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        const bps = Number(parsed?.houseCutBps ?? HOUSE_CUT_BPS_DEFAULT)
+        if (!cancelled && Number.isFinite(bps)) setHouseCutBps(bps)
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Deep-link: ?join=ABCDEF → preselect the join-by-code form.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const joinParam = params.get('join')
     if (joinParam) {
-      const cleaned = normalizeAddress(joinParam)
-      if (/^0x[0-9a-f]{40}$/.test(cleaned)) {
-        rememberJoinedRoom(cleaned)
+      const code = normalizeRoomCode(joinParam)
+      if (isValidRoomCode(code)) {
+        setJoinCodeInput(code)
+        setShowJoinByCode(true)
+        rememberJoinedRoom(code)
       }
       params.delete('join')
       const qs = params.toString()
@@ -67,6 +96,7 @@ export default function MistrialPage() {
   const symbol  = getChainNativeSymbol()
   const profile = getProfile()
   const connected = isWalletConnected()
+  const contractConfigured = hasContractAddress()
 
   const entryFeeWei = useMemo(() => {
     try { return parseGen(entryFee) } catch { return null }
@@ -77,15 +107,21 @@ export default function MistrialPage() {
     if (!connected) { setOpenWallet(true); return }
     if (entryFeeWei === null) { setFeeError(`Invalid ${symbol} amount`); return }
     setFeeError(null)
-    createRoom(profile.name, { entryFeeWei, maxRounds: Number(maxRounds) })
+    createRoom(profile.name, {
+      entryFeeWei,
+      maxRounds:  Number(maxRounds),
+      maxPlayers: Number(maxPlayers),
+    })
   }
 
-  const handleAdvancedJoin = () => {
-    const addr = normalizeAddress(advancedAddr)
-    if (!/^0x[0-9a-f]{40}$/.test(addr)) return
+  const handleJoinByCode = () => {
+    const code = normalizeRoomCode(joinCodeInput)
+    if (!isValidRoomCode(code)) return
     if (!connected) { setOpenWallet(true); return }
-    joinRoom(addr)
+    joinRoom(code)
   }
+
+  const validJoinCode = isValidRoomCode(normalizeRoomCode(joinCodeInput))
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-10 sm:py-14 relative">
@@ -121,17 +157,17 @@ export default function MistrialPage() {
         </h1>
 
         <p className="text-white/55 text-base sm:text-lg max-w-lg mx-auto leading-relaxed font-body">
-          Two truths, one lie. Fool the players. Fool the AI Judge.
+          Two truths, one lie. Bluff the jury. Outwit the AI Judge.
           <br />
-          <span className="text-plasma/85">Stake {symbol}, win the pot, on GenLayer.</span>
+          <span className="text-plasma/85">Stake {symbol}, win the purse, on GenLayer.</span>
         </p>
 
         <div className="flex flex-wrap gap-2 justify-center mt-6">
           {[
-            { Icon: Drama, label: 'Deceiver vs Detectors' },
+            { Icon: Drama, label: 'Defendant vs Jury' },
             { Icon: Brain, label: 'AI Judge' },
-            { Icon: Vote,  label: 'Optimistic Democracy' },
-            { Icon: Coins, label: `Winner takes the ${symbol} pot` },
+            { Icon: Gavel, label: 'Objections allowed' },
+            { Icon: Coins, label: `Winner takes the ${symbol} purse` },
           ].map(({ Icon, label }) => (
             <span
               key={label}
@@ -144,24 +180,41 @@ export default function MistrialPage() {
         </div>
       </div>
 
-      {/* Open rounds — primary entry point */}
+      {/* Contract not configured warning */}
+      {!contractConfigured && (
+        <div className="card glass border-signal/40 bg-signal/[0.05] mb-5 animate-slide-up">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-signal mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-display font-700 text-white">Contract not configured</h3>
+              <p className="text-white/65 text-sm mt-1">
+                The Genjury contract address (<code className="font-mono text-white/85">VITE_GENJURY_CONTRACT</code>)
+                is missing. The platform owner needs to deploy the singleton contract once and add the address to
+                the project's environment.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live courthouse / open cases */}
       <div className="card glass mb-5 animate-slide-up" style={{ animationDelay: '0.05s' }}>
         <OpenRoundsList
-          title="Open rounds"
-          emptyHint="No rooms tracked yet. Tap “Create new room” below to start one, or use Advanced to join by contract address."
+          title="The docket — live courthouse"
+          emptyHint="No cases on the docket. Open one below — friends will see it instantly."
         />
       </div>
 
-      {/* Create-new-room CTA */}
+      {/* Open new case */}
       <div className="card glass mb-5 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="font-display font-700 text-base text-white inline-flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-neon" />
-              Start your own room
+              Open a new case
             </h2>
             <p className="text-white/50 text-sm mt-1">
-              Pick the entry fee and round count. Friends can join via the room list above.
+              You become the host. Set the entry fee, the docket length, and the jury size.
             </p>
           </div>
           <button
@@ -169,7 +222,7 @@ export default function MistrialPage() {
             className="px-3 py-2 rounded-lg border border-neon/40 bg-neon/15 text-neon text-sm font-semibold hover:bg-neon/25 inline-flex items-center gap-2"
           >
             <Plus className="w-4 h-4" strokeWidth={2.25} />
-            {showCreate ? 'Hide' : 'Create new room'}
+            {showCreate ? 'Hide' : 'Open new case'}
           </button>
         </div>
 
@@ -185,7 +238,7 @@ export default function MistrialPage() {
             {/* Entry fee */}
             <div>
               <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
-                Entry fee per player ({symbol})
+                Entry fee per juror ({symbol})
               </label>
               <input
                 className="input font-mono"
@@ -213,67 +266,99 @@ export default function MistrialPage() {
               {feeError && <p className="text-signal text-xs mt-1.5">{feeError}</p>}
             </div>
 
-            {/* Max rounds */}
-            <div>
-              <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
-                Total rounds
-              </label>
-              <div className="flex items-center gap-2">
-                {[2, 3, 5, 7].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setMaxRounds(n)}
-                    className={`flex-1 rounded-lg py-2 text-sm font-mono transition-colors ${
-                      maxRounds === n
-                        ? 'bg-neon/20 text-neon border border-neon/40'
-                        : 'bg-white/5 text-white/55 border border-white/10 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
+            {/* Rounds + players grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
+                  Total rounds
+                </label>
+                <div className="flex items-center gap-2">
+                  {[2, 3, 5, 7].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setMaxRounds(n)}
+                      className={`flex-1 rounded-lg py-2 text-sm font-mono transition-colors ${
+                        maxRounds === n
+                          ? 'bg-neon/20 text-neon border border-neon/40'
+                          : 'bg-white/5 text-white/55 border border-white/10 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-white/50 text-xs font-mono uppercase tracking-wider mb-2 block">
+                  Jury size
+                </label>
+                <div className="flex items-center gap-2">
+                  {[4, 6, 8, 12].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setMaxPlayers(n)}
+                      className={`flex-1 rounded-lg py-2 text-sm font-mono transition-colors ${
+                        maxPlayers === n
+                          ? 'bg-neon/20 text-neon border border-neon/40'
+                          : 'bg-white/5 text-white/55 border border-white/10 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {/* Money map */}
+            <MoneyMap
+              entryFeeWei={entryFeeWei}
+              maxPlayers={Number(maxPlayers)}
+              houseCutBps={houseCutBps}
+              symbol={symbol}
+            />
 
             <button
               className="btn btn-neon w-full py-3 text-base"
               onClick={handleCreate}
-              disabled={loading || entryFeeWei === null || !profile.name}
+              disabled={loading || entryFeeWei === null || !profile.name || !contractConfigured}
             >
               {loading
-                ? 'Talking to GenLayer…'
+                ? 'Filing case on-chain…'
                 : entryFeeWei && entryFeeWei > 0n
-                  ? `Deploy & Stake ${formatGen(entryFeeWei, 6)} ${symbol}`
-                  : 'Deploy & Enter'}
+                  ? `File case · stake ${formatGen(entryFeeWei, 6)} ${symbol}`
+                  : 'File case'}
             </button>
           </div>
         )}
       </div>
 
-      {/* Advanced — paste-by-address (rarely needed). */}
+      {/* Join by code */}
       <div className="rounded-xl border border-white/5 bg-white/[0.015] px-4 py-3 animate-fade-in" style={{ animationDelay: '0.15s' }}>
         <button
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="w-full flex items-center justify-between text-white/45 hover:text-white text-xs font-mono uppercase tracking-wider"
+          onClick={() => setShowJoinByCode((v) => !v)}
+          className="w-full flex items-center justify-between text-white/60 hover:text-white text-xs font-mono uppercase tracking-wider"
         >
-          <span>Advanced · join by contract address</span>
-          {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          <span>Join by case code (e.g. {sampleCode()})</span>
+          {showJoinByCode ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
-        {showAdvanced && (
+        {showJoinByCode && (
           <div className="mt-3 flex flex-col sm:flex-row gap-2">
             <input
-              className="input font-mono text-xs flex-1"
-              placeholder="0x… contract address"
-              value={advancedAddr}
-              onChange={(e) => setAdvancedAddr(normalizeAddress(e.target.value))}
+              className="input font-mono text-sm flex-1 uppercase tracking-[0.25em]"
+              placeholder="ABCDEF"
+              value={joinCodeInput}
+              onChange={(e) => setJoinCodeInput(normalizeRoomCode(e.target.value))}
+              maxLength={6}
             />
             <button
-              onClick={handleAdvancedJoin}
-              disabled={loading || !/^0x[0-9a-f]{40}$/.test(advancedAddr)}
+              onClick={handleJoinByCode}
+              disabled={loading || !validJoinCode}
               className="px-4 py-2 rounded-lg border border-plasma/40 bg-plasma/15 text-plasma text-sm font-semibold hover:bg-plasma/25 disabled:opacity-50"
             >
-              Join
+              Take a seat
             </button>
           </div>
         )}
@@ -293,10 +378,85 @@ export default function MistrialPage() {
   )
 }
 
-function normalizeAddress(raw) {
-  if (!raw) return ''
-  let s = String(raw).trim()
-  if (s.toLowerCase().startsWith('0x')) s = s.slice(2)
-  s = s.replace(/[^0-9a-fA-F]/g, '').toLowerCase().slice(0, 40)
-  return s ? `0x${s}` : ''
+// ── Money map ────────────────────────────────────────────────────────────────
+function MoneyMap({ entryFeeWei, maxPlayers, houseCutBps, symbol }) {
+  const fee = entryFeeWei ?? 0n
+  const cap = Math.max(2, Number(maxPlayers) || 0)
+  const totalPot = fee * BigInt(cap)
+  const cutBps = BigInt(Math.max(0, Math.min(10_000, Number(houseCutBps) || 0)))
+  const houseTake = (totalPot * cutBps) / 10_000n
+  const winnerTake = totalPot - houseTake
+  const cutPct = Number(cutBps) / 100
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-gradient-to-br from-gold/[0.04] via-white/[0.015] to-transparent p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Trophy className="w-4 h-4 text-gold" />
+        <h3 className="font-display font-700 text-white text-sm">Money map</h3>
+        <span className="text-white/35 text-[10px] font-mono uppercase tracking-wider">
+          where every {symbol} goes
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <MapCell
+          icon={<Wallet className="w-3.5 h-3.5 text-white/60" />}
+          label={`Per juror (×${cap} jurors)`}
+          value={`${formatGen(fee, 6)} ${symbol}`}
+          sub={`Total purse: ${formatGen(totalPot, 6)} ${symbol}`}
+        />
+        <MapCell
+          icon={<Trophy className="w-3.5 h-3.5 text-gold" />}
+          label="Winner takes"
+          value={`${formatGen(winnerTake, 6)} ${symbol}`}
+          sub={`${(100 - cutPct).toFixed(2)}% of the purse`}
+          accent="gold"
+        />
+        <MapCell
+          icon={<Building2 className="w-3.5 h-3.5 text-plasma" />}
+          label="House keeps"
+          value={`${formatGen(houseTake, 6)} ${symbol}`}
+          sub={`${cutPct.toFixed(2)}% — covers the AI Judge`}
+          accent="plasma"
+        />
+      </div>
+
+      {/* Stacked bar */}
+      <div className="mt-3 h-2 rounded-full overflow-hidden bg-white/5 border border-white/10 flex">
+        <div
+          className="h-full bg-gold/70"
+          style={{ width: `${100 - cutPct}%` }}
+          title={`Winner: ${(100 - cutPct).toFixed(2)}%`}
+        />
+        <div
+          className="h-full bg-plasma/70"
+          style={{ width: `${cutPct}%` }}
+          title={`House: ${cutPct.toFixed(2)}%`}
+        />
+      </div>
+      <p className="text-white/40 text-[11px] mt-2 leading-relaxed">
+        Refunds are automatic if the case never starts. Kicked players get their stake back.
+      </p>
+    </div>
+  )
+}
+
+function MapCell({ icon, label, value, sub, accent }) {
+  const accentText = accent === 'gold' ? 'text-gold'
+                  : accent === 'plasma' ? 'text-plasma'
+                  : 'text-white'
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <span className="text-[10px] font-mono uppercase tracking-wider text-white/45">{label}</span>
+      </div>
+      <div className={`font-mono text-sm ${accentText}`}>{value}</div>
+      {sub && <div className="text-white/40 text-[11px] mt-1 font-mono">{sub}</div>}
+    </div>
+  )
+}
+
+function sampleCode() {
+  return 'TRIAL9'
 }
