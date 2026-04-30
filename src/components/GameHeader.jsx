@@ -1,4 +1,5 @@
 import React from 'react'
+import { Coins } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import TimerRing from './TimerRing'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
@@ -55,7 +56,7 @@ export default function GameHeader() {
       {/* Prize pool */}
       {showPot && (
         <div className="flex-shrink-0 hidden sm:flex items-center gap-1.5 badge bg-gold/10 border border-gold/30 text-gold font-mono text-xs">
-          <span>💰</span>
+          <Coins className="w-3.5 h-3.5" />
           <span>{formatGen(displayPotWei, 4)} {symbol}</span>
         </div>
       )}
