@@ -1,31 +1,33 @@
 import React, { useState } from 'react'
+import { PenLine, Loader2, Check, AlertTriangle, ExternalLink, X } from 'lucide-react'
 import useGameStore from '../lib/store'
 import { getNetworkInfo } from '../lib/genlayer'
 
 const STATUS_META = {
   awaiting_signature: {
-    icon:   '✍️',
+    Icon:   PenLine,
     title:  'Confirm in your wallet',
     accent: 'border-plasma/40 bg-plasma/10',
     dotCls: 'bg-plasma animate-pulse',
     text:   'text-plasma',
   },
   pending: {
-    icon:   '⏳',
+    Icon:   Loader2,
+    spin:   true,
     title:  'Transaction pending',
     accent: 'border-ice/40 bg-ice/10',
     dotCls: 'bg-ice animate-pulse',
     text:   'text-ice',
   },
   confirmed: {
-    icon:   '✓',
+    Icon:   Check,
     title:  'Confirmed on-chain',
     accent: 'border-neon/40 bg-neon/10',
     dotCls: 'bg-neon',
     text:   'text-neon',
   },
   failed: {
-    icon:   '⚠',
+    Icon:   AlertTriangle,
     title:  'Transaction failed',
     accent: 'border-signal/40 bg-signal/10',
     dotCls: 'bg-signal',
@@ -77,8 +79,9 @@ export default function TxStatusBanner() {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-mono uppercase tracking-wider ${meta.text}`}>
-                {meta.icon} {meta.title}
+              <span className={`text-xs font-mono uppercase tracking-wider inline-flex items-center gap-1.5 ${meta.text}`}>
+                <meta.Icon className={`w-3.5 h-3.5 ${meta.spin ? 'animate-spin' : ''}`} strokeWidth={2.25} />
+                {meta.title}
               </span>
             </div>
             <div className="text-white/90 text-sm font-display font-600 mt-0.5 truncate">
@@ -101,10 +104,10 @@ export default function TxStatusBanner() {
           {dismissable && (
             <button
               onClick={() => setHidden(true)}
-              className="flex-shrink-0 text-white/40 hover:text-white text-lg leading-none"
+              className="flex-shrink-0 text-white/40 hover:text-white"
               aria-label="Dismiss"
             >
-              ×
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -127,9 +130,9 @@ export default function TxStatusBanner() {
                   href={txLink}
                   target="_blank"
                   rel="noopener"
-                  className="text-plasma/80 hover:text-plasma text-[11px] font-mono"
+                  className="text-plasma/80 hover:text-plasma text-[11px] font-mono inline-flex items-center gap-1"
                 >
-                  Explorer ↗
+                  Explorer <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>
