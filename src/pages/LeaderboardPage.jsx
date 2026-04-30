@@ -1,27 +1,53 @@
-import React, { useState } from 'react'
-import { Trophy, Medal, Award, TrendingUp, Flame, Crown } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Trophy, Medal, Award, Crown, Flame, RefreshCw } from 'lucide-react'
+import {
+  readView,
+  myAddress,
+  isWalletConnected,
+} from '../lib/genlayer'
+import {
+  listJoinedRooms,
+  subscribeJoinedRooms,
+} from '../lib/joinedRooms'
+import Avatar from '../components/Avatar'
 
-const SEEDED = [
-  { rank: 1,  name: 'cipher.eth',    addr: '0xA9c4…3f12', wins: 184, winRate: 71, earnings: '128.42', streak: 12, tier: 'mythic'   },
-  { rank: 2,  name: 'lumen',         addr: '0x44b1…d09a', wins: 162, winRate: 68, earnings: '101.07', streak: 8,  tier: 'mythic'   },
-  { rank: 3,  name: 'oracle9',       addr: '0x7e2c…ab44', wins: 149, winRate: 65, earnings:  '92.18', streak: 4,  tier: 'mythic'   },
-  { rank: 4,  name: 'nyx.builds',    addr: '0xC0fe…1188', wins: 138, winRate: 63, earnings:  '78.66', streak: 3,  tier: 'diamond'  },
-  { rank: 5,  name: 'phantom_byte',  addr: '0x21ee…ff03', wins: 122, winRate: 61, earnings:  '64.30', streak: 5,  tier: 'diamond'  },
-  { rank: 6,  name: 'bluffmaster',   addr: '0x8aa9…4b2d', wins: 117, winRate: 59, earnings:  '60.81', streak: 2,  tier: 'diamond'  },
-  { rank: 7,  name: 'detective.gg',  addr: '0x9013…77ab', wins: 104, winRate: 57, earnings:  '53.22', streak: 1,  tier: 'platinum' },
-  { rank: 8,  name: 'glitchhunter',  addr: '0x5fea…0099', wins:  98, winRate: 55, earnings:  '47.91', streak: 6,  tier: 'platinum' },
-  { rank: 9,  name: 'voidwalker',    addr: '0xB123…cd34', wins:  91, winRate: 54, earnings:  '42.05', streak: 0,  tier: 'platinum' },
-  { rank: 10, name: 'silentecho',    addr: '0x6789…1ab2', wins:  85, winRate: 52, earnings:  '38.77', streak: 2,  tier: 'gold'     },
-]
-
-const TIER_COLORS = {
-  mythic:   'text-plasma',
-  diamond:  'text-ice',
-  platinum: 'text-white/80',
-  gold:     'text-gold',
+// Aggregate every player's XP / wins / games across every room the user knows
+// about (joined rooms + the configured house room). This produces a real
+// leaderboard from on-chain state — no hardcoded sample data.
+function aggregate(roomStates, address) {
+  const me = (address || '').toLowerCase()
+  const acc = new Map()  // addr -> { addr, name, color, xp, wins, games }
+  for (const s of roomStates) {
+    if (!s) continue
+    const winner = (s.winnerAddress || '').toLowerCase()
+    const players = s.players || {}
+    for (const [k, rec] of Object.entries(players)) {
+      const a = String(k).toLowerCase()
+      const cur = acc.get(a) || {
+        addr: a,
+        name: rec?.name || `${a.slice(0, 6)}…${a.slice(-4)}`,
+        color: rec?.color || '#a259ff',
+        xp: 0,
+        wins: 0,
+        games: 0,
+      }
+      cur.xp += Number(rec?.xp || 0)
+      cur.games += 1
+      if (winner && winner === a) cur.wins += 1
+      // Prefer the longest non-empty name we've seen.
+      if (rec?.name && rec.name.length > cur.name.length) cur.name = rec.name
+      acc.set(a, cur)
+    }
+  }
+  const list = Array.from(acc.values())
+  list.sort((a, b) => b.xp - a.xp || b.wins - a.wins)
+  return list.map((p, i) => ({
+    ...p,
+    rank: i + 1,
+    isMe: me && p.addr === me,
+    winRate: p.games > 0 ? Math.round((p.wins / p.games) * 100) : 0,
+  }))
 }
-
-const RANGES = ['Today', 'This week', 'All time']
 
 function rankBadge(rank) {
   if (rank === 1) return { Icon: Crown,  cls: 'text-gold bg-gold/15 border-gold/30' }
@@ -31,10 +57,40 @@ function rankBadge(rank) {
 }
 
 export default function LeaderboardPage() {
-  const [range, setRange] = useState('This week')
+  const [rooms, setRooms] = useState(() => listJoinedRooms())
+  useEffect(() => subscribeJoinedRooms(() => setRooms(listJoinedRooms())), [])
 
-  const top3 = SEEDED.slice(0, 3)
-  const rest = SEEDED.slice(3)
+  const [loading, setLoading] = useState(false)
+  const [roomStates, setRoomStates] = useState([])
+  const [tick, setTick] = useState(0)
+  const address = myAddress()
+
+  const refresh = async () => {
+    if (!rooms.length) {
+      setRoomStates([])
+      return
+    }
+    setLoading(true)
+    try {
+      const states = await Promise.all(rooms.map(async (r) => {
+        try {
+          const raw = await readView(r.address, 'get_state')
+          return typeof raw === 'string' ? JSON.parse(raw) : raw
+        } catch {
+          return null
+        }
+      }))
+      setRoomStates(states.filter(Boolean))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { refresh() /* eslint-disable-next-line */ }, [rooms, tick])
+
+  const players = useMemo(() => aggregate(roomStates, address), [roomStates, address])
+  const top3 = players.slice(0, 3)
+  const rest = players.slice(3)
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-14">
@@ -49,101 +105,143 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-white/55 mt-2 max-w-xl">
-            The sharpest detectives and the boldest deceivers, ranked by on-chain results.
+            Aggregated across every room you've touched plus the house room. Powered by on-chain state.
           </p>
         </div>
 
-        {/* Range pills */}
-        <div className="inline-flex items-center rounded-xl bg-white/5 border border-white/10 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                range === r ? 'bg-white/10 text-white' : 'text-white/55 hover:text-white'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={() => setTick((n) => n + 1)}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} strokeWidth={2.25} />
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
-      {/* Top 3 podium */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {top3.map((p) => {
-          const badge = rankBadge(p.rank)
-          const Icon = badge?.Icon || Award
-          return (
-            <div
-              key={p.addr}
-              className={`card glass relative overflow-hidden ${
-                p.rank === 1 ? 'border-gold/40 shadow-[0_0_60px_rgba(255,206,84,0.18)]' : ''
-              }`}
-            >
-              <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-white/5 blur-2xl" />
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${badge?.cls || 'border-white/10 bg-white/5'}`}>
-                  <Icon className="w-6 h-6" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-white/40 text-xs font-mono">#{p.rank}</div>
-                  <div className="text-white font-display font-700 text-lg truncate">{p.name}</div>
-                  <div className={`text-xs font-mono uppercase tracking-widest ${TIER_COLORS[p.tier]}`}>{p.tier}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mt-5">
-                <Stat label="Wins"     value={p.wins} />
-                <Stat label="Win rate" value={`${p.winRate}%`} />
-                <Stat label="Earned"   value={`${p.earnings}`} suffix="GEN" />
-              </div>
+      {players.length === 0 ? (
+        <EmptyState loading={loading} hasRooms={rooms.length > 0} connected={isWalletConnected()} />
+      ) : (
+        <>
+          {/* Top 3 podium */}
+          {top3.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {top3.map((p) => {
+                const badge = rankBadge(p.rank)
+                const Icon = badge?.Icon || Award
+                return (
+                  <div
+                    key={p.addr}
+                    className={`card glass relative overflow-hidden ${
+                      p.rank === 1 ? 'border-gold/40 shadow-[0_0_60px_rgba(255,206,84,0.18)]' : ''
+                    } ${p.isMe ? 'ring-1 ring-plasma/40' : ''}`}
+                  >
+                    <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-white/5 blur-2xl" />
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${badge?.cls || 'border-white/10 bg-white/5'}`}>
+                        <Icon className="w-6 h-6" strokeWidth={2} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-white/40 text-xs font-mono">#{p.rank}</div>
+                        <div className="text-white font-display font-700 text-lg truncate flex items-center gap-2">
+                          {p.name}
+                          {p.isMe && (
+                            <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">YOU</span>
+                          )}
+                        </div>
+                        <div className="text-white/30 text-[10px] font-mono truncate">{p.addr}</div>
+                      </div>
+                      <Avatar name={p.name} color={p.color} size={40} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-5">
+                      <Stat label="XP"        value={p.xp} />
+                      <Stat label="Wins"      value={p.wins} />
+                      <Stat label="Win rate"  value={`${p.winRate}%`} />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          )
-        })}
-      </div>
+          )}
 
-      {/* Table */}
-      <div className="card glass !p-0 overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-5 py-3 text-[10px] font-mono uppercase tracking-widest text-white/40 border-b border-white/10">
-          <div className="col-span-1">#</div>
-          <div className="col-span-5">Player</div>
-          <div className="col-span-2 text-right">Wins</div>
-          <div className="col-span-2 text-right">Win rate</div>
-          <div className="col-span-2 text-right">Earned</div>
-        </div>
-        <div className="divide-y divide-white/5">
-          {rest.map((p) => (
-            <div key={p.addr} className="grid grid-cols-12 gap-2 px-5 py-3 items-center hover:bg-white/[0.03] transition-colors">
-              <div className="col-span-1 text-white/40 font-mono text-sm">{p.rank}</div>
-              <div className="col-span-5 min-w-0">
-                <div className="text-white text-sm truncate">{p.name}</div>
-                <div className="text-white/30 text-xs font-mono truncate">{p.addr}</div>
+          {/* Table */}
+          {rest.length > 0 && (
+            <div className="card glass !p-0 overflow-hidden">
+              <div className="grid grid-cols-12 gap-2 px-5 py-3 text-[10px] font-mono uppercase tracking-widest text-white/40 border-b border-white/10">
+                <div className="col-span-1">#</div>
+                <div className="col-span-6">Player</div>
+                <div className="col-span-2 text-right">XP</div>
+                <div className="col-span-1 text-right">Wins</div>
+                <div className="col-span-2 text-right">Win rate</div>
               </div>
-              <div className="col-span-2 text-right text-white/85 font-mono text-sm">{p.wins}</div>
-              <div className="col-span-2 text-right text-white/85 font-mono text-sm">{p.winRate}%</div>
-              <div className="col-span-2 text-right text-neon font-mono text-sm">{p.earnings}</div>
+              <div className="divide-y divide-white/5">
+                {rest.map((p) => (
+                  <div
+                    key={p.addr}
+                    className={`grid grid-cols-12 gap-2 px-5 py-3 items-center transition-colors ${
+                      p.isMe ? 'bg-plasma/[0.06]' : 'hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <div className="col-span-1 text-white/40 font-mono text-sm">{p.rank}</div>
+                    <div className="col-span-6 min-w-0 flex items-center gap-3">
+                      <Avatar name={p.name} color={p.color} size={28} />
+                      <div className="min-w-0">
+                        <div className="text-white text-sm truncate flex items-center gap-2">
+                          {p.name}
+                          {p.isMe && (
+                            <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">YOU</span>
+                          )}
+                        </div>
+                        <div className="text-white/30 text-xs font-mono truncate">{p.addr}</div>
+                      </div>
+                    </div>
+                    <div className="col-span-2 text-right text-white/85 font-mono text-sm">{p.xp}</div>
+                    <div className="col-span-1 text-right text-white/85 font-mono text-sm">{p.wins}</div>
+                    <div className="col-span-2 text-right text-neon font-mono text-sm">{p.winRate}%</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
+          )}
+        </>
+      )}
 
       {/* Footnote */}
       <div className="mt-6 flex items-center gap-2 text-xs text-white/40">
         <Flame className="w-3.5 h-3.5 text-signal" />
-        Rankings refresh after each finalized round. Sample data shown — connect your wallet to start climbing.
+        Aggregated from {roomStates.length} room{roomStates.length === 1 ? '' : 's'}. Join more rooms to grow the board.
       </div>
     </div>
   )
 }
 
-function Stat({ label, value, suffix }) {
+function EmptyState({ loading, hasRooms, connected }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-12 text-center">
+      <Trophy className="w-8 h-8 text-white/30 mx-auto mb-3" />
+      <div className="text-white/80 font-display font-700 text-lg">
+        {loading ? 'Loading on-chain players…'
+          : !hasRooms ? 'No rooms tracked yet'
+          : 'No players found in your rooms'}
+      </div>
+      <div className="text-white/50 text-sm mt-2 max-w-md mx-auto">
+        {loading
+          ? 'Reading scoreboards from the rooms you have joined.'
+          : !hasRooms
+            ? 'Join a room or create one — the leaderboard ranks every player you have shared a game with.'
+            : connected
+              ? 'Once players join the rooms you have created or joined, they will show up here.'
+              : 'Connect your wallet to see your own rank highlighted.'}
+      </div>
+    </div>
+  )
+}
+
+function Stat({ label, value }) {
   return (
     <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2">
       <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{label}</div>
-      <div className="text-white text-sm font-mono mt-0.5">
-        {value}
-        {suffix && <span className="text-white/40 text-[10px] ml-1">{suffix}</span>}
-      </div>
+      <div className="text-white text-sm font-mono mt-0.5">{value}</div>
     </div>
   )
 }
