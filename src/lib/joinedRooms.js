@@ -1,36 +1,42 @@
-// ──────────────────────────────────────────────────────────────────────────────
-// "Joined rooms" registry — every contract address the user has joined or
-// created, plus the env-configured house room. Lets the user re-open a game
-// without retyping a contract address, and powers the "Open rounds" lists on
-// Home / Games / Mistrial.
-//
+// "Joined rooms" registry — every room code the user has joined or created.
 // Stored in localStorage as an array of:
-//   { address, lastSeenAt, isHost, label? }
+//   { code, lastSeenAt, isHost, label? }
 // Most-recently-touched first. Capped to keep the registry small.
-// ──────────────────────────────────────────────────────────────────────────────
 
-import { getDefaultContractAddress } from './genlayer'
+import { isValidRoomCode, normalizeRoomCode } from './genlayer'
 
-const STORAGE_KEY = 'genjury_joined_rooms_v1'
+const STORAGE_KEY = 'genjury_joined_rooms_v2'
+const LEGACY_KEYS = ['genjury_joined_rooms_v1']
 const MAX_ROOMS   = 25
 
 const _listeners = new Set()
 
 function safeRead() {
   if (typeof window === 'undefined') return []
+  // One-time wipe of the legacy address-keyed registry — addresses don't
+  // map to room codes in the new model so the old data isn't useful.
+  try {
+    for (const key of LEGACY_KEYS) {
+      if (localStorage.getItem(key) !== null) localStorage.removeItem(key)
+    }
+  } catch {}
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
     return arr
-      .filter((r) => r && /^0x[0-9a-f]{40}$/i.test(r.address || ''))
-      .map((r) => ({
-        address:    String(r.address).toLowerCase(),
-        lastSeenAt: Number(r.lastSeenAt) || 0,
-        isHost:     !!r.isHost,
-        label:      r.label ? String(r.label).slice(0, 32) : '',
-      }))
+      .map((r) => {
+        const code = normalizeRoomCode(r?.code || '')
+        if (!isValidRoomCode(code)) return null
+        return {
+          code,
+          lastSeenAt: Number(r.lastSeenAt) || 0,
+          isHost:     !!r.isHost,
+          label:      r.label ? String(r.label).slice(0, 32) : '',
+        }
+      })
+      .filter(Boolean)
   } catch {
     return []
   }
@@ -51,31 +57,18 @@ export function subscribeJoinedRooms(fn) {
   return () => _listeners.delete(fn)
 }
 
-// Return the user's known rooms — joined / created + the configured house
-// room (so it's always visible even on a fresh device).
 export function listJoinedRooms() {
-  const stored = safeRead()
-  const seen = new Set(stored.map((r) => r.address))
-  const out = [...stored]
-  const house = getDefaultContractAddress()
-  if (house && !seen.has(house.toLowerCase())) {
-    out.push({
-      address: house.toLowerCase(),
-      lastSeenAt: 0,
-      isHost: false,
-      label: 'House Room',
-    })
-  }
-  out.sort((a, b) => b.lastSeenAt - a.lastSeenAt)
-  return out
+  const arr = safeRead()
+  arr.sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+  return arr
 }
 
-export function rememberJoinedRoom(address, opts = {}) {
-  if (!address || !/^0x[0-9a-f]{40}$/i.test(address)) return
-  const addr = address.toLowerCase()
-  const arr = safeRead().filter((r) => r.address !== addr)
+export function rememberJoinedRoom(rawCode, opts = {}) {
+  const code = normalizeRoomCode(rawCode)
+  if (!isValidRoomCode(code)) return
+  const arr = safeRead().filter((r) => r.code !== code)
   arr.unshift({
-    address:    addr,
+    code,
     lastSeenAt: Date.now(),
     isHost:     !!opts.isHost,
     label:      opts.label || '',
@@ -85,10 +78,10 @@ export function rememberJoinedRoom(address, opts = {}) {
   notify()
 }
 
-export function forgetJoinedRoom(address) {
-  if (!address) return
-  const addr = address.toLowerCase()
-  const arr = safeRead().filter((r) => r.address !== addr)
+export function forgetJoinedRoom(rawCode) {
+  const code = normalizeRoomCode(rawCode)
+  if (!code) return
+  const arr = safeRead().filter((r) => r.code !== code)
   safeWrite(arr)
   notify()
 }
