@@ -1,38 +1,11 @@
-# v0.2.16
+# v0.3.0
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
-Genjury — The AI Jury Game
-==========================
+Genjury — multi-room AI Jury game.
 
-GenLayer Intelligent Contract that powers a multiplayer "two truths,
-one lie" social deduction game with on-chain GEN-token stakes.
-
-Tokenomics
-----------
-Each player pays an `entry_fee` (in wei of GEN) when they join the room.
-A configurable `platform_fee_bps` slice of every entry is routed to a
-designated `platform_owner`; the rest pools toward the eventual winner.
-
-When the final round resolves, the player with the highest XP becomes the
-winner of record. Funds stay in the contract until the rightful party
-calls one of the claim methods:
-
-    * claim_prize()         – the winner withdraws the prize pool
-    * claim_platform_fees() – the platform owner withdraws their cut
-
-Demonstrates four core GenLayer concepts:
-
-    * Intelligent Contracts        – the AI Judge calls an LLM on-chain.
-    * Optimistic Democracy         – the Objection flow lets players overrule the AI.
-    * Non-deterministic Operations – LLM verdicts vary; validators reach
-                                     consensus through the Equivalence Principle.
-    * Appeal Process               – the Objection -> Sustain / Overrule vote.
-
-Game lifecycle:
-
-    LOBBY -> WRITING -> VOTING -> AI_JUDGING -> OBJECTION
-          -> [OBJECTION_VOTE]  -> REVEAL -> (next round) -> SCOREBOARD
+Singleton contract: deployed once by the platform; players never deploy.
+Each game lives in a Room, keyed by a 6-char alphanumeric code.
 """
 
 from genlayer import *
@@ -41,21 +14,6 @@ import json
 import typing
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# EVM-contract interface stub used purely so the IC can transfer GEN to EOA
-# wallet addresses (winners, the platform owner, anyone calling `leave`).
-#
-# `emit_transfer` is auto-injected by `@gl.evm.contract_interface` on the
-# `Write` proxy, so leaving the inner classes empty is the documented
-# GenLayer pattern. BUT — and this is what to actually test on Studio /
-# Bradbury before mainnet — the auto-injected emit_transfer relies on the
-# recipient address being valid and the contract holding enough native GEN
-# to cover `value`. If a withdrawal silently fails on Bradbury but worked on
-# Studio, the most common cause is that Bradbury's consensus rejects native
-# transfers from contracts that are still in a non-finalized state. Always
-# end-to-end test `claim_prize`, `claim_platform_fees`, and `leave` on
-# Bradbury BEFORE the first real game.
-# ──────────────────────────────────────────────────────────────────────────────
 @gl.evm.contract_interface
 class _Wallet:
     class View:
@@ -66,26 +24,11 @@ class _Wallet:
 
 
 def _send_gen(recipient: str, amount_wei: int) -> None:
-    """Transfer ``amount_wei`` GEN from this contract to ``recipient``.
-
-    Defensive: skip zero/negative amounts so we never emit a no-op transfer
-    and so callers can blindly call this without pre-checking.
-    """
     if amount_wei <= 0:
         return
-    # Recipient must be lowercased before constructing Address — a mixed-case
-    # string can fail Address() validation depending on SDK version.
     _Wallet(Address(_norm_addr(recipient))).emit_transfer(value=u256(amount_wei))
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Address normalization
-#
-# `gl.message.sender_address` may arrive checksummed or all-lowercase
-# depending on which RPC / wallet path the caller used. We canonicalize to
-# lowercase EVERYWHERE so equality checks against `self.host`, `self.deceiver`,
-# `self.platform_owner`, etc. don't randomly fail for a legitimate caller.
-# ──────────────────────────────────────────────────────────────────────────────
 def _norm_addr(addr) -> str:
     return str(addr).strip().lower()
 
@@ -94,12 +37,7 @@ def _sender() -> str:
     return _norm_addr(gl.message.sender_address)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Constants
-# ──────────────────────────────────────────────────────────────────────────────
-
-# Phase strings — kept as plain literals so the JS frontend can compare them
-# directly without sharing an enum.
+# Phases
 PHASE_LOBBY          = "lobby"
 PHASE_WRITING        = "writing"
 PHASE_VOTING         = "voting"
@@ -110,10 +48,9 @@ PHASE_REVEAL         = "reveal"
 PHASE_SCOREBOARD     = "scoreboard"
 
 MIN_PLAYERS = 2
-MAX_PLAYERS = 8
-
-# Cap the platform fee at 20% so a malicious deployer can't grief players.
-MAX_PLATFORM_FEE_BPS = 2000  # 20.00%
+MAX_PLAYERS_DEFAULT = 8
+MAX_PLAYERS_HARD_CAP = 12
+MAX_HOUSE_CUT_BPS = 2000
 
 CATEGORIES = [
     "Personal Facts",
@@ -125,352 +62,365 @@ CATEGORIES = [
     "Wild Cards",
 ]
 
-# XP rewards — mirror src/lib/store.js's calculateXP so the UI's
-# pre-round estimates match what the contract actually awards.
 XP_PER_FOOLED_PLAYER = 120
 XP_AI_FOOLED_BONUS   = 250
 XP_FULL_FOOL_BONUS   = 200
 XP_DETECTOR_BASE     = 100
-XP_DETECTOR_CONF_MAX = 150   # multiplied by confidence (0–100)
+XP_DETECTOR_CONF_MAX = 150
 XP_OBJECTION_SUCCESS = 80
 
 AVATARS = ["🦊", "🐉", "🦁", "🐺", "🦅", "🐙", "🦈", "🐆", "🦝", "🐻", "🦄", "🐬"]
-# Expanded to 12 colors so it stays collision-free if MAX_PLAYERS is ever
-# bumped beyond 8 (it currently equals the old 8-color length, which would
-# silently start aliasing avatars to duplicate colors at player 9+).
 COLORS  = ["#7fff6e", "#a259ff", "#38d9f5", "#ff6b35",
            "#f5c842", "#ff4d8d", "#00d4aa", "#ff9500",
            "#5b8cff", "#ff5cd6", "#9aff5c", "#ffd86b"]
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Storage helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _clear_arr(arr) -> None:
-    while len(arr) > 0:
-        arr.pop()
+ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+ROOM_CODE_LEN = 6
 
 
-def _clear_tm(tm) -> None:
-    keys = [k for k in tm]
-    for k in keys:
-        del tm[k]
+def _gen_room_code(seed: int) -> str:
+    h = (int(seed) * 2654435761 + 0x9E3779B9) & 0xFFFFFFFFFFFFFFFF
+    out = []
+    base = len(ROOM_CODE_ALPHABET)
+    for _ in range(ROOM_CODE_LEN):
+        out.append(ROOM_CODE_ALPHABET[h % base])
+        h //= base
+        if h == 0:
+            h = (seed * 1103515245 + 12345) & 0xFFFFFFFFFFFFFFFF
+    return "".join(out)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Contract
-# ──────────────────────────────────────────────────────────────────────────────
+def _norm_code(code) -> str:
+    return str(code).strip().upper()
+
+
+def _new_room_dict(host: str, host_name: str, max_rounds: int,
+                   max_players: int, entry_fee_wei: int) -> dict:
+    return {
+        "host":            host,
+        "phase":           PHASE_LOBBY,
+        "round":           0,
+        "maxRounds":       int(max_rounds),
+        "maxPlayers":      int(max_players),
+        "category":        "",
+        "deceiver":        "",
+        "deceiverIndex":   0,
+        "playerOrder":     [],
+        "players":         {},
+        "statements":      ["", "", ""],
+        "submitted":       False,
+        "lieIndex":        0,
+        "voters":          [],
+        "votes":           {},
+        "confidence":      {},
+        "aiJudged":        False,
+        "aiVerdictIndex":  0,
+        "aiConfidence":    0,
+        "aiReasoning":     "",
+        "objectionRaised": False,
+        "objectionBy":     "",
+        "objectionVotes":  {},
+        "lastReveal":      None,
+        "scoreHistory":    [],
+        "entryFee":        str(int(entry_fee_wei)),
+        "prizePool":       "0",
+        "winnerAddress":   "",
+        "winnerWinnings":  "0",
+        "prizeDistributed": True,
+        "createdHostName": host_name,
+    }
+
+
+def _player_count(room: dict) -> int:
+    return len(room["playerOrder"])
+
+
+def _is_player(room: dict, addr: str) -> bool:
+    return addr in room["players"]
+
+
+def _new_player_record(name: str, slot: int) -> dict:
+    return {
+        "name":   name,
+        "avatar": AVATARS[slot % len(AVATARS)],
+        "color":  COLORS[slot % len(COLORS)],
+        "xp":     0,
+        "level":  1,
+    }
+
+
+def _split_entry(paid: int, house_cut_bps: int) -> tuple[int, int]:
+    if paid <= 0:
+        return 0, 0
+    fee = (paid * int(house_cut_bps)) // 10000
+    return fee, paid - fee
+
+
+def _pick_category(room_code: str, round_num: int) -> str:
+    h = int(round_num) * 2654435761
+    for ch in room_code:
+        h = (h * 131 + ord(ch)) & 0xFFFFFFFFFFFFFFFF
+    return CATEGORIES[h % len(CATEGORIES)]
+
+
+def _reset_round_state(room: dict) -> None:
+    room["statements"] = ["", "", ""]
+    room["lieIndex"] = 0
+    room["submitted"] = False
+    room["voters"] = []
+    room["votes"] = {}
+    room["confidence"] = {}
+    room["aiJudged"] = False
+    room["aiVerdictIndex"] = 0
+    room["aiConfidence"] = 0
+    room["aiReasoning"] = ""
+    room["objectionRaised"] = False
+    room["objectionBy"] = ""
+    room["objectionVotes"] = {}
+    room["lastReveal"] = None
+
+
+def _public_room_view(code: str, room: dict) -> dict:
+    return {
+        "roomCode":        code,
+        "host":            room["host"],
+        "hostName":        room.get("createdHostName", ""),
+        "phase":           room["phase"],
+        "round":           int(room["round"]),
+        "maxRounds":       int(room["maxRounds"]),
+        "maxPlayers":      int(room["maxPlayers"]),
+        "category":        room["category"],
+        "deceiver":        room["deceiver"],
+        "deceiverIndex":   int(room["deceiverIndex"]),
+        "playerOrder":     room["playerOrder"],
+        "players":         room["players"],
+        "statements":      room["statements"],
+        "submitted":       bool(room["submitted"]),
+        "lieIndex":        int(room["lieIndex"]) if room["submitted"] else -1,
+        "voters":          room["voters"],
+        "votes":           room["votes"],
+        "confidence":      room["confidence"],
+        "aiJudged":        bool(room["aiJudged"]),
+        "aiVerdictIndex":  int(room["aiVerdictIndex"]),
+        "aiConfidence":    int(room["aiConfidence"]),
+        "aiReasoning":     room["aiReasoning"],
+        "objectionRaised": bool(room["objectionRaised"]),
+        "objectionBy":     room["objectionBy"] if room["objectionRaised"] else "",
+        "objectionVotes":  room["objectionVotes"],
+        "lastReveal":      room["lastReveal"],
+        "entryFee":        str(room["entryFee"]),
+        "prizePool":       str(room["prizePool"]),
+        "winnerAddress":   room["winnerAddress"],
+        "winnerWinnings":  str(room["winnerWinnings"]),
+        "prizeDistributed": bool(room["prizeDistributed"]),
+        "playerCount":     _player_count(room),
+    }
+
 
 class Genjury(gl.Contract):
-    # ── Game meta ──────────────────────────────────────────────────────────
-    host:        str
-    phase:       str
-    round_num:   u256
-    max_rounds:  u256
-    max_players: u256   # runtime-tunable cap, defaults to MAX_PLAYERS
-    category:    str
+    house: str
+    house_cut_bps: u256
+    house_fees_collected: u256
 
-    # ── Players ────────────────────────────────────────────────────────────
-    # Player record is JSON-encoded for ergonomic frontend reads:
-    #   {"name":..., "avatar":..., "color":..., "xp":..., "level":...}
-    players:        TreeMap[str, str]
-    player_order:   DynArray[str]
-    deceiver_index: u256
-    deceiver:       str
+    rooms: TreeMap[str, str]
+    all_room_codes: DynArray[str]
+    room_seq: u256
 
-    # ── Round data ─────────────────────────────────────────────────────────
-    statements:  DynArray[str]   # always length 3 once initialized
-    lie_index:   u256
-    submitted:   bool
+    global_xp: TreeMap[str, str]
+    leaderboard_addrs: DynArray[str]
 
-    # ── Votes ──────────────────────────────────────────────────────────────
-    votes:       TreeMap[str, u256]   # voter -> statement index (0,1,2)
-    confidence:  TreeMap[str, u256]   # voter -> 0..100
-    voters:      DynArray[str]        # ordered for replayability
+    def __init__(self, house_cut_bps: int = 300):
+        self.house = _sender()
+        self.house_cut_bps = u256(min(MAX_HOUSE_CUT_BPS, max(0, int(house_cut_bps))))
+        self.house_fees_collected = u256(0)
+        self.room_seq = u256(0)
 
-    # ── AI verdict ─────────────────────────────────────────────────────────
-    ai_judged:        bool
-    ai_verdict_index: u256
-    ai_confidence:    u256
-    ai_reasoning:     str
+    def _load(self, code: str) -> dict:
+        c = _norm_code(code)
+        if c not in self.rooms:
+            raise gl.vm.UserError(f"Room {c} does not exist")
+        return json.loads(self.rooms[c])
 
-    # ── Objection ──────────────────────────────────────────────────────────
-    objection_raised: bool
-    objection_by:     str
-    objection_votes:  TreeMap[str, str]   # 'sustain' | 'overrule'
+    def _save(self, code: str, room: dict) -> None:
+        self.rooms[_norm_code(code)] = json.dumps(room)
 
-    # ── Reveal & history ───────────────────────────────────────────────────
-    last_reveal:   str               # JSON blob the frontend renders
-    score_history: DynArray[str]     # JSON per round
+    def _bump_global_xp(self, addr: str, name: str, avatar: str,
+                        color: str, gained: int) -> None:
+        if addr in self.global_xp:
+            rec = json.loads(self.global_xp[addr])
+            rec["xp"] = int(rec.get("xp", 0)) + int(gained)
+            rec["name"] = name or rec.get("name", "")
+            rec["avatar"] = avatar or rec.get("avatar", "")
+            rec["color"] = color or rec.get("color", "")
+            rec["level"] = (int(rec["xp"]) // 500) + 1
+        else:
+            rec = {
+                "name":   name,
+                "avatar": avatar,
+                "color":  color,
+                "xp":     int(gained),
+                "level":  (int(gained) // 500) + 1,
+                "wins":   0,
+            }
+            self.leaderboard_addrs.append(addr)
+        self.global_xp[addr] = json.dumps(rec)
 
-    # ── Economics ──────────────────────────────────────────────────────────
-    entry_fee:               u256   # wei each player must pay to join
-    platform_fee_bps:        u256   # basis points (e.g. 500 = 5%)
-    platform_owner:          str    # receives platform_fees_collected
-    prize_pool:              u256   # wei accrued for the eventual winner
-    platform_fees_collected: u256   # wei accrued for the platform owner
+    def _bump_global_win(self, addr: str) -> None:
+        if addr not in self.global_xp:
+            return
+        rec = json.loads(self.global_xp[addr])
+        rec["wins"] = int(rec.get("wins", 0)) + 1
+        self.global_xp[addr] = json.dumps(rec)
 
-    # ── Settlement (set when game ends) ────────────────────────────────────
-    winner_address:      str
-    winner_winnings_wei: u256       # wei reserved for the winner's claim
-    prize_distributed:   bool
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Construction
-    # ──────────────────────────────────────────────────────────────────────
-    def __init__(self,
-                 max_rounds: int = 3,
-                 entry_fee_wei: int = 0,
-                 platform_fee_bps: int = 0,
-                 platform_owner: str = ""):
-        self.host = _sender()
-        self.phase = PHASE_LOBBY
-        self.round_num = u256(0)
-        self.max_rounds = u256(max_rounds)
-        self.max_players = u256(MAX_PLAYERS)   # host can later resize via set_max_players
-        self.category = ""
-
-        self.deceiver_index = u256(0)
-        self.deceiver = ""
-
-        # Always keep statements as a length-3 array so client indexing is safe.
-        self.statements.append("")
-        self.statements.append("")
-        self.statements.append("")
-        self.lie_index = u256(0)
-        self.submitted = False
-
-        self.ai_judged = False
-        self.ai_verdict_index = u256(0)
-        self.ai_confidence = u256(0)
-        self.ai_reasoning = ""
-
-        self.objection_raised = False
-        self.objection_by = ""
-
-        self.last_reveal = ""
-
-        # Economics — validated and clamped so the contract stays player-safe
-        # regardless of what the deployer passes in.
-        fee_wei = max(0, int(entry_fee_wei))
-        bps     = max(0, min(MAX_PLATFORM_FEE_BPS, int(platform_fee_bps)))
-        owner   = _norm_addr(platform_owner) if platform_owner else ""
-        self.entry_fee               = u256(fee_wei)
-        self.platform_fee_bps        = u256(bps)
-        # Empty owner => fall back to whoever deployed the contract.
-        self.platform_owner          = owner if owner else self.host
-        self.prize_pool              = u256(0)
-        self.platform_fees_collected = u256(0)
-
-        # Settlement
-        self.winner_address      = ""
-        self.winner_winnings_wei = u256(0)
-        # Treated as "already settled" until a game with a non-zero prize pool
-        # finishes, at which point this flips to False until the winner claims.
-        self.prize_distributed   = True
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Internal helpers
-    # ──────────────────────────────────────────────────────────────────────
-    def _player_count(self) -> int:
-        return len(self.player_order)
-
-    def _is_player(self, addr: str) -> bool:
-        return addr in self.players
-
-    def _reset_round_state(self) -> None:
-        _clear_arr(self.statements)
-        self.statements.append("")
-        self.statements.append("")
-        self.statements.append("")
-        self.lie_index = u256(0)
-        self.submitted = False
-
-        _clear_tm(self.votes)
-        _clear_tm(self.confidence)
-        _clear_arr(self.voters)
-
-        self.ai_judged = False
-        self.ai_verdict_index = u256(0)
-        self.ai_confidence = u256(0)
-        self.ai_reasoning = ""
-
-        self.objection_raised = False
-        self.objection_by = ""
-        _clear_tm(self.objection_votes)
-
-        self.last_reveal = ""
-
-    def _pick_category(self, salt: int) -> str:
-        """Deterministic but non-trivial category picker.
-
-        The previous version was just `CATEGORIES[round_num % 7]`, which
-        meant round 1 was *always* "Pop Culture", round 2 *always*
-        "Science & Tech", etc. — across every Genjury room ever deployed.
-        Players could memorize the schedule.
-
-        We now mix in the host address so each deployment has a different
-        rotation, while staying fully deterministic (every validator picks
-        the same category, so consensus is preserved).
-        """
-        h = int(salt) * 2654435761  # Knuth multiplicative hash
-        for ch in self.host:
-            h = (h * 131 + ord(ch)) & 0xFFFFFFFFFFFFFFFF
-        return CATEGORIES[h % len(CATEGORIES)]
-
-    def _new_player_record(self, name: str, slot: int) -> str:
-        return json.dumps({
-            "name":   name,
-            "avatar": AVATARS[slot % len(AVATARS)],
-            "color":  COLORS[slot % len(COLORS)],
-            "xp":     0,
-            "level":  1,
-        })
-
-    def _update_xp(self, addr: str, gained: int) -> int:
-        rec = json.loads(self.players[addr])
-        rec["xp"]    = int(rec["xp"]) + int(gained)
-        rec["level"] = (rec["xp"] // 500) + 1
-        self.players[addr] = json.dumps(rec)
-        return int(rec["xp"])
-
-    def _split_entry(self, paid: int) -> tuple[int, int]:
-        """Return (platform_fee, prize_share) for a payment of ``paid`` wei."""
-        if paid <= 0:
-            return 0, 0
-        fee = (paid * int(self.platform_fee_bps)) // 10000
-        return fee, paid - fee
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Lobby — join / leave / start
-    # ──────────────────────────────────────────────────────────────────────
     @gl.public.write.payable
-    def join(self, name: str) -> None:
-        """Add the caller to the lobby with a chosen display name.
-
-        The caller must send exactly ``entry_fee`` wei of GEN with the call.
-        """
+    def create_room(self, host_name: str, max_rounds: int = 3,
+                    entry_fee_wei: int = 0,
+                    max_players: int = MAX_PLAYERS_DEFAULT) -> str:
         sender = _sender()
-        if self.phase != PHASE_LOBBY:
-            raise gl.vm.UserError("Game already started")
-        if self._player_count() >= int(self.max_players):
-            raise gl.vm.UserError("Lobby full")
-        if self._is_player(sender):
-            raise gl.vm.UserError("Already joined")
+        name = host_name.strip()
         if len(name) == 0 or len(name) > 24:
+            raise gl.vm.UserError("Host name must be 1-24 characters")
+        rounds = max(1, min(50, int(max_rounds)))
+        cap = min(MAX_PLAYERS_HARD_CAP, max(MIN_PLAYERS, int(max_players)))
+        fee_wei = max(0, int(entry_fee_wei))
+
+        paid = int(gl.message.value)
+        if paid != fee_wei:
+            raise gl.vm.UserError(
+                f"Must send exactly {fee_wei} wei (entry fee); received {paid}"
+            )
+
+        seq = int(self.room_seq)
+        code = _gen_room_code(seq)
+        attempts = 0
+        while code in self.rooms and attempts < 32:
+            seq += 1
+            code = _gen_room_code(seq)
+            attempts += 1
+        if code in self.rooms:
+            raise gl.vm.UserError("Could not allocate a room code; try again")
+        self.room_seq = u256(seq + 1)
+
+        room = _new_room_dict(sender, name, rounds, cap, fee_wei)
+        room["players"][sender] = _new_player_record(name, 0)
+        room["playerOrder"].append(sender)
+
+        if fee_wei > 0:
+            fee, share = _split_entry(fee_wei, int(self.house_cut_bps))
+            self.house_fees_collected = u256(int(self.house_fees_collected) + fee)
+            room["prizePool"] = str(int(room["prizePool"]) + share)
+            room["prizeDistributed"] = False
+
+        self._save(code, room)
+        self.all_room_codes.append(code)
+        return code
+
+    @gl.public.write.payable
+    def join(self, room_code: str, name: str) -> None:
+        sender = _sender()
+        room = self._load(room_code)
+        if room["phase"] != PHASE_LOBBY:
+            raise gl.vm.UserError("Game already started")
+        if _player_count(room) >= int(room["maxPlayers"]):
+            raise gl.vm.UserError("Room full")
+        if _is_player(room, sender):
+            raise gl.vm.UserError("Already joined")
+        clean = name.strip()
+        if len(clean) == 0 or len(clean) > 24:
             raise gl.vm.UserError("Name must be 1-24 characters")
 
-        paid     = int(gl.message.value)
-        required = int(self.entry_fee)
+        paid = int(gl.message.value)
+        required = int(room["entryFee"])
         if paid != required:
             raise gl.vm.UserError(
                 f"Must send exactly {required} wei (entry fee); received {paid}"
             )
 
         if required > 0:
-            fee, share = self._split_entry(required)
-            self.platform_fees_collected = u256(int(self.platform_fees_collected) + fee)
-            self.prize_pool              = u256(int(self.prize_pool) + share)
+            fee, share = _split_entry(required, int(self.house_cut_bps))
+            self.house_fees_collected = u256(int(self.house_fees_collected) + fee)
+            room["prizePool"] = str(int(room["prizePool"]) + share)
+            room["prizeDistributed"] = False
 
-        slot = self._player_count()
-        self.players[sender] = self._new_player_record(name, slot)
-        self.player_order.append(sender)
+        slot = _player_count(room)
+        room["players"][sender] = _new_player_record(clean, slot)
+        room["playerOrder"].append(sender)
+        self._save(room_code, room)
 
     @gl.public.write
-    def leave(self) -> None:
-        """Leave the lobby. Only allowed before the game starts.
-
-        Refunds the full entry fee back to the caller and rolls back the
-        platform-fee / prize-pool accounting for that seat.
-        """
+    def leave(self, room_code: str) -> None:
         sender = _sender()
-        if self.phase != PHASE_LOBBY:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_LOBBY:
             raise gl.vm.UserError("Cannot leave mid-game")
-        if not self._is_player(sender):
-            raise gl.vm.UserError("Not in lobby")
+        if not _is_player(room, sender):
+            raise gl.vm.UserError("Not in room")
 
-        required = int(self.entry_fee)
+        required = int(room["entryFee"])
         if required > 0:
-            fee, share = self._split_entry(required)
-            self.platform_fees_collected = u256(int(self.platform_fees_collected) - fee)
-            self.prize_pool              = u256(int(self.prize_pool) - share)
+            fee, share = _split_entry(required, int(self.house_cut_bps))
+            self.house_fees_collected = u256(int(self.house_fees_collected) - fee)
+            room["prizePool"] = str(int(room["prizePool"]) - share)
 
-        del self.players[sender]
-        kept = [a for a in self.player_order if a != sender]
-        _clear_arr(self.player_order)
-        for a in kept:
-            self.player_order.append(a)
-
+        del room["players"][sender]
+        room["playerOrder"] = [a for a in room["playerOrder"] if a != sender]
+        self._save(room_code, room)
         _send_gen(sender, required)
 
     @gl.public.write
-    def start_game(self) -> None:
-        """Host kicks the game off. Round 1, deceiver = player_order[0]."""
+    def start_game(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can start the game")
-        if self.phase != PHASE_LOBBY:
+        if room["phase"] != PHASE_LOBBY:
             raise gl.vm.UserError("Already running")
-        if self._player_count() < MIN_PLAYERS:
-            raise gl.vm.UserError("Need at least 2 players")
+        if _player_count(room) < MIN_PLAYERS:
+            raise gl.vm.UserError(f"Need at least {MIN_PLAYERS} players")
 
-        self.round_num = u256(1)
-        self.deceiver_index = u256(0)
-        self.deceiver = self.player_order[0]
-        self.category = self._pick_category(int(self.round_num))
-        self._reset_round_state()
-        self.phase = PHASE_WRITING
+        room["round"] = 1
+        room["deceiverIndex"] = 0
+        room["deceiver"] = room["playerOrder"][0]
+        room["category"] = _pick_category(_norm_code(room_code), 1)
+        _reset_round_state(room)
+        room["phase"] = PHASE_WRITING
+        self._save(room_code, room)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Writing phase — deceiver submits 3 statements + which one is the lie
-    # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
-    def submit_statements(self,
-                          s1: str, s2: str, s3: str,
+    def submit_statements(self, room_code: str, s1: str, s2: str, s3: str,
                           lie_index: int) -> None:
         sender = _sender()
-        if self.phase != PHASE_WRITING:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_WRITING:
             raise gl.vm.UserError("Not in writing phase")
-        if sender != self.deceiver:
+        if sender != room["deceiver"]:
             raise gl.vm.UserError("Only the deceiver can submit")
-        # (writing-phase escape hatch lives in `force_close_writing` below
-        # so a disconnected deceiver doesn't permanently brick the room).
-        if lie_index not in (0, 1, 2):
+        if int(lie_index) not in (0, 1, 2):
             raise gl.vm.UserError("lie_index must be 0, 1 or 2")
         for s in (s1, s2, s3):
             if len(s) == 0 or len(s) > 280:
                 raise gl.vm.UserError("Statements must be 1-280 chars")
 
-        _clear_arr(self.statements)
-        self.statements.append(s1)
-        self.statements.append(s2)
-        self.statements.append(s3)
-        self.lie_index = u256(lie_index)
-        self.submitted = True
-        self.phase = PHASE_VOTING
+        room["statements"] = [s1, s2, s3]
+        room["lieIndex"] = int(lie_index)
+        room["submitted"] = True
+        room["phase"] = PHASE_VOTING
+        self._save(room_code, room)
 
     @gl.public.write
-    def force_close_writing(self) -> None:
-        """Host's escape hatch when the deceiver disconnects mid-WRITING.
-
-        Mirrors `force_close_voting` so a stalled writer can't brick the room
-        forever. Skips this round (the deceiver gets 0 XP for this round) and
-        rotates to the next deceiver.
-        """
+    def force_close_writing(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can force-close writing")
-        if self.phase != PHASE_WRITING:
+        if room["phase"] != PHASE_WRITING:
             raise gl.vm.UserError("Not in writing phase")
 
-        # Treat the round as if it had just been voted unanimously wrong:
-        # nothing to reveal, no XP awarded, just move on.
-        self.last_reveal = json.dumps({
-            "round":            int(self.round_num),
+        skipped_reveal = {
+            "round":            int(room["round"]),
             "lieIndex":         -1,
             "statements":       ["", "", ""],
-            "deceiver":         self.deceiver,
+            "deceiver":         room["deceiver"],
             "aiVerdictIndex":   -1,
             "aiConfidence":     0,
             "aiReasoning":      "Round skipped — deceiver did not submit in time.",
@@ -485,66 +435,63 @@ class Genjury(gl.Contract):
             "fooledPlayers":    [],
             "xpGained":         {},
             "skipped":          True,
-        })
-        self.score_history.append(self.last_reveal)
-        self.phase = PHASE_REVEAL
+        }
+        room["lastReveal"] = skipped_reveal
+        room["scoreHistory"].append(skipped_reveal)
+        room["phase"] = PHASE_REVEAL
+        self._save(room_code, room)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Voting phase — every detector picks the statement they think is the lie
-    # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
-    def cast_vote(self, statement_index: int, confidence_pct: int) -> None:
+    def cast_vote(self, room_code: str, statement_index: int,
+                  confidence_pct: int) -> None:
         sender = _sender()
-        if self.phase != PHASE_VOTING:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_VOTING:
             raise gl.vm.UserError("Not in voting phase")
-        if not self._is_player(sender):
+        if not _is_player(room, sender):
             raise gl.vm.UserError("Not a player")
-        if sender == self.deceiver:
+        if sender == room["deceiver"]:
             raise gl.vm.UserError("Deceiver cannot vote")
-        if statement_index not in (0, 1, 2):
+        if int(statement_index) not in (0, 1, 2):
             raise gl.vm.UserError("Vote must be 0, 1 or 2")
-        if confidence_pct < 0 or confidence_pct > 100:
+        cp = int(confidence_pct)
+        if cp < 0 or cp > 100:
             raise gl.vm.UserError("Confidence must be 0-100")
-        if sender in self.votes:
+        if sender in room["votes"]:
             raise gl.vm.UserError("Already voted")
 
-        self.votes[sender] = u256(statement_index)
-        self.confidence[sender] = u256(confidence_pct)
-        self.voters.append(sender)
+        room["votes"][sender] = int(statement_index)
+        room["confidence"][sender] = cp
+        room["voters"].append(sender)
 
-        # Auto-advance once every detector has voted.
-        detectors = self._player_count() - 1
-        if len(self.voters) >= detectors:
-            self.phase = PHASE_AI_JUDGING
+        detectors = _player_count(room) - 1
+        if len(room["voters"]) >= detectors:
+            room["phase"] = PHASE_AI_JUDGING
+
+        self._save(room_code, room)
 
     @gl.public.write
-    def force_close_voting(self) -> None:
-        """Host can close voting if the timer expires before everyone voted."""
+    def force_close_voting(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can force-close voting")
-        if self.phase != PHASE_VOTING:
+        if room["phase"] != PHASE_VOTING:
             raise gl.vm.UserError("Not in voting phase")
-        self.phase = PHASE_AI_JUDGING
+        room["phase"] = PHASE_AI_JUDGING
+        self._save(room_code, room)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # AI judging — the Intelligent Contract part.
-    #
-    # The LLM is asked to return ONLY a single digit (1, 2 or 3). That keeps
-    # the output strict-equality friendly so validators reach consensus via
-    # gl.eq_principle.strict_eq even though the underlying LLM call is
-    # non-deterministic.
-    # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
-    def run_ai_judge(self) -> int:
-        if self.phase != PHASE_AI_JUDGING:
+    def run_ai_judge(self, room_code: str) -> int:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_AI_JUDGING:
             raise gl.vm.UserError("Not in judging phase")
-        if self.ai_judged:
+        if room["aiJudged"]:
             raise gl.vm.UserError("Already judged")
 
-        s1 = self.statements[0]
-        s2 = self.statements[1]
-        s3 = self.statements[2]
+        s1 = room["statements"][0]
+        s2 = room["statements"][1]
+        s3 = room["statements"][2]
 
         def llm_pick_lie() -> int:
             prompt = f"""You are the AI Judge in Genjury, a social deduction game.
@@ -569,110 +516,93 @@ character.
         verdict_1based = gl.eq_principle.strict_eq(llm_pick_lie)
         verdict_idx = max(0, min(2, int(verdict_1based) - 1))
 
-        self.ai_verdict_index = u256(verdict_idx)
-        self.ai_confidence    = u256(70)
-        self.ai_reasoning     = (
+        room["aiVerdictIndex"] = verdict_idx
+        room["aiConfidence"] = 70
+        room["aiReasoning"] = (
             "After analyzing the plausibility of all three statements, "
             f"the AI Judge ruled that Statement {verdict_idx + 1} is the most likely lie."
         )
-        self.ai_judged = True
-        self.phase = PHASE_OBJECTION
+        room["aiJudged"] = True
+        room["phase"] = PHASE_OBJECTION
+        self._save(room_code, room)
         return verdict_idx
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Objection — Optimistic Democracy
-    # ──────────────────────────────────────────────────────────────────────
     @gl.public.write
-    def raise_objection(self) -> None:
+    def raise_objection(self, room_code: str) -> None:
         sender = _sender()
-        if self.phase != PHASE_OBJECTION:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_OBJECTION:
             raise gl.vm.UserError("Not objection window")
-        if not self._is_player(sender):
+        if not _is_player(room, sender):
             raise gl.vm.UserError("Not a player")
-        if self.objection_raised:
+        if room["objectionRaised"]:
             raise gl.vm.UserError("Already raised")
 
-        self.objection_raised = True
-        self.objection_by = sender
-        self.phase = PHASE_OBJECTION_VOTE
+        room["objectionRaised"] = True
+        room["objectionBy"] = sender
+        room["phase"] = PHASE_OBJECTION_VOTE
+        self._save(room_code, room)
 
     @gl.public.write
-    def cast_objection_vote(self, stance: str) -> None:
+    def cast_objection_vote(self, room_code: str, stance: str) -> None:
         sender = _sender()
-        if self.phase != PHASE_OBJECTION_VOTE:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_OBJECTION_VOTE:
             raise gl.vm.UserError("Not objection-vote phase")
-        if not self._is_player(sender):
+        if not _is_player(room, sender):
             raise gl.vm.UserError("Not a player")
         if stance != "sustain" and stance != "overrule":
             raise gl.vm.UserError("stance must be 'sustain' or 'overrule'")
-        if sender in self.objection_votes:
+        if sender in room["objectionVotes"]:
             raise gl.vm.UserError("Already voted on objection")
 
-        self.objection_votes[sender] = stance
+        room["objectionVotes"][sender] = stance
+        self._save(room_code, room)
 
     @gl.public.write
-    def skip_objection(self) -> None:
-        """Called when the objection window expires with nobody objecting.
-
-        Host-only to prevent any player from race-finalizing the round before
-        someone else has had time to object (the previous open-to-anyone
-        version was a denial-of-objection vector).
-        """
+    def skip_objection(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can skip the objection window")
-        if self.phase != PHASE_OBJECTION:
+        if room["phase"] != PHASE_OBJECTION:
             raise gl.vm.UserError("Not objection window")
-        self._finalize_round()
+        self._finalize_round(room_code, room)
 
     @gl.public.write
-    def close_objection_vote(self) -> None:
-        """Tally the objection vote and finalize the round.
-
-        Host-only for the same reason as `skip_objection` — keeps a losing
-        player from closing the vote before their opponents have voted.
-        """
+    def close_objection_vote(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can close the objection vote")
-        if self.phase != PHASE_OBJECTION_VOTE:
+        if room["phase"] != PHASE_OBJECTION_VOTE:
             raise gl.vm.UserError("Not objection-vote phase")
-        self._finalize_round()
+        self._finalize_round(room_code, room)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Reveal & XP — finalize the round
-    # ──────────────────────────────────────────────────────────────────────
-    def _finalize_round(self) -> None:
-        # 1. Tally objection votes.
+    def _finalize_round(self, room_code: str, room: dict) -> None:
         sustain = 0
         overrule = 0
-        for k in self.objection_votes:
-            if self.objection_votes[k] == "sustain":
+        for k in room["objectionVotes"]:
+            if room["objectionVotes"][k] == "sustain":
                 sustain += 1
             else:
                 overrule += 1
 
-        # 2. Effective verdict (AI verdict, possibly overruled).
-        effective_verdict = int(self.ai_verdict_index)
-        if self.objection_raised and overrule > sustain:
-            effective_verdict = int(self.lie_index)
+        effective_verdict = int(room["aiVerdictIndex"])
+        if room["objectionRaised"] and overrule > sustain:
+            effective_verdict = int(room["lieIndex"])
 
-        ai_was_fooled = effective_verdict != int(self.lie_index)
+        ai_was_fooled = effective_verdict != int(room["lieIndex"])
 
-        # 3. Detectors / fooled.
-        detectors = []
-        for a in self.player_order:
-            if a != self.deceiver:
-                detectors.append(a)
+        detectors = [a for a in room["playerOrder"] if a != room["deceiver"]]
         fooled_addrs = []
         for d in detectors:
             voted = -1
-            if d in self.votes:
-                voted = int(self.votes[d])
-            if voted != int(self.lie_index):
+            if d in room["votes"]:
+                voted = int(room["votes"][d])
+            if voted != int(room["lieIndex"]):
                 fooled_addrs.append(d)
 
-        # 4. XP awards.
         xp_gained = {}
 
         d_xp = len(fooled_addrs) * XP_PER_FOOLED_PLAYER
@@ -680,504 +610,380 @@ character.
             d_xp += XP_AI_FOOLED_BONUS
         if len(detectors) > 0 and len(fooled_addrs) == len(detectors):
             d_xp += XP_FULL_FOOL_BONUS
-        self._update_xp(self.deceiver, d_xp)
-        xp_gained[self.deceiver] = d_xp
+
+        deceiver = room["deceiver"]
+        deceiver_rec = room["players"][deceiver]
+        deceiver_rec["xp"] = int(deceiver_rec["xp"]) + d_xp
+        deceiver_rec["level"] = (int(deceiver_rec["xp"]) // 500) + 1
+        room["players"][deceiver] = deceiver_rec
+        xp_gained[deceiver] = d_xp
+        self._bump_global_xp(deceiver, deceiver_rec["name"],
+                             deceiver_rec["avatar"], deceiver_rec["color"], d_xp)
 
         for d in detectors:
             voted = -1
-            if d in self.votes:
-                voted = int(self.votes[d])
+            if d in room["votes"]:
+                voted = int(room["votes"][d])
             conf = 50
-            if d in self.confidence:
-                conf = int(self.confidence[d])
+            if d in room["confidence"]:
+                conf = int(room["confidence"][d])
             gained = 0
-            if voted == int(self.lie_index):
+            if voted == int(room["lieIndex"]):
                 gained += XP_DETECTOR_BASE
                 gained += int((conf * XP_DETECTOR_CONF_MAX) // 100)
-            if (self.objection_raised
-                    and d in self.objection_votes
-                    and self.objection_votes[d] == "sustain"
+            if (room["objectionRaised"]
+                    and d in room["objectionVotes"]
+                    and room["objectionVotes"][d] == "sustain"
                     and ai_was_fooled):
                 gained += XP_OBJECTION_SUCCESS
-            self._update_xp(d, gained)
+            d_rec = room["players"][d]
+            d_rec["xp"] = int(d_rec["xp"]) + gained
+            d_rec["level"] = (int(d_rec["xp"]) // 500) + 1
+            room["players"][d] = d_rec
             xp_gained[d] = gained
-
-        # 5. Build a reveal blob the frontend can render directly.
-        votes_map = {}
-        conf_map = {}
-        for v in self.voters:
-            votes_map[v] = int(self.votes[v])
-            conf_map[v] = int(self.confidence[v])
-
-        obj_votes_map = {}
-        for k in self.objection_votes:
-            obj_votes_map[k] = self.objection_votes[k]
-
-        statements_list = [self.statements[0], self.statements[1], self.statements[2]]
+            self._bump_global_xp(d, d_rec["name"], d_rec["avatar"],
+                                 d_rec["color"], gained)
 
         reveal = {
-            "round":            int(self.round_num),
-            "lieIndex":         int(self.lie_index),
-            "statements":       statements_list,
-            "deceiver":         self.deceiver,
-            "aiVerdictIndex":   int(self.ai_verdict_index),
-            "aiConfidence":     int(self.ai_confidence),
-            "aiReasoning":      self.ai_reasoning,
+            "round":            int(room["round"]),
+            "lieIndex":         int(room["lieIndex"]),
+            "statements":       room["statements"],
+            "deceiver":         deceiver,
+            "aiVerdictIndex":   int(room["aiVerdictIndex"]),
+            "aiConfidence":     int(room["aiConfidence"]),
+            "aiReasoning":      room["aiReasoning"],
             "effectiveVerdict": effective_verdict,
             "aiWasFooled":      ai_was_fooled,
-            "objectionRaised":  self.objection_raised,
-            "objectionBy":      self.objection_by if self.objection_raised else "",
+            "objectionRaised":  bool(room["objectionRaised"]),
+            "objectionBy":      room["objectionBy"] if room["objectionRaised"] else "",
             "objectionTally":   {"sustain": sustain, "overrule": overrule},
-            "votes":            votes_map,
-            "confidence":       conf_map,
-            "objectionVotes":   obj_votes_map,
+            "votes":            dict(room["votes"]),
+            "confidence":       dict(room["confidence"]),
+            "objectionVotes":   dict(room["objectionVotes"]),
             "fooledPlayers":    fooled_addrs,
             "xpGained":         xp_gained,
         }
-        self.last_reveal = json.dumps(reveal)
-        self.score_history.append(self.last_reveal)
-        self.phase = PHASE_REVEAL
+        room["lastReveal"] = reveal
+        room["scoreHistory"].append(reveal)
+        room["phase"] = PHASE_REVEAL
+        self._save(room_code, room)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Round progression
-    # ──────────────────────────────────────────────────────────────────────
-    def _settle_winner(self) -> None:
-        """Pick the highest-XP player and reserve the prize pool for them.
-
-        Called when the last round finishes and we transition to scoreboard.
-        Ties resolve in favour of whichever player joined first (player_order
-        scan keeps the first of equal XP).
-        """
+    def _settle_winner(self, room: dict) -> None:
         best_addr = ""
         best_xp = -1
-        for a in self.player_order:
-            rec = json.loads(self.players[a])
-            xp = int(rec.get("xp", 0))
+        for a in room["playerOrder"]:
+            xp = int(room["players"][a].get("xp", 0))
             if xp > best_xp:
                 best_xp = xp
                 best_addr = a
-        self.winner_address      = best_addr
-        self.winner_winnings_wei = u256(int(self.prize_pool))
-        # The pool is now reserved for the winner; clear the bookkeeping so
-        # leave/refund logic can't double-spend it (lobby is locked anyway).
-        self.prize_pool          = u256(0)
-        # If there's nothing to claim we mark the game settled immediately.
-        self.prize_distributed   = int(self.winner_winnings_wei) == 0
+        room["winnerAddress"] = best_addr
+        room["winnerWinnings"] = str(int(room["prizePool"]))
+        room["prizePool"] = "0"
+        room["prizeDistributed"] = int(room["winnerWinnings"]) == 0
+        if best_addr:
+            self._bump_global_win(best_addr)
 
     @gl.public.write
-    def next_round(self) -> None:
-        if self.phase != PHASE_REVEAL:
+    def next_round(self, room_code: str) -> None:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_REVEAL:
             raise gl.vm.UserError("Not in reveal phase")
 
-        if int(self.round_num) >= int(self.max_rounds):
-            self._settle_winner()
-            self.phase = PHASE_SCOREBOARD
+        if int(room["round"]) >= int(room["maxRounds"]):
+            self._settle_winner(room)
+            room["phase"] = PHASE_SCOREBOARD
+            self._save(room_code, room)
             return
 
-        self.round_num = u256(int(self.round_num) + 1)
-        next_idx = (int(self.deceiver_index) + 1) % self._player_count()
-        self.deceiver_index = u256(next_idx)
-        self.deceiver = self.player_order[next_idx]
-        self.category = self._pick_category(int(self.round_num))
-        self._reset_round_state()
-        self.phase = PHASE_WRITING
+        room["round"] = int(room["round"]) + 1
+        next_idx = (int(room["deceiverIndex"]) + 1) % _player_count(room)
+        room["deceiverIndex"] = next_idx
+        room["deceiver"] = room["playerOrder"][next_idx]
+        room["category"] = _pick_category(_norm_code(room_code), int(room["round"]))
+        _reset_round_state(room)
+        room["phase"] = PHASE_WRITING
+        self._save(room_code, room)
 
     @gl.public.write
-    def reset_to_lobby(self) -> None:
-        """Host returns the room to lobby for a fresh game.
-
-        We require the winner to have already claimed their prize so we
-        don't wipe their entitlement. Outstanding platform fees, however,
-        used to *block* reset entirely — meaning an unresponsive platform
-        owner could permanently brick the room. Now we auto-sweep those
-        fees to the platform owner as part of the reset, so the host always
-        has a clean exit path.
-
-        Players are wiped because everyone needs to re-pay the entry fee
-        for the next round.
-        """
+    def claim_prize(self, room_code: str) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if room["phase"] != PHASE_SCOREBOARD:
+            raise gl.vm.UserError("Game has not finished yet")
+        if room["prizeDistributed"]:
+            raise gl.vm.UserError("Prize already claimed")
+        if sender != room["winnerAddress"]:
+            raise gl.vm.UserError("Only the winner can claim the prize")
+
+        amount = int(room["winnerWinnings"])
+        room["winnerWinnings"] = "0"
+        room["prizeDistributed"] = True
+        self._save(room_code, room)
+        _send_gen(sender, amount)
+
+    @gl.public.write
+    def reset_to_lobby(self, room_code: str) -> None:
+        sender = _sender()
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can reset")
-        if not self.prize_distributed:
+        if not room["prizeDistributed"]:
             raise gl.vm.UserError("Winner must claim their prize before resetting")
 
-        # Auto-sweep any unclaimed platform fees so the platform owner
-        # doesn't have to be online for the host to start a new game.
-        outstanding_fees = int(self.platform_fees_collected)
-        if outstanding_fees > 0:
-            self.platform_fees_collected = u256(0)
-            _send_gen(self.platform_owner, outstanding_fees)
-
-        self.phase = PHASE_LOBBY
-        self.round_num = u256(0)
-        self.deceiver_index = u256(0)
-        self.deceiver = ""
-        self.category = ""
-        self._reset_round_state()
-        _clear_arr(self.score_history)
-
-        # Wipe player roster — they must rejoin (and re-pay) for a fresh game.
-        _clear_tm(self.players)
-        _clear_arr(self.player_order)
-
-        # Reset settlement state.
-        self.winner_address      = ""
-        self.winner_winnings_wei = u256(0)
-        self.prize_distributed   = True
+        room["phase"] = PHASE_LOBBY
+        room["round"] = 0
+        room["deceiverIndex"] = 0
+        room["deceiver"] = ""
+        room["category"] = ""
+        _reset_round_state(room)
+        room["scoreHistory"] = []
+        room["players"] = {}
+        room["playerOrder"] = []
+        room["winnerAddress"] = ""
+        room["winnerWinnings"] = "0"
+        room["prizeDistributed"] = True
+        self._save(room_code, room)
 
     @gl.public.write
-    def set_entry_fee(self, new_fee_wei: int) -> None:
-        """Host changes the entry fee for the *next* game.
-
-        Only callable in LOBBY and only while no players have joined yet,
-        so we never silently change the price under someone who already
-        paid the old rate. If players have already joined, the host should
-        either start the game with the existing fee, or call
-        `reset_to_lobby()` first (which wipes the roster) and then change
-        the fee before reopening signups.
-
-        Negative values are clamped to 0; there is no upper bound (the
-        host is trusted to set a sensible price for their own room).
-        """
+    def set_entry_fee(self, room_code: str, new_fee_wei: int) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can change the entry fee")
-        if self.phase != PHASE_LOBBY:
+        if room["phase"] != PHASE_LOBBY:
             raise gl.vm.UserError("Entry fee can only be changed in LOBBY")
-        if self._player_count() > 0:
+        if _player_count(room) > 0:
             raise gl.vm.UserError(
-                "Players have already paid the current fee; "
-                "reset_to_lobby() first to change it"
+                "Players have already paid the current fee; reset_to_lobby() first"
             )
-        self.entry_fee = u256(max(0, int(new_fee_wei)))
+        room["entryFee"] = str(max(0, int(new_fee_wei)))
+        self._save(room_code, room)
 
     @gl.public.write
-    def set_max_rounds(self, n: int) -> None:
-        """Host changes how many rounds the next game will run.
-
-        LOBBY-only and only while no players have joined yet — same
-        reasoning as `set_entry_fee`. Clamped to 1..50 so a typo can't
-        brick the room (`max_rounds=0` would settle the game on
-        `start_game`, and absurdly large values would just waste time).
-        """
+    def set_max_rounds(self, room_code: str, n: int) -> None:
         sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can change max_rounds")
-        if self.phase != PHASE_LOBBY:
+        if room["phase"] != PHASE_LOBBY:
             raise gl.vm.UserError("max_rounds can only be changed in LOBBY")
-        if self._player_count() > 0:
-            raise gl.vm.UserError(
-                "Players have already joined; reset_to_lobby() first"
-            )
-        n = int(n)
-        if n < 1 or n > 50:
+        if _player_count(room) > 0:
+            raise gl.vm.UserError("Players have already joined; reset_to_lobby() first")
+        nv = int(n)
+        if nv < 1 or nv > 50:
             raise gl.vm.UserError("max_rounds must be between 1 and 50")
-        self.max_rounds = u256(n)
+        room["maxRounds"] = nv
+        self._save(room_code, room)
 
     @gl.public.write
-    def set_platform_fee_bps(self, new_bps: int) -> None:
-        """Platform owner adjusts their own cut between games.
-
-        Callable only by the **current platform_owner** — never the
-        host — so a host can't dial the dev's cut down to 0% on their
-        own room. Same LOBBY + no-players-joined-yet guard as
-        `set_entry_fee` so we don't change the rate under players who
-        already paid in. Silently clamped to [0, MAX_PLATFORM_FEE_BPS]
-        so the platform can never exceed the documented 20% cap, even
-        with a fat-fingered call.
-        """
+    def set_max_players(self, room_code: str, n: int) -> None:
         sender = _sender()
-        if sender != self.platform_owner:
+        room = self._load(room_code)
+        if sender != room["host"]:
+            raise gl.vm.UserError("Only host can change max_players")
+        if room["phase"] != PHASE_LOBBY:
+            raise gl.vm.UserError("max_players can only be changed in LOBBY")
+        nv = int(n)
+        if nv < MIN_PLAYERS or nv > MAX_PLAYERS_HARD_CAP:
             raise gl.vm.UserError(
-                "Only the platform owner can change platform_fee_bps"
+                f"max_players must be between {MIN_PLAYERS} and {MAX_PLAYERS_HARD_CAP}"
             )
-        if self.phase != PHASE_LOBBY:
-            raise gl.vm.UserError("platform_fee_bps can only be changed in LOBBY")
-        if self._player_count() > 0:
-            raise gl.vm.UserError(
-                "Players have already paid the current fee; "
-                "reset_to_lobby() first"
-            )
-        bps = max(0, min(MAX_PLATFORM_FEE_BPS, int(new_bps)))
-        self.platform_fee_bps = u256(bps)
+        if nv < _player_count(room):
+            raise gl.vm.UserError("max_players cannot be set below the current player count")
+        room["maxPlayers"] = nv
+        self._save(room_code, room)
 
     @gl.public.write
-    def set_platform_owner(self, new_owner: str) -> None:
-        """Hand off the platform-fee recipient role to a new address.
-
-        Only callable by the **current** platform_owner — never the
-        host — so the host can't silently redirect fees to themselves
-        on an active room. Any unclaimed fees are auto-swept to the
-        *outgoing* owner first so the handoff doesn't accidentally
-        transfer pending balances to the new recipient.
-        """
+    def kick_player(self, room_code: str, addr: str) -> None:
         sender = _sender()
-        if sender != self.platform_owner:
-            raise gl.vm.UserError(
-                "Only the current platform owner can transfer this role"
-            )
-        new_owner_norm = _norm_addr(new_owner)
-        if not new_owner_norm:
-            raise gl.vm.UserError("New platform owner must be a valid address")
-
-        # Pay out anything pending to the *current* owner before swapping.
-        outstanding = int(self.platform_fees_collected)
-        if outstanding > 0:
-            self.platform_fees_collected = u256(0)
-            _send_gen(self.platform_owner, outstanding)
-
-        self.platform_owner = new_owner_norm
-
-    @gl.public.write
-    def transfer_host(self, new_host: str) -> None:
-        """Hand the host (room admin) role to another address.
-
-        LOBBY-only — handing it off mid-game would let a fresh host
-        disrupt an ongoing round via `force_close_voting` etc.
-        """
-        sender = _sender()
-        if sender != self.host:
-            raise gl.vm.UserError("Only host can transfer the host role")
-        if self.phase != PHASE_LOBBY:
-            raise gl.vm.UserError("Host can only be transferred in LOBBY")
-        new_host_norm = _norm_addr(new_host)
-        if not new_host_norm:
-            raise gl.vm.UserError("New host must be a valid address")
-        self.host = new_host_norm
-
-    @gl.public.write
-    def kick_player(self, addr: str) -> None:
-        """Host removes a player from the lobby and refunds their entry fee.
-
-        For dealing with AFK or troll joiners that won't `leave()` on
-        their own. Mirrors the refund accounting in `leave()` exactly:
-        rolls back the platform-fee / prize-pool slices, deletes the
-        player record, compacts `player_order`, and sends the entry
-        fee back to the kicked address.
-        """
-        sender = _sender()
-        if sender != self.host:
+        room = self._load(room_code)
+        if sender != room["host"]:
             raise gl.vm.UserError("Only host can kick players")
-        if self.phase != PHASE_LOBBY:
+        if room["phase"] != PHASE_LOBBY:
             raise gl.vm.UserError("Players can only be kicked in LOBBY")
         target = _norm_addr(addr)
         if not target:
             raise gl.vm.UserError("Invalid player address")
         if target == sender:
-            raise gl.vm.UserError(
-                "Host cannot kick themselves; use transfer_host or leave"
-            )
-        if not self._is_player(target):
+            raise gl.vm.UserError("Host cannot kick themselves")
+        if not _is_player(room, target):
             raise gl.vm.UserError("Address is not in the lobby")
 
-        required = int(self.entry_fee)
+        required = int(room["entryFee"])
         if required > 0:
-            fee, share = self._split_entry(required)
-            self.platform_fees_collected = u256(int(self.platform_fees_collected) - fee)
-            self.prize_pool              = u256(int(self.prize_pool) - share)
+            fee, share = _split_entry(required, int(self.house_cut_bps))
+            self.house_fees_collected = u256(int(self.house_fees_collected) - fee)
+            room["prizePool"] = str(int(room["prizePool"]) - share)
 
-        del self.players[target]
-        kept = [a for a in self.player_order if a != target]
-        _clear_arr(self.player_order)
-        for a in kept:
-            self.player_order.append(a)
-
+        del room["players"][target]
+        room["playerOrder"] = [a for a in room["playerOrder"] if a != target]
+        self._save(room_code, room)
         if required > 0:
             _send_gen(target, required)
 
     @gl.public.write
-    def set_max_players(self, n: int) -> None:
-        """Host raises or lowers the per-room player cap.
-
-        Bounded by `MIN_PLAYERS` on the low end and the avatar/color
-        list length (12) on the high end so we never hand out duplicate
-        avatars or colors. Allowed any time during LOBBY, as long as
-        the new cap is at least the current player count — we never
-        want more players seated than the cap allows.
-        """
+    def transfer_host(self, room_code: str, new_host: str) -> None:
         sender = _sender()
-        if sender != self.host:
-            raise gl.vm.UserError("Only host can change max_players")
-        if self.phase != PHASE_LOBBY:
-            raise gl.vm.UserError("max_players can only be changed in LOBBY")
-        n = int(n)
-        cap = min(len(AVATARS), len(COLORS))
-        if n < MIN_PLAYERS or n > cap:
-            raise gl.vm.UserError(
-                f"max_players must be between {MIN_PLAYERS} and {cap}"
-            )
-        if n < self._player_count():
-            raise gl.vm.UserError(
-                "max_players cannot be set below the current player count"
-            )
-        self.max_players = u256(n)
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Settlement — claims for prize and platform fees
-    # ──────────────────────────────────────────────────────────────────────
-    @gl.public.write
-    def claim_prize(self) -> None:
-        """Winner withdraws the prize pool to their wallet."""
-        sender = _sender()
-        if self.phase != PHASE_SCOREBOARD:
-            raise gl.vm.UserError("Game has not finished yet")
-        if self.prize_distributed:
-            raise gl.vm.UserError("Prize already claimed")
-        if sender != self.winner_address:
-            raise gl.vm.UserError("Only the winner can claim the prize")
-
-        amount = int(self.winner_winnings_wei)
-        # Update bookkeeping BEFORE the external send so a re-entry attempt
-        # would find the prize already marked claimed.
-        self.winner_winnings_wei = u256(0)
-        self.prize_distributed   = True
-        _send_gen(sender, amount)
+        room = self._load(room_code)
+        if sender != room["host"]:
+            raise gl.vm.UserError("Only host can transfer the host role")
+        if room["phase"] != PHASE_LOBBY:
+            raise gl.vm.UserError("Host can only be transferred in LOBBY")
+        new_host_norm = _norm_addr(new_host)
+        if not new_host_norm:
+            raise gl.vm.UserError("New host must be a valid address")
+        room["host"] = new_host_norm
+        self._save(room_code, room)
 
     @gl.public.write
-    def claim_platform_fees(self) -> None:
-        """Platform owner sweeps accumulated fees to their wallet."""
+    def claim_house_fees(self) -> None:
         sender = _sender()
-        if sender != self.platform_owner:
-            raise gl.vm.UserError("Only the platform owner can claim fees")
-
-        amount = int(self.platform_fees_collected)
+        if sender != self.house:
+            raise gl.vm.UserError("Only the house can claim house fees")
+        amount = int(self.house_fees_collected)
         if amount == 0:
-            raise gl.vm.UserError("No platform fees to claim")
-        self.platform_fees_collected = u256(0)
+            raise gl.vm.UserError("No house fees to claim")
+        self.house_fees_collected = u256(0)
         _send_gen(sender, amount)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Read-only views (used by the frontend to render state)
-    #
-    # IMPORTANT: every view returns a JSON-encoded string instead of a
-    # Python dict / list. The previous `dict[str, typing.Any]` signatures
-    # tripped GenLayer's calldata encoder on values like nested dicts,
-    # `None`, and bigint-as-string mixed alongside ints — producing the
-    # "ACCEPTED [ERROR] / no return value" you saw on Bradbury when the
-    # frontend tried to verify the contract. Returning a `str` is
-    # unambiguous to the encoder; the frontend does `JSON.parse(raw)`.
-    # ──────────────────────────────────────────────────────────────────────
+    @gl.public.write
+    def transfer_house(self, new_house: str) -> None:
+        sender = _sender()
+        if sender != self.house:
+            raise gl.vm.UserError("Only the current house can transfer this role")
+        new_house_norm = _norm_addr(new_house)
+        if not new_house_norm:
+            raise gl.vm.UserError("New house must be a valid address")
+        outstanding = int(self.house_fees_collected)
+        if outstanding > 0:
+            self.house_fees_collected = u256(0)
+            _send_gen(self.house, outstanding)
+        self.house = new_house_norm
+
+    @gl.public.write
+    def set_house_cut_bps(self, new_bps: int) -> None:
+        sender = _sender()
+        if sender != self.house:
+            raise gl.vm.UserError("Only the house can change house_cut_bps")
+        bps = max(0, min(MAX_HOUSE_CUT_BPS, int(new_bps)))
+        self.house_cut_bps = u256(bps)
+
     @gl.public.view
-    def get_state(self) -> str:
-        """Single snapshot of everything the UI needs (JSON-encoded)."""
-        votes_map: dict[str, int] = {}
-        conf_map:  dict[str, int] = {}
-        for v in self.voters:
-            votes_map[v] = int(self.votes[v])
-            conf_map[v]  = int(self.confidence[v])
+    def get_room_state(self, room_code: str) -> str:
+        c = _norm_code(room_code)
+        if c not in self.rooms:
+            return ""
+        room = json.loads(self.rooms[c])
+        view = _public_room_view(c, room)
+        view["house"] = self.house
+        view["houseCutBps"] = int(self.house_cut_bps)
+        return json.dumps(view)
 
-        obj_votes_map: dict[str, str] = {}
-        for k in self.objection_votes:
-            obj_votes_map[k] = self.objection_votes[k]
-
-        players_map: dict[str, typing.Any] = {}
-        for a in self.player_order:
-            players_map[a] = json.loads(self.players[a])
-
-        statements_list = [self.statements[i] for i in range(len(self.statements))]
-        player_order_list = [a for a in self.player_order]
-        voters_list = [v for v in self.voters]
-
-        last_reveal_obj: typing.Any = None
-        if self.last_reveal:
-            last_reveal_obj = json.loads(self.last_reveal)
-
+    @gl.public.view
+    def get_room_economics(self, room_code: str) -> str:
+        c = _norm_code(room_code)
+        if c not in self.rooms:
+            return ""
+        room = json.loads(self.rooms[c])
         return json.dumps({
-            "host":            self.host,
-            "phase":           self.phase,
-            "round":           int(self.round_num),
-            "maxRounds":       int(self.max_rounds),
-            "category":        self.category,
-            "deceiver":        self.deceiver,
-            "deceiverIndex":   int(self.deceiver_index),
-            "playerOrder":     player_order_list,
-            "players":         players_map,
-            "statements":      statements_list,
-            "submitted":       self.submitted,
-            "lieIndex":        int(self.lie_index) if self.submitted else -1,
-            "voters":          voters_list,
-            "votes":           votes_map,
-            "confidence":      conf_map,
-            "aiJudged":        self.ai_judged,
-            "aiVerdictIndex":  int(self.ai_verdict_index),
-            "aiConfidence":    int(self.ai_confidence),
-            "aiReasoning":     self.ai_reasoning,
-            "objectionRaised": self.objection_raised,
-            "objectionBy":     self.objection_by if self.objection_raised else "",
-            "objectionVotes":  obj_votes_map,
-            "lastReveal":      last_reveal_obj,
-            # ── Economics (wei values are encoded as strings so JS can
-            #    safely turn them into BigInts without precision loss) ──
-            "entryFee":              str(int(self.entry_fee)),
-            "prizePool":             str(int(self.prize_pool)),
-            "platformFeeBps":        int(self.platform_fee_bps),
-            "platformOwner":         self.platform_owner,
-            "platformFeesCollected": str(int(self.platform_fees_collected)),
-            "winnerAddress":         self.winner_address,
-            "winnerWinningsWei":     str(int(self.winner_winnings_wei)),
-            "prizeDistributed":      self.prize_distributed,
+            "roomCode":         c,
+            "phase":            room["phase"],
+            "entryFee":         str(room["entryFee"]),
+            "prizePool":        str(room["prizePool"]),
+            "playerCount":      _player_count(room),
+            "maxPlayers":       int(room["maxPlayers"]),
+            "maxRounds":        int(room["maxRounds"]),
+            "host":             room["host"],
+            "hostName":         room.get("createdHostName", ""),
+            "winnerAddress":    room["winnerAddress"],
+            "winnerWinnings":   str(room["winnerWinnings"]),
+            "prizeDistributed": bool(room["prizeDistributed"]),
+            "houseCutBps":      int(self.house_cut_bps),
         })
 
     @gl.public.view
-    def get_phase(self) -> str:
-        return self.phase
+    def list_open_rooms(self, limit: int = 20) -> str:
+        out = []
+        n = len(self.all_room_codes)
+        cap = min(int(limit), 100)
+        for i in range(n - 1, -1, -1):
+            if len(out) >= cap:
+                break
+            code = self.all_room_codes[i]
+            if code not in self.rooms:
+                continue
+            room = json.loads(self.rooms[code])
+            if room["phase"] != PHASE_LOBBY:
+                continue
+            out.append({
+                "roomCode":    code,
+                "hostName":    room.get("createdHostName", ""),
+                "host":        room["host"],
+                "phase":       room["phase"],
+                "playerCount": _player_count(room),
+                "maxPlayers":  int(room["maxPlayers"]),
+                "maxRounds":   int(room["maxRounds"]),
+                "entryFee":    str(room["entryFee"]),
+                "prizePool":   str(room["prizePool"]),
+            })
+        return json.dumps(out)
 
     @gl.public.view
-    def get_round(self) -> int:
-        return int(self.round_num)
+    def list_live_rooms(self, limit: int = 20) -> str:
+        out = []
+        n = len(self.all_room_codes)
+        cap = min(int(limit), 100)
+        for i in range(n - 1, -1, -1):
+            if len(out) >= cap:
+                break
+            code = self.all_room_codes[i]
+            if code not in self.rooms:
+                continue
+            room = json.loads(self.rooms[code])
+            ph = room["phase"]
+            if ph in (PHASE_LOBBY, PHASE_SCOREBOARD):
+                continue
+            out.append({
+                "roomCode":    code,
+                "hostName":    room.get("createdHostName", ""),
+                "phase":       ph,
+                "round":       int(room["round"]),
+                "maxRounds":   int(room["maxRounds"]),
+                "playerCount": _player_count(room),
+                "maxPlayers":  int(room["maxPlayers"]),
+                "prizePool":   str(room["prizePool"]),
+            })
+        return json.dumps(out)
 
     @gl.public.view
-    def get_last_reveal(self) -> str:
-        """JSON-encoded reveal blob, or `""` when no round has finished yet."""
-        return self.last_reveal or ""
+    def get_global_leaderboard(self, limit: int = 50) -> str:
+        rows = []
+        for addr in self.leaderboard_addrs:
+            if addr not in self.global_xp:
+                continue
+            rec = json.loads(self.global_xp[addr])
+            rows.append({
+                "address": addr,
+                "name":    rec.get("name", ""),
+                "avatar":  rec.get("avatar", ""),
+                "color":   rec.get("color", ""),
+                "xp":      int(rec.get("xp", 0)),
+                "level":   int(rec.get("level", 1)),
+                "wins":    int(rec.get("wins", 0)),
+            })
+        rows.sort(key=lambda r: r["xp"], reverse=True)
+        cap = min(int(limit), 200)
+        return json.dumps(rows[:cap])
 
     @gl.public.view
-    def get_economics(self) -> str:
-        """Standalone view used by the lobby/landing UI to preview a room.
-
-        Returns a JSON string. The frontend does `JSON.parse(raw)` on it.
-        """
-        return json.dumps({
-            "entryFee":              str(int(self.entry_fee)),
-            "prizePool":             str(int(self.prize_pool)),
-            "platformFeeBps":        int(self.platform_fee_bps),
-            "platformOwner":         self.platform_owner,
-            "platformFeesCollected": str(int(self.platform_fees_collected)),
-            "winnerAddress":         self.winner_address,
-            "winnerWinningsWei":     str(int(self.winner_winnings_wei)),
-            "prizeDistributed":      self.prize_distributed,
-            "playerCount":           self._player_count(),
-            "maxPlayers":            int(self.max_players),
-            "phase":                 self.phase,
-            "host":                  self.host,
-        })
-
-    @gl.public.view
-    def get_xp_config(self) -> str:
-        """Authoritative XP constants used by `_finalize_round`.
-
-        Exposed so the frontend can show pre-round XP estimates that always
-        match what the contract actually awards — no more silent drift
-        between the contract and `src/lib/store.js`. JSON-encoded for the
-        same reason as the other views.
-        """
-        return json.dumps({
-            "perFooledPlayer":  XP_PER_FOOLED_PLAYER,
-            "aiFooledBonus":    XP_AI_FOOLED_BONUS,
-            "fullFoolBonus":    XP_FULL_FOOL_BONUS,
-            "detectorBase":     XP_DETECTOR_BASE,
-            "detectorConfMax":  XP_DETECTOR_CONF_MAX,
-            "objectionSuccess": XP_OBJECTION_SUCCESS,
-            "levelXp":          500,    # rec["level"] = (xp // 500) + 1
-        })
-
-    @gl.public.view
-    def get_scoreboard(self) -> str:
-        """Sorted XP leaderboard for the SCOREBOARD page (JSON-encoded list)."""
-        rows: list[dict[str, typing.Any]] = []
-        for addr in self.player_order:
-            rec = json.loads(self.players[addr])
+    def get_room_scoreboard(self, room_code: str) -> str:
+        c = _norm_code(room_code)
+        if c not in self.rooms:
+            return "[]"
+        room = json.loads(self.rooms[c])
+        rows = []
+        for addr in room["playerOrder"]:
+            rec = room["players"][addr]
             rows.append({
                 "address": addr,
                 "name":    rec["name"],
@@ -1188,3 +994,24 @@ character.
             })
         rows.sort(key=lambda r: r["xp"], reverse=True)
         return json.dumps(rows)
+
+    @gl.public.view
+    def get_xp_config(self) -> str:
+        return json.dumps({
+            "perFooledPlayer":  XP_PER_FOOLED_PLAYER,
+            "aiFooledBonus":    XP_AI_FOOLED_BONUS,
+            "fullFoolBonus":    XP_FULL_FOOL_BONUS,
+            "detectorBase":     XP_DETECTOR_BASE,
+            "detectorConfMax":  XP_DETECTOR_CONF_MAX,
+            "objectionSuccess": XP_OBJECTION_SUCCESS,
+            "levelXp":          500,
+        })
+
+    @gl.public.view
+    def get_house_info(self) -> str:
+        return json.dumps({
+            "house":              self.house,
+            "houseCutBps":        int(self.house_cut_bps),
+            "houseFeesCollected": str(int(self.house_fees_collected)),
+            "totalRooms":         len(self.all_room_codes),
+        })
