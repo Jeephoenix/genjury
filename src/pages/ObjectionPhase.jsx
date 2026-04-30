@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { Bot, Scale, Hand, Check, X as XIcon } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import StatementCard from '../components/StatementCard'
 
@@ -44,7 +45,7 @@ export default function ObjectionPhase() {
         <div className="w-full max-w-lg">
           {/* AI Verdict */}
           <div className="card mb-6 text-center" style={{ borderColor: 'rgba(162,89,255,0.3)', background: 'rgba(162,89,255,0.05)' }}>
-            <div className="text-4xl mb-3">🤖</div>
+            <Bot className="w-10 h-10 mb-3 mx-auto text-plasma" strokeWidth={2} />
             <h2 className="font-display text-xl font-700 text-plasma mb-2">AI Judge's Verdict</h2>
             <div className="badge bg-plasma/20 text-plasma border border-plasma/30 text-sm mb-4 mx-auto">
               Statement {['A','B','C'][aiVerdict?.verdict]} is the lie
@@ -74,17 +75,19 @@ export default function ObjectionPhase() {
 
           {/* Objection section */}
           <div className="card text-center" style={{ borderColor: 'rgba(245,200,66,0.2)', background: 'rgba(245,200,66,0.04)' }}>
-            <h3 className="font-display text-lg font-700 text-gold mb-2">✊ Raise an Objection?</h3>
+            <h3 className="font-display text-lg font-700 text-gold mb-2 inline-flex items-center gap-2 justify-center">
+              <Hand className="w-5 h-5" strokeWidth={2.25} /> Raise an Objection?
+            </h3>
             <p className="text-white/40 text-sm mb-4">
               If you believe the AI Judge ruled incorrectly, raise an Objection.<br />
               Players will vote to <strong className="text-neon">Sustain</strong> or <strong className="text-signal">Overrule</strong> — this is GenLayer's <em>Optimistic Democracy</em> in action.
             </p>
             {myId !== deceiver?.id && (
               <button
-                className="btn btn-gold"
+                className="btn btn-gold inline-flex items-center gap-2"
                 onClick={() => raiseObjection(myId)}
               >
-                ✊ I Object!
+                <Hand className="w-4 h-4" strokeWidth={2.25} /> I Object!
               </button>
             )}
             {myId === deceiver?.id && (
@@ -102,7 +105,7 @@ export default function ObjectionPhase() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-6 animate-slide-up">
       <div className="w-full max-w-lg">
         <div className="card mb-6 text-center" style={{ borderColor: 'rgba(245,200,66,0.3)', background: 'rgba(245,200,66,0.05)' }}>
-          <div className="text-4xl mb-2">⚖️</div>
+          <Scale className="w-10 h-10 mb-2 mx-auto text-gold" strokeWidth={2} />
           <h2 className="font-display text-2xl font-700 text-gold mb-2">Objection Raised!</h2>
           <p className="text-white/50 text-sm">
             <span style={{ color: objector?.color }}>{objector?.name}</span> has objected to the AI's verdict.
@@ -127,7 +130,7 @@ export default function ObjectionPhase() {
               className="btn btn-neon flex-col py-6 text-base h-auto"
               onClick={() => castObjectionVote(myId, 'sustain')}
             >
-              <span className="text-2xl mb-1">✅</span>
+              <Check className="w-7 h-7 mb-1" strokeWidth={2.25} />
               <span className="font-700">Sustain</span>
               <span className="text-black/60 text-xs font-body font-400">AI was wrong</span>
             </button>
@@ -135,7 +138,7 @@ export default function ObjectionPhase() {
               className="btn btn-ghost flex-col py-6 text-base h-auto border-signal/30 hover:border-signal/60"
               onClick={() => castObjectionVote(myId, 'overrule')}
             >
-              <span className="text-2xl mb-1">❌</span>
+              <XIcon className="w-7 h-7 mb-1 text-signal" strokeWidth={2.25} />
               <span className="font-700">Overrule</span>
               <span className="text-white/40 text-xs font-body font-400">AI was right</span>
             </button>
@@ -144,8 +147,10 @@ export default function ObjectionPhase() {
 
         {myObjVote && (
           <div className={`card text-center mb-4 ${myObjVote === 'sustain' ? 'border-neon/30 bg-neon/5' : 'border-signal/30 bg-signal/5'}`}>
-            <p className={`font-600 ${myObjVote === 'sustain' ? 'text-neon' : 'text-signal'}`}>
-              You voted to {myObjVote === 'sustain' ? '✅ Sustain' : '❌ Overrule'}
+            <p className={`font-600 inline-flex items-center gap-1.5 justify-center ${myObjVote === 'sustain' ? 'text-neon' : 'text-signal'}`}>
+              You voted to {myObjVote === 'sustain'
+                ? <><Check className="w-4 h-4" /> Sustain</>
+                : <><XIcon className="w-4 h-4" /> Overrule</>}
             </p>
           </div>
         )}
