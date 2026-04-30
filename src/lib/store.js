@@ -34,6 +34,8 @@ import {
   subscribeTx,
   parseGen,
 } from './genlayer'
+import { getProfile } from './profile'
+import { rememberJoinedRoom } from './joinedRooms'
 
 // ── Phase constants — must match the contract's PHASE_* string literals ─────
 export const PHASES = {
@@ -80,7 +82,7 @@ function mapPlayers(state) {
     return {
       id:       addr,
       name:     rec.name || addr.slice(0, 6),
-      avatar:   rec.avatar || '🦊',
+      avatar:   rec.avatar || '',
       color:    rec.color || '#a259ff',
       xp:       Number(rec.xp || 0),
       level:    Number(rec.level || 1),
@@ -434,11 +436,16 @@ const useGameStore = create((set, get) => ({
    * @param {bigint} [opts.entryFeeWei=0n]   Wei each player pays to join.
    * @param {number} [opts.maxRounds=3]      Total rounds in the game.
    */
-    createRoom: async (name, opts = {}) => {
+    createRoom: async (rawName, opts = {}) => {
     if (get().loading) return
     const me = norm(myAddress())
     if (!me) {
       pushToast('error', 'Connect your wallet first to create a room')
+      return
+    }
+    const name = (rawName || getProfile().name || '').trim()
+    if (!name) {
+      pushToast('error', 'Set a player name in your profile first')
       return
     }
     set({ loading: true, chatMessages: [] })
@@ -454,6 +461,7 @@ const useGameStore = create((set, get) => ({
         entryFeeWei,
       })
       rememberRoom(addr)
+      rememberJoinedRoom(addr, { isHost: true, label: 'Your room' })
       // Seed the store with what we already know about the freshly-deployed
       // contract so the Lobby renders with the correct entry fee / round count
       // immediately, instead of flashing default 0-GEN "free-play" copy until
@@ -484,17 +492,23 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-    joinRoom: async (code, name) => {
+    joinRoom: async (code, rawName) => {
     if (get().loading) return
     const me = norm(myAddress())
     if (!me) {
       pushToast('error', 'Connect your wallet first to join a room')
       return
     }
+    const name = (rawName || getProfile().name || '').trim()
+    if (!name) {
+      pushToast('error', 'Set a player name in your profile first')
+      return
+    }
     set({ loading: true, chatMessages: [] })
     const addr = code.trim()
     set({ roomCode: addr, myId: me })
     rememberRoom(addr)
+    rememberJoinedRoom(addr)
     try {
       const raw = await readView(addr, 'get_state')
       const parsed = parseContractPayload(raw) || {}
