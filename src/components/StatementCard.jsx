@@ -1,4 +1,5 @@
 import React from 'react'
+import { Drama, Bot, Eye } from 'lucide-react'
 
 export default function StatementCard({
   index,
@@ -71,18 +72,18 @@ export default function StatementCard({
           {revealed && (
             <div className="mt-3 flex items-center flex-wrap gap-2">
               {isLie && (
-                <span className="badge bg-signal/20 text-signal border border-signal/30">
-                  🎭 THE LIE
+                <span className="badge bg-signal/20 text-signal border border-signal/30 inline-flex items-center gap-1">
+                  <Drama className="w-3 h-3" /> THE LIE
                 </span>
               )}
               {aiPicked && (
-                <span className="badge bg-plasma/20 text-plasma border border-plasma/30">
-                  🤖 AI PICKED
+                <span className="badge bg-plasma/20 text-plasma border border-plasma/30 inline-flex items-center gap-1">
+                  <Bot className="w-3 h-3" /> AI PICKED
                 </span>
               )}
               {playerVoted && (
-                <span className="badge bg-ice/20 text-ice border border-ice/30">
-                  👁️ YOU VOTED
+                <span className="badge bg-ice/20 text-ice border border-ice/30 inline-flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> YOU VOTED
                 </span>
               )}
               <span className="badge bg-white/5 text-white/40 border border-white/10 font-mono">
