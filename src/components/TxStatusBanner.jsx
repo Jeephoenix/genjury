@@ -66,7 +66,7 @@ export default function TxStatusBanner() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[80] w-[min(92vw,360px)] animate-slide-up"
+      className="fixed bottom-[5.5rem] right-4 md:bottom-4 z-[80] w-[min(92vw,360px)] animate-slide-up"
       role="status"
       aria-live="polite"
     >
