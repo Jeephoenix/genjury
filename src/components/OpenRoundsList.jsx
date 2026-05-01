@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Users, Trophy, RefreshCw, X, Globe, Clock } from 'lucide-react'
+import { Users, Trophy, RefreshCw, X, Globe, Clock, Share2, Check, Link } from 'lucide-react'
 import useGameStore from '../lib/store'
 import {
   listJoinedRooms,
@@ -12,6 +12,17 @@ import {
   isWalletConnected,
   hasContractAddress,
 } from '../lib/genlayer'
+
+// Build a one-tap invite URL that deep-links straight into the join flow for
+// a given room code. MistrialPage already handles the ?join=CODE query param.
+function buildInviteUrl(code) {
+  if (typeof window === 'undefined' || !code) return ''
+  const u = new URL(window.location.href)
+  u.search = ''
+  u.hash = ''
+  u.searchParams.set('join', code)
+  return u.toString()
+}
 
 // Live courthouse: shows every open case from the contract (across ALL hosts),
 // and merges in your personally-tracked cases (joined rooms registry) so they
@@ -27,6 +38,7 @@ export default function OpenRoundsList({
   const [myRooms, setMyRooms] = useState(() => listJoinedRooms())
   const [previews, setPreviews] = useState({})  // { code: previewObj | 'loading' | 'error' }
   const [tick, setTick] = useState(0)
+  const [copiedCode, setCopiedCode] = useState(null) // which card's link was just copied
 
   const previewRoom   = useGameStore((s) => s.previewRoom)
   const joinRoom      = useGameStore((s) => s.joinRoom)
@@ -136,12 +148,37 @@ export default function OpenRoundsList({
   const handleJoin = (room) => {
     if (loading) return
     if (!isWalletConnected()) { setOpenWallet(true); return }
-    // If the user already paid the fee in this room, re-enter without paying.
     const myAlready = myRooms.find((r) => r.code === room.code)
     if (myAlready) {
       enterRoom(room.code)
     } else {
       joinRoom(room.code)
+    }
+  }
+
+  // Share / copy invite link for a room. Tries the native share sheet first
+  // (ideal on mobile), falls back to clipboard copy.
+  const handleShare = async (code) => {
+    const url = buildInviteUrl(code)
+    if (!url) return
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join Genjury case ${code}`,
+          text: `Take a seat in Genjury case ${code}:`,
+          url,
+        })
+        return
+      } catch {
+        // User dismissed the share sheet — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedCode(code)
+      setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 2500)
+    } catch {
+      // Clipboard unavailable — nothing to do.
     }
   }
 
@@ -170,8 +207,6 @@ export default function OpenRoundsList({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {mergedRooms.map((r) => {
-            // For contract-discovered rooms, the merged object IS the preview.
-            // For local-only rooms, look up the deferred preview.
             const live = r.source === 'contract'
               ? r
               : (typeof previews[r.code] === 'object' && previews[r.code]) || null
@@ -185,10 +220,15 @@ export default function OpenRoundsList({
             const pool = live?.prizePoolWei ?? 0n
             const players = live ? `${live.playerCount}/${live.maxPlayers || '?'}` : '—'
 
-            // A player who already joined this room (tracked locally) can
-            // re-enter even if the game has started. Non-participants are locked out.
-            const isMyRoom = !!myRooms.find((mr) => mr.code === r.code)
+            const isMyRoom  = !!myRooms.find((mr) => mr.code === r.code)
             const canRejoin = !playable && !isError && isMyRoom
+
+            // Show the invite-share button on any joinable (lobby) room, and
+            // also on rooms where the user is already seated (they can invite
+            // others to future rounds by sharing the code).
+            const showShare = (playable || isMyRoom) && !isError
+
+            const wasCopied = copiedCode === r.code
 
             return (
               <div
@@ -199,6 +239,7 @@ export default function OpenRoundsList({
                     : 'border-white/10 bg-white/[0.03]'
                 }`}
               >
+                {/* Remove button — only for locally-tracked rooms */}
                 {r.source === 'local' && (
                   <button
                     onClick={() => forgetJoinedRoom(r.code)}
@@ -211,7 +252,7 @@ export default function OpenRoundsList({
                 )}
 
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className={`w-2 h-2 rounded-full ${
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     isError ? 'bg-white/20'
                     : playable ? 'bg-neon animate-pulse'
                     : isLoading ? 'bg-white/30'
@@ -224,6 +265,24 @@ export default function OpenRoundsList({
                     <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">
                       YOUR CASE
                     </span>
+                  )}
+
+                  {/* Invite / share button — right-aligned, only when relevant */}
+                  {showShare && (
+                    <button
+                      onClick={() => handleShare(r.code)}
+                      title={wasCopied ? 'Link copied!' : 'Copy invite link'}
+                      className={`ml-auto flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-mono transition-all ${
+                        wasCopied
+                          ? 'border-neon/50 bg-neon/10 text-neon'
+                          : 'border-white/15 bg-white/[0.04] text-white/45 hover:text-white hover:border-white/30'
+                      }`}
+                    >
+                      {wasCopied
+                        ? <><Check className="w-3 h-3" /> Copied!</>
+                        : <><Share2 className="w-3 h-3" /> Invite</>
+                      }
+                    </button>
                   )}
                 </div>
 
@@ -253,10 +312,17 @@ export default function OpenRoundsList({
                   } />
                 </div>
 
+                {/* Invite link row — shown below the stats for lobby rooms */}
+                {playable && (
+                  <InviteLinkBar code={r.code} wasCopied={wasCopied} onShare={handleShare} />
+                )}
+
                 <button
                   onClick={() => handleJoin(r)}
                   disabled={loading || isError || (!playable && !canRejoin)}
                   className={`w-full py-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                    playable ? 'mt-2' : ''
+                  } ${
                     isError
                       ? 'bg-white/5 text-white/35 cursor-not-allowed'
                       : canRejoin
@@ -287,6 +353,33 @@ export default function OpenRoundsList({
   )
 }
 
+// ── Invite link bar ──────────────────────────────────────────────────────────
+// Shown beneath the stats grid for lobby-phase rooms. Displays the shareable
+// URL in a read-only input with a copy/share button so players can grab it
+// without needing to be inside the room.
+function InviteLinkBar({ code, wasCopied, onShare }) {
+  const url = buildInviteUrl(code)
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 mb-0">
+      <Link className="w-3 h-3 text-white/30 flex-shrink-0" />
+      <span className="flex-1 font-mono text-[10px] text-white/40 truncate select-all" title={url}>
+        {url || `…?join=${code}`}
+      </span>
+      <button
+        onClick={() => onShare(code)}
+        className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-mono transition-all ${
+          wasCopied
+            ? 'border-neon/40 bg-neon/10 text-neon'
+            : 'border-white/15 bg-white/[0.04] text-white/45 hover:text-white hover:border-white/25'
+        }`}
+      >
+        {wasCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Share2 className="w-3 h-3" /> Share</>}
+      </button>
+    </div>
+  )
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function prettyPhase(p) {
   switch (p) {
     case 'lobby':           return 'Pre-trial'
