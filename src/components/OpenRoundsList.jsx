@@ -185,10 +185,19 @@ export default function OpenRoundsList({
             const pool = live?.prizePoolWei ?? 0n
             const players = live ? `${live.playerCount}/${live.maxPlayers || '?'}` : '—'
 
+            // A player who already joined this room (tracked locally) can
+            // re-enter even if the game has started. Non-participants are locked out.
+            const isMyRoom = !!myRooms.find((mr) => mr.code === r.code)
+            const canRejoin = !playable && !isError && isMyRoom
+
             return (
               <div
                 key={r.code}
-                className="relative rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:border-white/20 transition-colors"
+                className={`relative rounded-xl border p-4 hover:border-white/20 transition-colors ${
+                  canRejoin
+                    ? 'border-plasma/30 bg-plasma/[0.04]'
+                    : 'border-white/10 bg-white/[0.03]'
+                }`}
               >
                 {r.source === 'local' && (
                   <button
@@ -226,7 +235,7 @@ export default function OpenRoundsList({
                   <Cell label="Phase" value={
                     <span className="capitalize text-white/85 text-xs inline-flex items-center justify-center gap-1">
                       {playable
-                        ? <span className="text-neon">In session</span>
+                        ? <span className="text-neon">Open · Pre-trial</span>
                         : phase === 'unreachable'
                           ? <span className="text-white/40">—</span>
                           : <><Clock className="w-3 h-3 text-signal/70" /> <span className="text-signal/85">{prettyPhase(phase)}</span></>}
@@ -246,24 +255,28 @@ export default function OpenRoundsList({
 
                 <button
                   onClick={() => handleJoin(r)}
-                  disabled={loading || isError || !playable}
+                  disabled={loading || isError || (!playable && !canRejoin)}
                   className={`w-full py-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
                     isError
                       ? 'bg-white/5 text-white/35 cursor-not-allowed'
-                      : playable
-                        ? 'bg-neon/15 text-neon border border-neon/40 hover:bg-neon/25'
-                        : 'bg-white/5 text-white/45 border border-white/10 cursor-not-allowed'
+                      : canRejoin
+                        ? 'bg-plasma/15 text-plasma border border-plasma/40 hover:bg-plasma/25'
+                        : playable
+                          ? 'bg-neon/15 text-neon border border-neon/40 hover:bg-neon/25'
+                          : 'bg-white/5 text-white/35 border border-white/10 cursor-not-allowed'
                   }`}
                 >
                   {isError
                     ? 'Unreachable'
                     : isLoading
                       ? 'Loading…'
-                      : !playable
-                        ? 'Trial in session'
-                        : fee > 0n
-                          ? `Take a seat · ${formatGen(fee, 4)} ${symbol}`
-                          : 'Take a seat'}
+                      : canRejoin
+                        ? 'Rejoin your seat'
+                        : !playable
+                          ? 'Trial in session — locked'
+                          : fee > 0n
+                            ? `Take a seat · ${formatGen(fee, 4)} ${symbol}`
+                            : 'Take a seat'}
                 </button>
               </div>
             )
