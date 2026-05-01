@@ -14,6 +14,7 @@ import {
   Wallet,
   Trophy,
   Building2,
+  UserPlus,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import MistrialMark from '../components/MistrialMark'
@@ -39,6 +40,7 @@ export default function MistrialPage() {
   const [showCreate, setShowCreate]     = useState(false)
   const [showJoinByCode, setShowJoinByCode] = useState(false)
   const [joinCodeInput, setJoinCodeInput]   = useState('')
+  const [invitedCode, setInvitedCode]       = useState(null) // code from ?join= deep link
 
   // Create-room form
   const [entryFee, setEntryFee]   = useState('0.01')
@@ -74,7 +76,11 @@ export default function MistrialPage() {
     return () => { cancelled = true }
   }, [])
 
-  // Deep-link: ?join=ABCDEF → preselect the join-by-code form.
+  // Deep-link: ?join=ABCDEF
+  // If the user is already connected + has a profile name, auto-trigger the
+  // join so they land directly in the lobby with one tap. Otherwise show a
+  // prominent invite banner and pre-fill the join form so they can connect
+  // their wallet first and then join with a single click.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
@@ -82,16 +88,30 @@ export default function MistrialPage() {
     if (joinParam) {
       const code = normalizeRoomCode(joinParam)
       if (isValidRoomCode(code)) {
-        setJoinCodeInput(code)
-        setShowJoinByCode(true)
-        rememberJoinedRoom(code)
+        // Strip the param from the address bar immediately.
+        params.delete('join')
+        const qs = params.toString()
+        window.history.replaceState({}, '',
+          window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
+
+        const readyToJoin =
+          isWalletConnected() &&
+          hasContractAddress() &&
+          getProfile().name
+
+        if (readyToJoin) {
+          // All set — jump straight into the room.
+          joinRoom(code)
+        } else {
+          // Not yet ready — show the invite banner and pre-fill the form.
+          setInvitedCode(code)
+          setJoinCodeInput(code)
+          setShowJoinByCode(true)
+          rememberJoinedRoom(code)
+        }
       }
-      params.delete('join')
-      const qs = params.toString()
-      window.history.replaceState({}, '',
-        window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
     }
-  }, [])
+  }, [joinRoom])
 
   const symbol  = getChainNativeSymbol()
   const profile = getProfile()
@@ -193,6 +213,36 @@ export default function MistrialPage() {
                 the project's environment.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite banner — shown when the user arrived via a ?join= deep link
+          but couldn't be auto-joined (no wallet / no profile yet). */}
+      {invitedCode && (
+        <div className="card glass border-neon/30 bg-neon/[0.04] mb-5 animate-slide-up">
+          <div className="flex items-start gap-3">
+            <UserPlus className="w-5 h-5 text-neon mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-display font-700 text-white">
+                You've been invited to case{' '}
+                <span className="text-neon font-mono tracking-widest">{invitedCode}</span>
+              </h3>
+              <p className="text-white/60 text-sm mt-1">
+                {!connected
+                  ? 'Connect your wallet and set a player name, then click "Take a seat" in the join form below.'
+                  : !getProfile().name
+                    ? 'Set a player name in your profile, then click "Take a seat" in the join form below.'
+                    : 'Click "Take a seat" in the join form below to enter the courtroom.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setInvitedCode(null)}
+              className="text-white/30 hover:text-white/70 flex-shrink-0 transition-colors"
+              aria-label="Dismiss"
+            >
+              <span className="text-lg leading-none">×</span>
+            </button>
           </div>
         </div>
       )}
