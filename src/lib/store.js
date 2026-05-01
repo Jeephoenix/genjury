@@ -22,6 +22,8 @@ import {
   subscribeTx,
   isValidRoomCode,
   normalizeRoomCode,
+  formatGen,
+  getChainNativeSymbol,
 } from './genlayer'
 import { getProfile } from './profile'
 import { rememberJoinedRoom, forgetJoinedRoom } from './joinedRooms'
@@ -57,6 +59,13 @@ function safeBigInt(v) {
   if (v === undefined || v === null || v === '') return 0n
   if (typeof v === 'bigint') return v
   try { return BigInt(v) } catch { return 0n }
+}
+
+// Returns true when a blockchain transaction is already in-flight, blocking
+// additional calls until the current one resolves or fails.
+function isTxBusy(get) {
+  const s = get().pendingTx?.status
+  return s === 'awaiting_signature' || s === 'pending'
 }
 
 function mapPlayers(state) {
@@ -195,33 +204,19 @@ async function maybeAutoAdvance(get, s) {
 
   const phase = s?.phase
   const code = state.roomCode
+  // Only auto-advance through AI judging — the host triggers run_ai_judge
+  // automatically so the rest of the players don't have to wait. The reveal →
+  // next_round transition is intentionally left to a manual button click so
+  // the winner has time to review results and claim rewards.
+  if (phase !== 'ai_judging' || s?.aiJudged) return
   try {
-    if (phase === 'ai_judging' && !s?.aiJudged) {
-      _autoAdvancing = true
-      await callMethod(requireContractAddress(), 'run_ai_judge', [code], 0n,
-        'Summon the AI Judge')
-    } else if (phase === 'reveal') {
-      _autoAdvancing = true
-      setTimeout(async () => {
-        const cur = useGameStore.getState()
-        if (cur.phase === 'reveal' && cur.roomCode === code) {
-          try {
-            await callMethod(requireContractAddress(), 'next_round', [code], 0n,
-              'Advance to next round')
-          } catch (e) {
-            console.warn('[genjury] auto next_round:', e?.message || e)
-          }
-        }
-        _autoAdvancing = false
-      }, 6000)
-      return
-    } else {
-      return
-    }
+    _autoAdvancing = true
+    await callMethod(requireContractAddress(), 'run_ai_judge', [code], 0n,
+      'Summon the AI Judge')
   } catch (e) {
     console.warn('[genjury] auto-advance:', e?.message || e)
   } finally {
-    if (phase !== 'reveal') _autoAdvancing = false
+    _autoAdvancing = false
   }
 }
 
@@ -482,12 +477,13 @@ const useGameStore = create((set, get) => ({
       const maxRounds  = Math.max(1, Number(opts.maxRounds  ?? 3))
       const maxPlayers = Math.max(2, Math.min(12, Number(opts.maxPlayers ?? 8)))
 
+      const sym = getChainNativeSymbol()
       const { receipt } = await callMethodForResult(
         requireContractAddress(),
         'create_room',
         [name, maxRounds, entryFeeWei, maxPlayers],
         entryFeeWei,
-        entryFeeWei > 0n ? `Open new room (stake ${entryFeeWei.toString()} wei)` : 'Open new room',
+        entryFeeWei > 0n ? `Open new room (stake ${formatGen(entryFeeWei)} ${sym})` : 'Open new room',
       )
 
       const code = extractReturnedCode(receipt)
@@ -565,12 +561,13 @@ const useGameStore = create((set, get) => ({
       applyContractState(get, parsed)
       startPolling(get)
       if (!alreadyIn) {
+        const sym = getChainNativeSymbol()
         await callMethod(
           requireContractAddress(),
           'join',
           [code, name],
           fee,
-          fee > 0n ? `Take seat in ${code} (stake fee)` : `Take seat in ${code}`,
+          fee > 0n ? `Take seat in ${code} (stake ${formatGen(fee)} ${sym})` : `Take seat in ${code}`,
         )
       }
       pushToast('success', `You're seated in ${code}`)
@@ -630,7 +627,7 @@ const useGameStore = create((set, get) => ({
 
   startGame: async () => {
     const { roomCode, phase } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       if (phase === PHASES.SCOREBOARD) {
         await callMethod(requireContractAddress(), 'reset_to_lobby', [roomCode], 0n, 'Reset case to lobby')
@@ -645,7 +642,7 @@ const useGameStore = create((set, get) => ({
   // ── Host admin ────────────────────────────────────────────────────────────
   setEntryFee: async (humanGenStr) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     let wei
     try {
       const { parseGen } = await import('./genlayer')
@@ -665,7 +662,7 @@ const useGameStore = create((set, get) => ({
 
   setMaxRounds: async (n) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     const rounds = Math.floor(Number(n))
     if (!Number.isFinite(rounds) || rounds < 1 || rounds > 50) {
       pushToast('error', 'Rounds must be a whole number between 1 and 50')
@@ -682,7 +679,7 @@ const useGameStore = create((set, get) => ({
 
   setMaxPlayers: async (n) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     const cap = Math.floor(Number(n))
     if (!Number.isFinite(cap) || cap < 2 || cap > 12) {
       pushToast('error', 'Player cap must be between 2 and 12')
@@ -699,7 +696,7 @@ const useGameStore = create((set, get) => ({
 
   kickPlayer: async (addr) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     const target = (addr || '').trim().toLowerCase()
     if (!/^0x[0-9a-f]{40}$/.test(target)) {
       pushToast('error', 'Invalid player address')
@@ -716,7 +713,7 @@ const useGameStore = create((set, get) => ({
 
   transferHost: async (addr) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     const target = (addr || '').trim().toLowerCase()
     if (!/^0x[0-9a-f]{40}$/.test(target)) {
       pushToast('error', 'New host must be a valid 0x… address')
@@ -733,7 +730,7 @@ const useGameStore = create((set, get) => ({
 
   resetToLobby: async () => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'reset_to_lobby', [roomCode], 0n, 'Reset case to lobby')
       pushToast('success', 'Case reset to lobby')
@@ -754,6 +751,50 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  // ── Platform owner admin ──────────────────────────────────────────────────
+  claimPlatformFees: async () => {
+    if (!hasContractAddress()) return
+    try {
+      await callMethod(requireContractAddress(), 'claim_platform_fees', [], 0n, 'Claim platform fees')
+      pushToast('success', 'Platform fees swept — funds in your wallet')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not claim platform fees')
+    }
+  },
+
+  setPlatformFeeBps: async (pctStr) => {
+    if (!hasContractAddress()) return
+    const pct = parseFloat(pctStr)
+    if (isNaN(pct) || pct < 0 || pct > 20) {
+      pushToast('error', 'Fee must be between 0% and 20%')
+      return
+    }
+    const bps = Math.round(pct * 100)
+    try {
+      await callMethod(requireContractAddress(), 'set_platform_fee_bps', [bps], 0n, 'Set platform fee')
+      pushToast('success', `Platform fee set to ${pct.toFixed(2)}%`)
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not set platform fee')
+    }
+  },
+
+  setPlatformOwner: async (newOwner) => {
+    if (!hasContractAddress()) return
+    if (!newOwner || !newOwner.startsWith('0x')) {
+      pushToast('error', 'Enter a valid 0x… wallet address')
+      return
+    }
+    try {
+      await callMethod(requireContractAddress(), 'set_platform_owner', [newOwner], 0n, 'Transfer platform ownership')
+      pushToast('success', 'Platform ownership transferred')
+      refreshState(get)
+    } catch (e) {
+      pushToast('error', e?.shortMessage || e?.message || 'Could not transfer ownership')
+    }
+  },
+
   // ── Writing ───────────────────────────────────────────────────────────────
   setStatement: (i, val) => {
     const next = [...get().statements]
@@ -765,7 +806,7 @@ const useGameStore = create((set, get) => ({
 
   submitStatements: async () => {
     const { roomCode, statements, lieIndex } = get()
-    if (!roomCode || lieIndex === null) return
+    if (!roomCode || lieIndex === null || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'submit_statements', [
         roomCode,
@@ -784,7 +825,7 @@ const useGameStore = create((set, get) => ({
   // ── Voting ────────────────────────────────────────────────────────────────
   castVote: async (_playerId, idx, conf) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     const confPct = Math.max(0, Math.min(100, Math.round(Number(conf) * 100)))
     try {
       await callMethod(requireContractAddress(), 'cast_vote', [roomCode, Number(idx), confPct], 0n, 'Render verdict')
@@ -796,7 +837,7 @@ const useGameStore = create((set, get) => ({
 
   proceedToAIJudge: async () => {
     const { roomCode, phase } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       if (phase === PHASES.VOTING) {
         try { await callMethod(requireContractAddress(), 'force_close_voting', [roomCode], 0n, 'Close jury deliberation') } catch {}
@@ -812,7 +853,7 @@ const useGameStore = create((set, get) => ({
   // ── Objection ─────────────────────────────────────────────────────────────
   raiseObjection: async () => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'raise_objection', [roomCode], 0n, 'Raise objection')
       refreshState(get)
@@ -823,7 +864,7 @@ const useGameStore = create((set, get) => ({
 
   castObjectionVote: async (_playerId, stance) => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'cast_objection_vote', [roomCode, stance], 0n, 'Vote on objection')
       refreshState(get)
@@ -834,7 +875,7 @@ const useGameStore = create((set, get) => ({
 
   finalizeRound: async () => {
     const { roomCode, phase } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       if (phase === PHASES.OBJECTION) {
         await callMethod(requireContractAddress(), 'skip_objection', [roomCode], 0n, 'Skip objection window')
@@ -850,7 +891,7 @@ const useGameStore = create((set, get) => ({
 
   nextRound: async () => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'next_round', [roomCode], 0n, 'Advance to next round')
       refreshState(get)
@@ -861,7 +902,7 @@ const useGameStore = create((set, get) => ({
 
   claimPrize: async () => {
     const { roomCode } = get()
-    if (!roomCode) return
+    if (!roomCode || isTxBusy(get)) return
     try {
       await callMethod(requireContractAddress(), 'claim_prize', [roomCode], 0n, 'Claim verdict winnings')
       pushToast('success', 'Prize claimed — funds in your wallet')
