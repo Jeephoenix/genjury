@@ -1,15 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   UserRound,
   Wallet,
   ShieldCheck,
-  Copy,
-  ExternalLink,
   Activity,
   Trophy,
   Flame,
   Sparkles,
-  Brain,
   Lock,
   Pencil,
   Image as ImageIcon,
@@ -21,8 +18,6 @@ import {
   myAddress,
   isWalletConnected,
   subscribeWallet,
-  getNetworkInfo,
-  explorerAddressUrl,
   readContractView,
   hasContractAddress,
 } from '../lib/genlayer'
@@ -35,7 +30,6 @@ import {
 import {
   listJoinedRooms,
   subscribeJoinedRooms,
-  forgetJoinedRoom,
 } from '../lib/joinedRooms'
 import Avatar from '../components/Avatar'
 
@@ -57,15 +51,10 @@ export default function ProfilePage() {
 
   const connected = isWalletConnected()
   const address   = myAddress()
-  const net       = getNetworkInfo()
   const profile   = getProfile()
 
-  // ── Aggregate stats from chain ────────────────────────────────────────────
-  // Walk every room the player has joined and pull `get_state` to find that
-  // address in the players map. Sum xp / wins / games. This gives a real
-  // on-chain reputation snapshot without inventing achievements.
   const [stats, setStats] = useState({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
-  const [history, setHistory] = useState([])  // [{code, phase, players, fee, pool, role}]
+  const [history, setHistory] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -122,16 +111,6 @@ export default function ProfilePage() {
 
   const winRate = stats.games > 0 ? Math.round((stats.wins / stats.games) * 100) : 0
 
-  const copy = (text, label) => {
-    if (!text) return
-    try {
-      navigator.clipboard?.writeText(text)
-      addToast(label, 'success')
-    } catch {
-      addToast('Copy failed', 'error')
-    }
-  }
-
   const handleResume = (code) => {
     if (loading) return
     if (!isWalletConnected()) { setOpenWallet(true); return }
@@ -187,91 +166,38 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Stat grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 mb-8">
-        <BigStat icon={Trophy}   label="Wins"     value={connected ? String(stats.wins)         : '—'} accent="gold"   />
-        <BigStat icon={Brain}    label="Win rate" value={connected ? `${winRate}%`              : '—'} accent="neon"   />
-        <BigStat icon={Activity} label="Games"    value={connected ? String(stats.games)        : '—'} accent="ice"    />
-        <BigStat icon={Flame}    label="XP"       value={connected ? String(stats.xp)           : '—'} accent="signal" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Wallet card */}
-        <div className="card glass lg:col-span-1 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display font-700 text-base text-white">Wallet</h2>
-            <span className="badge bg-ice/15 text-ice border border-ice/30 text-[10px] tracking-widest">
-              {net.label}
-            </span>
-          </div>
-          {connected ? (
-            <>
-              <div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-1.5">
-                  Address
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded-lg bg-white/5 border border-white/10 px-2.5 py-2 font-mono text-[11px] text-white/85 break-all">
-                    {address}
-                  </code>
-                  <button
-                    onClick={() => copy(address, 'Address copied')}
-                    className="btn btn-ghost px-2.5 py-2 text-xs"
-                    aria-label="Copy address"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              {net.explorer && (
-                <a
-                  href={explorerAddressUrl(address)}
-                  target="_blank"
-                  rel="noopener"
-                  className="inline-flex items-center gap-1.5 text-xs text-plasma/80 hover:text-plasma"
-                >
-                  View on explorer <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </>
-          ) : (
-            <p className="text-white/50 text-sm">Connect to view your wallet details and balance.</p>
-          )}
+      {/* On-chain reputation */}
+      <div className="card glass mt-6 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display font-700 text-base text-white">On-chain reputation</h2>
+          <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[10px] tracking-widest">
+            Level {connected ? stats.level : '—'}
+          </span>
         </div>
-
-        {/* Reputation summary */}
-        <div className="card glass lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-700 text-base text-white">On-chain reputation</h2>
-            <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[10px] tracking-widest">
-              Level {connected ? stats.level : '—'}
-            </span>
+        {!connected ? (
+          <p className="text-white/55 text-sm">Connect a wallet to see your reputation.</p>
+        ) : stats.loading && stats.games === 0 ? (
+          <p className="text-white/55 text-sm">Reading on-chain stats…</p>
+        ) : stats.games === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+            <Sparkles className="w-5 h-5 text-plasma mx-auto mb-2" />
+            <div className="text-white/70 text-sm">No on-chain games yet.</div>
+            <div className="text-white/45 text-xs mt-1">Join a room to start building reputation.</div>
+            <button
+              onClick={() => setActiveTab('games')}
+              className="mt-3 inline-flex items-center gap-1.5 text-plasma text-xs font-semibold"
+            >
+              Browse open rounds <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-          {!connected ? (
-            <p className="text-white/55 text-sm">Connect a wallet to see your reputation.</p>
-          ) : stats.loading && stats.games === 0 ? (
-            <p className="text-white/55 text-sm">Reading on-chain stats…</p>
-          ) : stats.games === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center">
-              <Sparkles className="w-5 h-5 text-plasma mx-auto mb-2" />
-              <div className="text-white/70 text-sm">No on-chain games yet.</div>
-              <div className="text-white/45 text-xs mt-1">Join a room to start building reputation.</div>
-              <button
-                onClick={() => setActiveTab('games')}
-                className="mt-3 inline-flex items-center gap-1.5 text-plasma text-xs font-semibold"
-              >
-                Browse open rounds <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Mini label="Games joined" value={stats.games} icon={Activity} />
-              <Mini label="Wins"         value={stats.wins} icon={Trophy} accent="gold" />
-              <Mini label="Total XP"     value={stats.xp} icon={Flame} accent="signal" />
-              <Mini label="Win rate"     value={`${winRate}%`} icon={ShieldCheck} accent="neon" />
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Mini label="Games joined" value={stats.games} icon={Activity} />
+            <Mini label="Wins"         value={stats.wins} icon={Trophy} accent="gold" />
+            <Mini label="Total XP"     value={stats.xp} icon={Flame} accent="signal" />
+            <Mini label="Win rate"     value={`${winRate}%`} icon={ShieldCheck} accent="neon" />
+          </div>
+        )}
       </div>
 
       {/* Game history (real, from chain) */}
@@ -333,23 +259,10 @@ export default function ProfilePage() {
 }
 
 const ACCENTS = {
-  gold:   { ring: 'border-gold/30',   text: 'text-gold'   },
-  neon:   { ring: 'border-neon/30',   text: 'text-neon'   },
-  ice:    { ring: 'border-ice/30',    text: 'text-ice'    },
-  signal: { ring: 'border-signal/30', text: 'text-signal' },
-}
-
-function BigStat({ icon: Icon, label, value, accent = 'neon' }) {
-  const a = ACCENTS[accent]
-  return (
-    <div className={`card glass ${a.ring}`}>
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{label}</div>
-        <Icon className={`w-4 h-4 ${a.text}`} strokeWidth={2} />
-      </div>
-      <div className="font-display font-800 text-2xl text-white mt-2 tracking-tight">{value}</div>
-    </div>
-  )
+  gold:   { text: 'text-gold'   },
+  neon:   { text: 'text-neon'   },
+  ice:    { text: 'text-ice'    },
+  signal: { text: 'text-signal' },
 }
 
 function Mini({ label, value, icon: Icon, accent = 'ice' }) {
@@ -365,7 +278,6 @@ function Mini({ label, value, icon: Icon, accent = 'ice' }) {
   )
 }
 
-// ── Profile editor (name + avatar) ────────────────────────────────────────
 function ProfileEditor({ profile }) {
   const [name, setName] = useState(profile.name)
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl || '')
@@ -401,7 +313,6 @@ function ProfileEditor({ profile }) {
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = String(reader.result || '')
-      // Downscale large images to keep localStorage usage reasonable.
       downscaleImage(dataUrl, 256).then((scaled) => setAvatarUrl(scaled))
     }
     reader.readAsDataURL(file)
@@ -481,7 +392,6 @@ function ProfileEditor({ profile }) {
   )
 }
 
-// Crop the image to a square + downscale so we don't blow out localStorage.
 function downscaleImage(dataUrl, size) {
   return new Promise((resolve) => {
     const img = new Image()
