@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import {
-  Share2, Copy, ExternalLink, Coins, Drama, Eye, Bot, Hand,
+  Share2, Copy, Coins, Drama, Eye, Bot, Hand,
   Sparkles, Trophy, Rocket, Check,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
-import { formatGen, getChainNativeSymbol, getNetworkInfo } from '../lib/genlayer'
+import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 import HostDashboard from '../components/HostDashboard'
 import PlatformOwnerPanel from '../components/PlatformOwnerPanel'
 import Avatar from '../components/Avatar'
@@ -22,14 +22,13 @@ export default function LobbyPage() {
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const symbol = getChainNativeSymbol()
-  const explorer = getNetworkInfo().explorer
 
   const me = players.find(p => p.id === myId)
   const isHost = me?.isHost
   const canStart = players.length >= 2
   const isPaid = (entryFeeWei || 0n) > 0n
 
-  // Build a one-tap join URL like https://genjury.vercel.app/?join=0x717D…AA14
+  // Build a one-tap join URL containing the room code as a query param.
   const joinUrl = (() => {
     if (!roomCode || typeof window === 'undefined') return ''
     const u = new URL(window.location.href)
@@ -71,41 +70,30 @@ export default function LobbyPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-20">
       <div className="w-full max-w-md space-y-6 animate-slide-up">
-        {/* Room Code */}
+
+        {/* Invite card */}
         <div className="card text-center">
-          <p className="text-white/40 text-xs font-mono uppercase tracking-widest mb-3">Contract Address</p>
-          <button
-            onClick={copyCode}
-            className="group font-display font-700 text-2xl text-neon text-glow-neon hover:scale-[1.02] transition-transform block mx-auto"
-            title={roomCode}
-          >
-            {roomCode ? `${roomCode.slice(0, 6)}…${roomCode.slice(-4)}` : ''}
-          </button>
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={shareLink}
               className={`btn btn-plasma text-sm px-6 inline-flex items-center gap-1.5 ${linkCopied ? 'opacity-80' : ''}`}
             >
-              {linkCopied ? <><Check className="w-4 h-4" /> Link copied!</> : <><Share2 className="w-4 h-4" /> Share Join Link</>}
+              {linkCopied
+                ? <><Check className="w-4 h-4" /> Link copied!</>
+                : <><Share2 className="w-4 h-4" /> Share Join Link</>}
             </button>
             <button
               onClick={copyCode}
               className={`btn btn-ghost text-sm px-4 inline-flex items-center gap-1.5 ${copied ? 'text-neon border-neon/30' : ''}`}
             >
-              {copied ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy Address</>}
+              {copied
+                ? <><Check className="w-4 h-4" /> Copied!</>
+                : <><Copy className="w-4 h-4" /> Copy Room Code</>}
             </button>
-            {explorer && (
-              <a
-                href={`${explorer}/address/${roomCode}`}
-                target="_blank"
-                rel="noopener"
-                className="btn btn-ghost text-sm px-4 inline-flex items-center gap-1.5"
-              >
-                <ExternalLink className="w-4 h-4" /> Explorer
-              </a>
-            )}
           </div>
-          <p className="text-white/30 text-xs mt-3">Tap “Share Join Link” to send a one-tap invite — or share just the contract address.</p>
+          <p className="text-white/30 text-xs mt-3">
+            Tap "Share Join Link" to send a one-tap invite — or share just the room code.
+          </p>
         </div>
 
         {/* Stakes */}
@@ -185,7 +173,7 @@ export default function LobbyPage() {
 
           {players.length < 2 && (
             <p className="text-white/30 text-xs text-center mt-4">
-              Need at least 2 players to start. Share the contract address with a friend.
+              Need at least 2 players to start. Share the room code with a friend.
             </p>
           )}
         </div>
