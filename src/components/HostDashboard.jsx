@@ -141,8 +141,9 @@ export default function HostDashboard() {
             {!noPlayersJoined && inLobby && (
               <p className="text-white/40 text-xs leading-relaxed">
                 Entry fee and max rounds are locked because players have already
-                paid the current fee. Use <span className="font-mono text-plasma">Reset to lobby</span>{' '}
-                below if you need to refund everyone and start over.
+                joined. Kick individual players to refund them, then adjust the
+                fee — or use <span className="font-mono text-plasma">Reset to lobby</span>{' '}
+                below to wipe the roster entirely (no refunds).
               </p>
             )}
             {!inLobby && (
