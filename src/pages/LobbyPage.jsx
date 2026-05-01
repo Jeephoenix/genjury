@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Share2, Copy, Coins, Drama, Eye, Bot, Hand,
-  Sparkles, Trophy, Rocket, Check,
+  Sparkles, Trophy, Rocket, Check, LogOut,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
@@ -14,6 +14,7 @@ export default function LobbyPage() {
   const players   = useGameStore(s => s.players)
   const myId      = useGameStore(s => s.myId)
   const startGame = useGameStore(s => s.startGame)
+  const resetGame = useGameStore(s => s.resetGame)
   const maxRounds = useGameStore(s => s.maxRounds)
   const entryFeeWei  = useGameStore(s => s.entryFeeWei)
   const prizePoolWei = useGameStore(s => s.prizePoolWei)
@@ -70,6 +71,21 @@ export default function LobbyPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-20">
       <div className="w-full max-w-md space-y-6 animate-slide-up">
+
+        {/* Leave room / back navigation */}
+        <div className="flex items-center justify-between">
+          <div className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
+            Case <span className="text-neon font-semibold">{roomCode}</span> · Lobby
+          </div>
+          <button
+            onClick={resetGame}
+            className="inline-flex items-center gap-1.5 text-white/40 hover:text-signal text-xs font-mono uppercase tracking-wider transition-colors"
+            title="Leave this room and return to the lobby"
+          >
+            <LogOut className="w-3.5 h-3.5" strokeWidth={2.25} />
+            Leave room
+          </button>
+        </div>
 
         {/* Invite card */}
         <div className="card text-center">
