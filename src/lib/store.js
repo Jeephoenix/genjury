@@ -195,6 +195,10 @@ async function refreshState(get) {
 }
 
 let _autoAdvancing = false
+// Track which room codes have already had run_ai_judge submitted so the
+// polling loop never re-triggers the wallet popup after the tx is sent.
+const _aiJudgeAttempted = new Set()
+
 async function maybeAutoAdvance(get, s) {
   if (_autoAdvancing) return
   const state = get()
@@ -209,12 +213,18 @@ async function maybeAutoAdvance(get, s) {
   // next_round transition is intentionally left to a manual button click so
   // the winner has time to review results and claim rewards.
   if (phase !== 'ai_judging' || s?.aiJudged) return
+  // Already submitted for this room — don't prompt the wallet again.
+  if (_aiJudgeAttempted.has(code)) return
   try {
     _autoAdvancing = true
+    // Mark before awaiting so concurrent polling ticks are also blocked.
+    _aiJudgeAttempted.add(code)
     await callMethod(requireContractAddress(), 'run_ai_judge', [code], 0n,
       'Summon the AI Judge')
   } catch (e) {
     console.warn('[genjury] auto-advance:', e?.message || e)
+    // Allow one retry if the tx failed (e.g. user rejected).
+    _aiJudgeAttempted.delete(code)
   } finally {
     _autoAdvancing = false
   }
