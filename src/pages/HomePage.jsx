@@ -12,8 +12,11 @@ import {
   Trophy,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
-import { getChainNativeSymbol } from '../lib/genlayer'
+import { getChainNativeSymbol, isWalletConnected } from '../lib/genlayer'
+import { listJoinedRooms } from '../lib/joinedRooms'
 import MistrialMark from '../components/MistrialMark'
+
+const REJOIN_MAX_AGE_MS = 8 * 60 * 60 * 1000 // 8 hours
 
 const HOW_IT_WORKS = [
   {
@@ -77,9 +80,19 @@ const ACCENT = {
 
 export default function HomePage() {
   const setActiveTab = useGameStore((s) => s.setActiveTab)
+  const enterRoom   = useGameStore((s) => s.enterRoom)
   const symbol = getChainNativeSymbol()
 
   const playGame = (id) => {
+    if (id === 'mistrial' && isWalletConnected()) {
+      const recent = listJoinedRooms().find(
+        (r) => Date.now() - r.lastSeenAt < REJOIN_MAX_AGE_MS,
+      )
+      if (recent) {
+        enterRoom(recent.code)
+        return
+      }
+    }
     if (id === 'mistrial') setActiveTab('mistrial')
     else setActiveTab('games')
   }
