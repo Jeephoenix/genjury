@@ -34,10 +34,9 @@ export default function App() {
   }, [tickTimer])
 
   const inGame    = roomCode && phase !== PHASES.LOBBY
-  const inLobbyUI = phase === PHASES.LOBBY && roomCode
-  // Show the persistent top navigation everywhere except inside an active game
-  // and the in-room lobby (both have their own dedicated headers / context).
-  const showTopNav = !inGame && !inLobbyUI
+  // Show TopNav everywhere except inside an active mid-game phase.
+  // Users in the lobby (pre-game) can still navigate other tabs freely.
+  const showTopNav = !inGame
 
   return (
     <ErrorBoundary>
@@ -62,10 +61,13 @@ export default function App() {
               {phase === PHASES.REVEAL && <RevealPhase />}
               {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
             </>
-          ) : inLobbyUI ? (
-            <LobbyPage />
           ) : (
             <>
+              {/* Lobby is shown when user has an active pre-game room and
+                  navigated to the lobby tab. Other tabs work normally even
+                  while sitting in a lobby — users can browse, create, or join
+                  another room without being trapped. */}
+              {activeTab === 'lobby' && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
               {activeTab === 'home'        && <HomePage />}
               {activeTab === 'mistrial'    && <MistrialPage />}
               {activeTab === 'games'       && <GamesPage />}
