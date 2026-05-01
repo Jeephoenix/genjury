@@ -37,8 +37,8 @@ const PRESET_FEES = ['0', '0.01', '0.1', '1']
 const HOUSE_CUT_BPS_DEFAULT = 500   // 5% — used until the contract reports its real cut
 
 export default function MistrialPage() {
-  const [showCreate, setShowCreate]     = useState(false)
-  const [showJoinByCode, setShowJoinByCode] = useState(false)
+  const [showCreate, setShowCreate]     = useState(true)
+  const [showJoinByCode, setShowJoinByCode] = useState(true)
   const [joinCodeInput, setJoinCodeInput]   = useState('')
   const [invitedCode, setInvitedCode]       = useState(null) // code from ?join= deep link
 
