@@ -11,11 +11,7 @@ import {
   Dice5,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
-import { isWalletConnected } from '../lib/genlayer'
-import { listJoinedRooms } from '../lib/joinedRooms'
 import MistrialMark from '../components/MistrialMark'
-
-const REJOIN_MAX_AGE_MS = 8 * 60 * 60 * 1000 // 8 hours
 
 const GAMES = [
   {
@@ -77,18 +73,8 @@ const ACCENT = {
 
 export default function GamesPage() {
   const setActiveTab = useGameStore((s) => s.setActiveTab)
-  const enterRoom   = useGameStore((s) => s.enterRoom)
 
   const handlePlay = (gameId) => {
-    if (gameId === 'mistrial' && isWalletConnected()) {
-      const recent = listJoinedRooms().find(
-        (r) => Date.now() - r.lastSeenAt < REJOIN_MAX_AGE_MS,
-      )
-      if (recent) {
-        enterRoom(recent.code)
-        return
-      }
-    }
     setActiveTab(gameId)
   }
 
