@@ -547,19 +547,32 @@ const useGameStore = create((set, get) => ({
       return
     }
     set({ loading: true, chatMessages: [] })
-    set({ roomCode: code, myId: me })
-    rememberJoinedRoom(code)
     try {
       const raw = await readView(requireContractAddress(), 'get_room_state', [code])
       const parsed = parseContractPayload(raw) || {}
       if (!parsed?.roomCode) {
         throw new Error(`Room "${code}" does not exist`)
       }
-      const fee = safeBigInt(parsed?.entryFee)
+
+      // ── Access control ────────────────────────────────────────────────────
+      // Once the host starts the game (phase leaves 'lobby'), the room is
+      // locked. Only players who already have a seat can re-enter.
+      const roomPhase = parsed?.phase || 'lobby'
       const playersMap = parsed?.players || {}
       const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
+
+      if (roomPhase !== 'lobby' && !alreadyIn) {
+        set({ loading: false })
+        pushToast('error', 'This case is already in session — the courtroom is locked to new spectators. You can only re-enter rooms you joined during the lobby.')
+        return
+      }
+
+      const fee = safeBigInt(parsed?.entryFee)
+      set({ roomCode: code, myId: me })
+      rememberJoinedRoom(code)
       applyContractState(get, parsed)
       startPolling(get)
+
       if (!alreadyIn) {
         const sym = getChainNativeSymbol()
         await callMethod(
@@ -582,12 +595,45 @@ const useGameStore = create((set, get) => ({
 
   /**
    * Re-enter a room without re-paying the entry fee (used by ProfilePage's
-   * "Resume" action and after we recover a freshly-created room).
+   * "Resume" action and after we recover a freshly-created room, and by the
+   * docket's "Rejoin" button for players already seated in a live game).
+   *
+   * Access control: if the game has left the lobby phase, only players who
+   * were already seated when the game started may re-enter. Spectators are
+   * blocked to keep each room independent and fair.
    */
   enterRoom: async (rawCode) => {
     const code = normalizeRoomCode(rawCode)
     if (!isValidRoomCode(code)) return
     const me = norm(myAddress())
+
+    // Pre-flight check: fetch room state to enforce participant-only access
+    // for in-progress games before updating any local state.
+    if (hasContractAddress()) {
+      try {
+        const raw = await readView(requireContractAddress(), 'get_room_state', [code])
+        const parsed = parseContractPayload(raw)
+        if (parsed) {
+          const roomPhase = parsed.phase || 'lobby'
+          const playersMap = parsed.players || {}
+          const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
+
+          if (roomPhase !== 'lobby' && !alreadyIn) {
+            pushToast('error', 'This case is already in session — only players who joined during the lobby can enter.')
+            return
+          }
+
+          set({ roomCode: code, myId: me, chatMessages: [] })
+          rememberJoinedRoom(code)
+          applyContractState(get, parsed)
+          startPolling(get)
+          return
+        }
+      } catch {
+        // Fall through to the original flow on network error.
+      }
+    }
+
     set({ roomCode: code, myId: me, chatMessages: [] })
     rememberJoinedRoom(code)
     startPolling(get)
