@@ -1,5 +1,5 @@
-import React from 'react'
-import { Coins } from 'lucide-react'
+import React, { useState } from 'react'
+import { Coins, Plus, X } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import TimerRing from './TimerRing'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
@@ -26,6 +26,10 @@ export default function GameHeader() {
   const roomCode          = useGameStore(s => s.roomCode)
   const prizePoolWei      = useGameStore(s => s.prizePoolWei)
   const winnerWinningsWei = useGameStore(s => s.winnerWinningsWei)
+  const resetGame         = useGameStore(s => s.resetGame)
+  const setActiveTab      = useGameStore(s => s.setActiveTab)
+
+  const [confirmLeave, setConfirmLeave] = useState(false)
 
   const me = players.find(p => p.id === myId)
   const symbol = getChainNativeSymbol()
@@ -33,6 +37,16 @@ export default function GameHeader() {
 
   const displayPotWei = phase === PHASES.SCOREBOARD ? winnerWinningsWei : prizePoolWei
   const showPot = (displayPotWei || 0n) > 0n
+
+  const handleLeaveAndCreate = () => {
+    if (!confirmLeave) {
+      setConfirmLeave(true)
+      setTimeout(() => setConfirmLeave(false), 3000)
+      return
+    }
+    resetGame()
+    setActiveTab('mistrial')
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 glass border-b border-ghost-border flex items-center px-3 sm:px-4 gap-2 sm:gap-4 overflow-hidden">
@@ -96,6 +110,22 @@ export default function GameHeader() {
           <TimerRing seconds={timer} max={timerMax} size={32} />
         </div>
       )}
+
+      {/* New case button — lets users leave and open/join another game */}
+      <button
+        onClick={handleLeaveAndCreate}
+        title={confirmLeave ? 'Click again to confirm — you will leave this game' : 'Open or join a new case'}
+        className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-mono transition-all ${
+          confirmLeave
+            ? 'border-signal/60 bg-signal/15 text-signal animate-pulse'
+            : 'border-neon/30 bg-neon/10 text-neon hover:bg-neon/20'
+        }`}
+      >
+        {confirmLeave
+          ? <><X className="w-3 h-3" />Leave?</>
+          : <><Plus className="w-3 h-3" /><span className="hidden sm:inline">New case</span></>
+        }
+      </button>
 
       {/* My avatar + XP */}
       {me && (
