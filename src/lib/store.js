@@ -509,6 +509,7 @@ const useGameStore = create((set, get) => ({
         maxPlayers,
         entryFeeWei,
         prizePoolWei: 0n,
+        activeTab:    'lobby',
       })
       startPolling(get)
       pushToast('success', `Room opened — code ${code}`)
@@ -568,7 +569,7 @@ const useGameStore = create((set, get) => ({
       }
 
       const fee = safeBigInt(parsed?.entryFee)
-      set({ roomCode: code, myId: me })
+      set({ roomCode: code, myId: me, activeTab: 'lobby' })
       rememberJoinedRoom(code)
       applyContractState(get, parsed)
       startPolling(get)
@@ -623,7 +624,7 @@ const useGameStore = create((set, get) => ({
             return
           }
 
-          set({ roomCode: code, myId: me, chatMessages: [] })
+          set({ roomCode: code, myId: me, chatMessages: [], activeTab: 'lobby' })
           rememberJoinedRoom(code)
           applyContractState(get, parsed)
           startPolling(get)
@@ -634,7 +635,7 @@ const useGameStore = create((set, get) => ({
       }
     }
 
-    set({ roomCode: code, myId: me, chatMessages: [] })
+    set({ roomCode: code, myId: me, chatMessages: [], activeTab: 'lobby' })
     rememberJoinedRoom(code)
     startPolling(get)
     await refreshState(get)
@@ -992,6 +993,7 @@ const useGameStore = create((set, get) => ({
       winnerAddress:         null,
       winnerWinningsWei:     0n,
       prizeDistributed:      true,
+      activeTab:             'home',
     })
   },
 }))
