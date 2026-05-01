@@ -1,6 +1,6 @@
 import React from 'react'
-import { Home, Gamepad2, Trophy, UserRound } from 'lucide-react'
-import useGameStore from '../lib/store'
+import { Home, Gamepad2, Trophy, UserRound, Gavel } from 'lucide-react'
+import useGameStore, { PHASES } from '../lib/store'
 import WalletButton from './WalletButton'
 
 const TABS = [
@@ -13,6 +13,10 @@ const TABS = [
 export default function TopNav() {
   const activeTab    = useGameStore((s) => s.activeTab)
   const setActiveTab = useGameStore((s) => s.setActiveTab)
+  const roomCode     = useGameStore((s) => s.roomCode)
+  const phase        = useGameStore((s) => s.phase)
+
+  const inLobby = !!(roomCode && phase === PHASES.LOBBY)
 
   const select = (id) => {
     setActiveTab(id)
@@ -60,6 +64,26 @@ export default function TopNav() {
                 </button>
               )
             })}
+            {/* In-Room pill — only visible while sitting in an active lobby */}
+            {inLobby && (
+              <button
+                onClick={() => select('lobby')}
+                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'lobby'
+                    ? 'text-neon bg-neon/10 border border-neon/30'
+                    : 'text-neon/70 hover:text-neon hover:bg-neon/10 border border-neon/20'
+                }`}
+              >
+                <span className="relative flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
+                  <Gavel className="w-4 h-4" strokeWidth={2.25} />
+                  <span className="font-mono tracking-widest text-[11px]">{roomCode}</span>
+                </span>
+                {activeTab === 'lobby' && (
+                  <span className="absolute inset-x-3 -bottom-px h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+                )}
+              </button>
+            )}
           </nav>
 
           <div className="flex-1" />
@@ -81,7 +105,7 @@ export default function TopNav() {
         className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-void/85 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]"
         aria-label="Primary"
       >
-        <div className="mx-auto max-w-7xl grid grid-cols-4">
+        <div className={`mx-auto max-w-7xl grid ${inLobby ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id
             return (
@@ -101,6 +125,25 @@ export default function TopNav() {
               </button>
             )
           })}
+          {/* In-Room tab — shown on mobile when sitting in an active lobby */}
+          {inLobby && (
+            <button
+              onClick={() => select('lobby')}
+              className={`relative flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+                activeTab === 'lobby' ? 'text-neon' : 'text-neon/60 hover:text-neon'
+              }`}
+              aria-current={activeTab === 'lobby' ? 'page' : undefined}
+            >
+              <span className="relative">
+                <Gavel className="w-5 h-5" strokeWidth={2.25} />
+                <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-neon animate-pulse border border-void" />
+              </span>
+              <span className="font-mono tracking-wider">{roomCode}</span>
+              {activeTab === 'lobby' && (
+                <span className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+              )}
+            </button>
+          )}
         </div>
       </nav>
     </>
