@@ -321,6 +321,65 @@ export function disconnectInjectedWallet() {
   notify()
 }
 
+// ── Auto-reconnect on page load ──────────────────────────────────────────────
+//
+// Silently re-establishes a previously approved wallet connection without any
+// popup. Uses eth_accounts (read-only, no user prompt) against every detected
+// provider, then restores _chosenProvider when the remembered address is still
+// authorised. Call once from the app root on mount.
+export async function autoReconnect() {
+  const stored = injectedAddress()
+  if (!stored) return false
+
+  // Give EIP-6963 wallets ~300 ms to announce via eip6963:announceProvider
+  await new Promise((r) => setTimeout(r, 300))
+
+  // EIP-6963 providers first, then window.ethereum fallback
+  const candidates = []
+  if (_eip6963Map.size > 0) {
+    for (const { provider } of _eip6963Map.values()) candidates.push(provider)
+  }
+  if (typeof window !== 'undefined' && window.ethereum && !candidates.includes(window.ethereum)) {
+    candidates.push(window.ethereum)
+  }
+
+  for (const provider of candidates) {
+    try {
+      const accounts = await provider.request({ method: 'eth_accounts' })
+      if (
+        Array.isArray(accounts) &&
+        accounts.some((a) => a.toLowerCase() === stored.toLowerCase())
+      ) {
+        // Still authorised — restore state silently
+        _chosenProvider = provider
+        _client = null
+        const tag = '__genjuryWired'
+        if (!provider[tag]) {
+          provider[tag] = true
+          provider.on?.('accountsChanged', (accs) => {
+            rememberInjected(accs?.[0] ?? null)
+            _client = null
+            notify()
+          })
+          provider.on?.('chainChanged', () => {
+            _client = null
+            notify()
+          })
+        }
+        notify()
+        return true
+      }
+    } catch {
+      // Provider not ready — try next
+    }
+  }
+
+  // No provider confirmed the stored address — permission revoked
+  rememberInjected(null)
+  notify()
+  return false
+}
+
 export function myAddress() {
   return injectedAddress()
 }
