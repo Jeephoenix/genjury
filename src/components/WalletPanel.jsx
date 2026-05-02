@@ -104,7 +104,15 @@ export default function WalletPanel() {
       // Refresh balance after a short delay so the node has time to update
       setTimeout(refreshBalance, 800)
     } catch (e) {
-      addToast(e?.message || 'Fund failed', 'error')
+      const _m = e?.message || ''
+      addToast(
+        /studionet|localnet|only available/i.test(_m)
+          ? 'Faucet is only available on test networks.'
+          : /rpc.*failed|http \d{3}|fetch failed/i.test(_m)
+          ? 'Network request failed — please try again.'
+          : 'Could not add funds. Please try again.',
+        'error'
+      )
     } finally {
       setFunding(false)
     }
