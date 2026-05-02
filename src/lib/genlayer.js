@@ -45,6 +45,189 @@ export function hasInjectedProvider() {
   return typeof window !== 'undefined' && !!window.ethereum
 }
 
+// ── Multi-wallet detection ───────────────────────────────────────────────────
+//
+// EIP-5749 / EIP-6963 expose multiple providers in window.ethereum.providers[].
+// Each provider carries fingerprint booleans (isMetaMask, isCoinbaseWallet, …).
+// We normalise these into a plain descriptor array so the UI can render a
+// labelled wallet selector without touching raw provider objects in React state
+// (provider objects are not serialisable).
+//
+// The returned array is stable across calls (same identity if no new wallets).
+
+const WALLET_DEFS = [
+  { key: 'rabby',    label: 'Rabby',            flag: 'isRabby',         icon: 'rabby' },
+  { key: 'coinbase', label: 'Coinbase Wallet',   flag: 'isCoinbaseWallet', icon: 'coinbase' },
+  { key: 'metamask', label: 'MetaMask',          flag: 'isMetaMask',       icon: 'metamask' },
+  { key: 'brave',    label: 'Brave Wallet',      flag: 'isBraveWallet',    icon: 'brave' },
+  { key: 'frame',    label: 'Frame',             flag: 'isFrame',          icon: 'frame' },
+  { key: 'trust',    label: 'Trust Wallet',      flag: 'isTrust',          icon: 'trust' },
+  { key: 'okx',      label: 'OKX Wallet',        flag: 'isOkxWallet',      icon: 'okx' },
+]
+
+function labelProvider(p) {
+  for (const def of WALLET_DEFS) {
+    if (p[def.flag]) return { label: def.label, icon: def.icon, key: def.key }
+  }
+  return { label: 'Browser Wallet', icon: 'generic', key: 'generic' }
+}
+
+// Returns an array of { key, label, icon } — one entry per detected provider.
+// The array index matches the internal _providers array so connectWithProvider
+// can look up the raw provider by index.
+let _providers = []
+
+  // ── EIP-6963 multi-wallet discovery ─────────────────────────────────────────
+  //
+  // EIP-6963 (Multi Injected Provider Discovery) supersedes the EIP-5749
+  // window.ethereum.providers[] approach.  Wallets announce themselves by:
+  //   1. listening for "eip6963:requestProvider" on window, then
+  //   2. firing "eip6963:announceProvider" with { detail: { info, provider } }
+  //
+  // info shape: { uuid: string, name: string, icon: string (data-URI), rdns: string }
+  //
+  // We collect these into a Map keyed by UUID so late-loading extensions are
+  // automatically picked up.  A lightweight pub/sub lets the selector modal
+  // re-render without polling.
+
+  const _eip6963Map = new Map()   // uuid → { info, provider }
+  const _walletListeners = new Set()
+
+  export function subscribeWalletList(fn) {
+    _walletListeners.add(fn)
+    return () => _walletListeners.delete(fn)
+  }
+
+  function notifyWalletList() {
+    for (const fn of _walletListeners) { try { fn() } catch {} }
+  }
+
+  // Call once (in the wallet selector modal or app root) to start discovery.
+  // Returns a cleanup function.  Safe to call multiple times — duplicate
+  // listeners are guarded by the "already in map" check.
+  export function initEIP6963() {
+    if (typeof window === 'undefined') return () => {}
+
+    const handler = (event) => {
+      const { info, provider } = event.detail ?? {}
+      if (!info?.uuid || !provider) return
+      if (!_eip6963Map.has(info.uuid)) {
+        _eip6963Map.set(info.uuid, { info, provider })
+        notifyWalletList()
+      }
+    }
+
+    window.addEventListener('eip6963:announceProvider', handler)
+    // Ask already-loaded wallets to re-announce
+    window.dispatchEvent(new Event('eip6963:requestProvider'))
+
+    return () => window.removeEventListener('eip6963:announceProvider', handler)
+  }
+
+  // Returns descriptors from EIP-6963 map (preferred) or EIP-5749 / single
+  // window.ethereum (fallback).  Each descriptor: { key, label, icon, dataIcon?,
+  // providerIndex } where dataIcon is the data-URI from EIP-6963 info when present.
+  
+
+export function detectWallets() {
+    if (typeof window === 'undefined' || !window.ethereum) return []
+
+    // ── EIP-6963 providers (preferred) ──────────────────────────────────────
+    if (_eip6963Map.size > 0) {
+      _providers = []
+      const seen = new Set()
+      const result = []
+      for (const { info, provider } of _eip6963Map.values()) {
+        const rdns = info.rdns ?? ''
+        // Derive a stable key from rdns (io.metamask → metamask) or name
+        const key = rdns.split('.').pop()?.toLowerCase() || info.name.toLowerCase().replace(/\s+/g, '_')
+        if (!seen.has(key)) {
+          seen.add(key)
+          _providers.push(provider)
+          result.push({
+            key,
+            label:         info.name,
+            icon:          'generic',       // inline SVG fallback key
+            dataIcon:      info.icon ?? null, // data-URI (preferred for rendering)
+            providerIndex: _providers.length - 1,
+          })
+        }
+      }
+      return result
+    }
+
+    // ── EIP-5749 fallback: window.ethereum.providers[] ───────────────────────
+    const multi = window.ethereum.providers
+    if (Array.isArray(multi) && multi.length > 0) {
+      _providers = multi
+    } else {
+      _providers = [window.ethereum]
+    }
+
+    const seen = new Set()
+    const result = []
+    for (let i = 0; i < _providers.length; i++) {
+      const meta = labelProvider(_providers[i])
+      if (!seen.has(meta.key)) {
+        seen.add(meta.key)
+        result.push({ ...meta, dataIcon: null, providerIndex: i })
+      }
+    }
+    return result
+  }
+  
+
+// Connect via descriptor.providerIndex from detectWallets().
+// Falls back to window.ethereum if index is out of range.
+export async function connectWithProvider(providerIndex = 0) {
+  const provider = _providers[providerIndex] ?? window.ethereum
+  if (!provider) throw new Error('No Web3 wallet found. Install MetaMask to continue.')
+
+  const accounts = await provider.request({ method: 'eth_requestAccounts' })
+  if (!accounts?.length) throw new Error('Wallet did not return any accounts')
+  const addr = accounts[0]
+
+  // Temporarily swap window.ethereum so ensureCorrectChain uses this provider
+  const prev = window.ethereum
+  window.ethereum = provider
+  try {
+    await ensureCorrectChain()
+  } finally {
+    window.ethereum = prev
+  }
+
+  // Wire events on the chosen provider
+  rememberInjected(addr)
+  _client = null
+  notify()
+
+  const tag = '__genjuryWired'
+  if (!provider[tag]) {
+    provider[tag] = true
+    provider.on?.('accountsChanged', (accs) => {
+      rememberInjected(accs?.[0] ?? null)
+      _client = null
+      notify()
+    })
+    provider.on?.('chainChanged', () => {
+      _client = null
+      notify()
+    })
+  }
+
+  // Store chosen provider so getClient() uses it
+  _chosenProvider = provider
+
+  return addr
+}
+
+// The provider chosen at last connectWithProvider call; used by getClient().
+let _chosenProvider = null
+
+export function getChosenProvider() {
+  return _chosenProvider ?? (typeof window !== 'undefined' ? window.ethereum : null)
+}
+
 export function injectedAddress() {
   if (_injectedAddress) return _injectedAddress
   try {
@@ -150,7 +333,7 @@ export function isWalletConnected() {
 
 export const isInjectedActive = isWalletConnected
 
-const DEFAULT_NETWORK = 'bradbury'
+const DEFAULT_NETWORK = 'studionet'
 
 const NETWORK_INFO = {
   bradbury: {
@@ -164,7 +347,7 @@ const NETWORK_INFO = {
     faucet:   'https://testnet-faucet.genlayer.foundation',
   },
   studionet: {
-    label:    'GenLayer Studio (local)',
+    label:    'GenLayer Studio',
     explorer: null,
     faucet:   null,
   },
@@ -196,10 +379,10 @@ export function getNetworkInfo() {
 
 export function getChain() {
   const key = getNetworkName()
-  if (key === 'studionet') return studionet
   if (key === 'localnet')  return localnet
   if (key === 'asimov')    return testnetAsimov
-  return testnetBradbury
+  if (key === 'bradbury')  return testnetBradbury
+  return studionet
 }
 
 export function getChainNativeSymbol() {
@@ -236,7 +419,7 @@ export function getClient() {
   _client = createClient({
     chain: buildChain(),
     account: addr,
-    provider: window.ethereum,
+    provider: getChosenProvider(),
   })
   return _client
 }
@@ -247,17 +430,62 @@ export function getClient() {
 // every player. Set VITE_GENJURY_CONTRACT to the deployed address; the app
 // throws on any read/write attempt if it's missing or malformed.
 
-export function getContractAddress() {
-  const raw = import.meta.env.VITE_GENJURY_CONTRACT
-  if (!raw) return null
-  const trimmed = String(raw).trim()
-  if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
-    console.warn('[genjury] VITE_GENJURY_CONTRACT is set but is not a valid 0x… address.')
+// Runtime override key — lets the platform owner configure the contract
+  // address directly in the browser without requiring a redeploy.
+  const STORAGE_CONTRACT_KEY = 'genjury_contract_v1'
+  const _contractListeners   = new Set()
+
+  function notifyContract() {
+    for (const fn of _contractListeners) { try { fn() } catch {} }
+  }
+
+  export function subscribeContractAddress(fn) {
+    _contractListeners.add(fn)
+    return () => _contractListeners.delete(fn)
+  }
+
+  function isValidAddress(raw) {
+    return typeof raw === 'string' && /^0x[0-9a-fA-F]{40}$/.test(raw.trim())
+  }
+
+  export function getContractAddress() {
+    // 1. Build-time env var (highest priority)
+    const envRaw = import.meta.env.VITE_GENJURY_CONTRACT
+    if (envRaw) {
+      const trimmed = String(envRaw).trim()
+      if (isValidAddress(trimmed)) return trimmed
+      console.warn('[genjury] VITE_GENJURY_CONTRACT is set but is not a valid 0x… address.')
+    }
+    // 2. Runtime override stored in localStorage by the platform owner
+    try {
+      const stored = localStorage.getItem(STORAGE_CONTRACT_KEY)
+      if (stored && isValidAddress(stored)) return stored.trim()
+    } catch {}
     return null
   }
-  return trimmed
-}
 
+  // Allow the platform owner to set / clear the address at runtime.
+  export function setRuntimeContractAddress(addr) {
+    if (!addr) {
+      try { localStorage.removeItem(STORAGE_CONTRACT_KEY) } catch {}
+      notifyContract()
+      return null
+    }
+    const trimmed = String(addr).trim()
+    if (!isValidAddress(trimmed)) {
+      throw new Error('Invalid contract address — must be a 0x… 40-hex-char address.')
+    }
+    try { localStorage.setItem(STORAGE_CONTRACT_KEY, trimmed) } catch {}
+    notifyContract()
+    return trimmed
+  }
+
+  export function clearRuntimeContractAddress() {
+    try { localStorage.removeItem(STORAGE_CONTRACT_KEY) } catch {}
+    notifyContract()
+  }
+
+  
 export function hasContractAddress() {
   return !!getContractAddress()
 }
@@ -397,6 +625,49 @@ export async function getGenBalanceWei(addr) {
   }
   return 0n
 }
+
+  // ── Studionet / localnet dev-fund helper ────────────────────────────────────
+  //
+  // Calls the node's debug_fundAccount JSON-RPC method to credit an address with
+  // test GEN.  Only available on studionet and localnet — throws on public
+  // testnets so it can never be accidentally called in a production build where
+  // the env var points at bradbury/asimov.
+  //
+  // GenLayer Studio RPC signature:
+  //   debug_fundAccount(address: string, amount: hex-string)
+  //   e.g. params: ["0xABC…", "0x56BC75E2D63100000"]  // 100 GEN in wei
+
+  const FUND_DEFAULT_WEI = 100n * 10n ** 18n  // 100 GEN
+
+  export async function fundAccount(address, amountWei = FUND_DEFAULT_WEI) {
+    const key = getNetworkName()
+    if (key !== 'studionet' && key !== 'localnet') {
+      throw new Error('debug_fundAccount is only available on studionet and localnet.')
+    }
+    const chain = getChain()
+    const rpc = import.meta.env.VITE_GENLAYER_RPC || chain?.rpcUrls?.default?.http?.[0]
+    if (!rpc) throw new Error('No RPC URL configured for this network.')
+
+    const amount = typeof amountWei === 'bigint' ? amountWei : BigInt(amountWei || 0)
+    const res = await fetch(rpc, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id:      Date.now(),
+        method:  'debug_fundAccount',
+        params:  [address, `0x${amount.toString(16)}`],
+      }),
+    })
+
+    if (!res.ok) throw new Error(`RPC request failed: HTTP ${res.status}`)
+    const data = await res.json()
+    if (data?.error) {
+      const msg = data.error.message || JSON.stringify(data.error)
+      throw new Error(`debug_fundAccount: ${msg}`)
+    }
+    return data?.result ?? null
+  }
 
 const GEN_DECIMALS = 18n
 

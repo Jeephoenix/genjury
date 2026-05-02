@@ -2,15 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   Drama, Brain, Vote, Coins, ArrowLeft, Plus, Sparkles,
   ChevronDown, ChevronUp, Info, Gavel, Wallet, Trophy,
-  Building2, UserPlus, Zap,
+  Building2, Zap,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import MistrialMark from '../components/MistrialMark'
+import JoinInviteSheet from '../components/JoinInviteSheet'
 import OpenRoundsList from '../components/OpenRoundsList'
 import {
   parseGen, formatGen, getChainNativeSymbol,
   subscribeWallet, isWalletConnected, hasContractAddress,
   isValidRoomCode, normalizeRoomCode, readContractView,
+  setRuntimeContractAddress, subscribeContractAddress,
 } from '../lib/genlayer'
 import { getProfile, subscribeProfile } from '../lib/profile'
 import { rememberJoinedRoom } from '../lib/joinedRooms'
@@ -37,8 +39,26 @@ export default function MistrialPage() {
   const setOpenWallet = useGameStore((s) => s.setWalletPanelOpen)
 
   const [, force] = useState(0)
-  useEffect(() => subscribeWallet(()  => force((n) => n + 1)), [])
-  useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])
+  useEffect(() => subscribeWallet(()        => force((n) => n + 1)), [])
+  useEffect(() => subscribeProfile(()      => force((n) => n + 1)), [])
+  useEffect(() => subscribeContractAddress(() => force((n) => n + 1)), [])
+
+  // Inline contract-address config state
+  const [contractInput, setContractInput] = useState('')
+  const [contractError, setContractError] = useState(null)
+  const [contractSaved, setContractSaved] = useState(false)
+
+  const handleSaveContract = () => {
+    setContractError(null)
+    try {
+      setRuntimeContractAddress(contractInput.trim())
+      setContractSaved(true)
+      setContractInput('')
+      setTimeout(() => window.location.reload(), 1200)
+    } catch (e) {
+      setContractError(e.message || 'Invalid address')
+    }
+  }
 
   useEffect(() => {
     if (!hasContractAddress()) return
@@ -64,13 +84,10 @@ export default function MistrialPage() {
         params.delete('join')
         const qs = params.toString()
         window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
-        const readyToJoin = isWalletConnected() && hasContractAddress() && getProfile().name
-        if (readyToJoin) {
-          joinRoom(code)
-        } else {
-          setInvitedCode(code)
-          setJoinCodeInput(code)
-          setShowJoinByCode(true)
+            // Always show the invite sheet so the player can confirm their name.
+        setInvitedCode(code)
+        setJoinCodeInput(code)
+        setShowJoinByCode(true)
           rememberJoinedRoom(code)
         }
       }
@@ -164,50 +181,54 @@ export default function MistrialPage() {
         </div>
       </div>
 
-      {/* Contract not configured warning */}
-      {!contractConfigured && (
-        <div className="glass rounded-2xl border border-signal/35 bg-signal/[0.05] p-5 mb-6 animate-slide-up">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-signal mt-0.5 flex-shrink-0" strokeWidth={2} />
-            <div>
-              <h3 className="font-display font-bold text-white text-sm mb-1">Contract not configured</h3>
-              <p className="text-white/55 text-sm leading-relaxed">
-                The Genjury contract address (<code className="font-mono text-white/80 text-xs">VITE_GENJURY_CONTRACT</code>) is missing.
-                The platform owner needs to deploy the singleton contract and add the address to the environment.
-              </p>
+      {/* Contract not configured — paste address to configure at runtime */}
+        {!contractConfigured && (
+          <div className="glass rounded-2xl border border-signal/35 bg-signal/[0.05] p-5 mb-6 animate-slide-up">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-signal mt-1 flex-shrink-0" strokeWidth={2} />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-bold text-white text-sm mb-1">Contract address not configured</h3>
+                <p className="text-white/55 text-sm leading-relaxed mb-3">
+                  Set <code className="font-mono text-white/80 text-xs">VITE_GENJURY_CONTRACT</code> in your build env, or paste the deployed address below — saved in this browser without a redeploy.
+                </p>
+                {contractSaved ? (
+                  <div className="flex items-center gap-2 text-neon text-sm font-semibold">
+                    <Zap className="w-4 h-4" strokeWidth={2.5} /> Contract address saved — reloading…
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      className="input flex-1 font-mono text-sm"
+                      placeholder="0x… paste contract address"
+                      value={contractInput}
+                      onChange={(e) => { setContractInput(e.target.value); setContractError(null) }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveContract()}
+                    />
+                    <button
+                      onClick={handleSaveContract}
+                      disabled={!contractInput.trim()}
+                      className="btn px-4 py-2.5 text-sm font-semibold bg-signal/15 text-signal border border-signal/35 hover:bg-signal/25 disabled:opacity-50 flex-shrink-0"
+                    >
+                      Save &amp; reload
+                    </button>
+                  </div>
+                )}
+                {contractError && (
+                  <p className="text-signal text-xs mt-2 font-mono">{contractError}</p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Invite banner */}
-      {invitedCode && (
-        <div className="glass rounded-2xl border border-neon/25 bg-neon/[0.04] p-5 mb-6 animate-slide-up">
-          <div className="flex items-start gap-3">
-            <UserPlus className="w-5 h-5 text-neon mt-0.5 flex-shrink-0" strokeWidth={2} />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-display font-bold text-white text-sm mb-1">
-                You've been invited to case{' '}
-                <span className="text-neon font-mono tracking-widest">{invitedCode}</span>
-              </h3>
-              <p className="text-white/50 text-sm">
-                {!connected
-                  ? 'Connect your wallet and set a player name, then click "Take a seat" below.'
-                  : !getProfile().name
-                  ? 'Set a player name in your profile, then click "Take a seat" below.'
-                  : 'Click "Take a seat" in the join form below to enter the courtroom.'}
-              </p>
-            </div>
-            <button
-              onClick={() => setInvitedCode(null)}
-              className="text-white/25 hover:text-white/60 flex-shrink-0 text-xl leading-none transition-colors"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Invite sheet — rendered when the user lands via a ?join=CODE link */}
+        {invitedCode && (
+          <JoinInviteSheet
+            code={invitedCode}
+            onDismiss={() => setInvitedCode(null)}
+          />
+        )}
 
       {/* Open docket */}
       <div className="glass rounded-2xl border border-white/[0.08] p-5 mb-5 animate-slide-up" style={{ animationDelay: '0.05s' }}>

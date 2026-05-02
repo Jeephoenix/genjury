@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   Crown, Trophy, Medal, Award, Home, RotateCcw, Banknote, Sparkles,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
+import { markRoomFinished } from '../lib/joinedRooms'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 import Confetti from '../components/Confetti'
 import Avatar from '../components/Avatar'
@@ -32,6 +33,16 @@ export default function ScoreboardPage() {
   const houseFeesCollectedWei = useGameStore((s) => s.houseFeesCollectedWei)
   const claimPrize          = useGameStore((s) => s.claimPrize)
   const claimHouseFees      = useGameStore((s) => s.claimHouseFees)
+
+  const roomCode = useGameStore((s) => s.roomCode)
+
+  // When the scoreboard mounts, the game is over. Remove this room from the
+  // personal docket so it doesn't linger in the "Open cases" list.
+  useEffect(() => {
+    if (!roomCode) return
+    const id = setTimeout(() => markRoomFinished(roomCode), 1500)
+    return () => clearTimeout(id)
+  }, [roomCode])
 
   const symbol  = getChainNativeSymbol()
   const sorted  = [...players].sort((a, b) => b.xp - a.xp)
