@@ -37,7 +37,7 @@ export default function TopNav() {
               <img src="/logo.png" alt="" className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110" />
               <div className="absolute inset-0 rounded-full bg-crimson/30 blur-lg opacity-0 group-hover:opacity-100 transition-all duration-300" />
             </div>
-            <span className="font-display font-extrabold text-lg text-white tracking-tight">
+            <span className="font-brand font-extrabold text-lg text-white tracking-tight">
               Gen<span className="text-crimson text-glow-crimson">jury</span>
             </span>
           </button>
