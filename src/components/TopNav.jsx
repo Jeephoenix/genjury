@@ -126,11 +126,11 @@ export default function TopNav() {
                 aria-current={active ? 'page' : undefined}
               >
                 <div className={`p-1.5 rounded-lg transition-all duration-200 ${active ? 'bg-white/[0.07]' : ''}`}>
-                  <Icon className={`w-5 h-5 transition-colors ${active ? 'text-neon' : ''}`} strokeWidth={2.25} />
+                  <Icon className={`w-5 h-5 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
                 </div>
                 <span className="tracking-wide">{label}</span>
                 {active && (
-                  <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-neon to-transparent shadow-[0_0_8px_#7fff6e]" />
+                  <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-crimson to-transparent shadow-[0_0_8px_#e8002d]" />
                 )}
               </button>
             )
