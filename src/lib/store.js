@@ -279,9 +279,24 @@ function applyContractState(get, s) {
     next.timerMax = PHASE_TIMERS[newPhase] ?? 0
     // When a room reaches scoreboard, mark it finished in localStorage so the
     // docket removes it automatically without requiring a manual dismiss.
-    if (newPhase === PHASES.SCOREBOARD && local.roomCode) {
-      markRoomFinished(local.roomCode)
-    }
+    // When a room reaches scoreboard, persist rich metadata so the Profile
+      // history panel can display rank, XP, category etc. without any RPC call.
+      if (newPhase === PHASES.SCOREBOARD && local.roomCode) {
+        const _sorted    = [...(next.players || [])].sort((a, b) => b.xp - a.xp)
+        const _myId      = local.myId
+        const _me        = _sorted.find((p) => p.id === _myId)
+        const _myRank    = _me ? _sorted.findIndex((p) => p.id === _myId) + 1 : 0
+        markRoomFinished(local.roomCode, {
+          category:    next.category    || local.category    || '',
+          rounds:      next.round       || local.round       || 0,
+          maxRounds:   next.maxRounds   || local.maxRounds   || 3,
+          playerCount: _sorted.length,
+          myRank:      _myRank,
+          myXP:        _me?.xp ?? 0,
+          winnerName:  _sorted[0]?.name || null,
+          finishedAt:  Date.now(),
+        })
+      }
   }
 
   useGameStore.setState(next)
