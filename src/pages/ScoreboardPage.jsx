@@ -313,7 +313,7 @@ export default function ScoreboardPage() {
             <Home className="w-4 h-4" strokeWidth={2.25} /> Main Menu
           </button>
           <button
-            className="btn btn-neon py-4 inline-flex items-center justify-center gap-2"
+            className="btn btn-crimson py-4 inline-flex items-center justify-center gap-2"
             onClick={startGame}
             disabled={playAgainBlocked}
             title={playAgainTitle}
