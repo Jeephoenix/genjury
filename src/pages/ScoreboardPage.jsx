@@ -3,7 +3,7 @@ import {
   Crown, Trophy, Medal, Award, Home, RotateCcw, Banknote, Sparkles,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
-import { forgetJoinedRoom } from '../lib/joinedRooms'
+import { markRoomFinished } from '../lib/joinedRooms'
 import { formatGen, getChainNativeSymbol } from '../lib/genlayer'
 import Confetti from '../components/Confetti'
 import Avatar from '../components/Avatar'
@@ -40,7 +40,7 @@ export default function ScoreboardPage() {
   // personal docket so it doesn't linger in the "Open cases" list.
   useEffect(() => {
     if (!roomCode) return
-    const id = setTimeout(() => forgetJoinedRoom(roomCode), 1500)
+    const id = setTimeout(() => markRoomFinished(roomCode), 1500)
     return () => clearTimeout(id)
   }, [roomCode])
 
