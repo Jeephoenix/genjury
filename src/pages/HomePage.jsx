@@ -218,6 +218,33 @@ export default function HomePage() {
             </span>
           </div>
 
+          {/* ── Game name ticker ── */}
+          <div
+            className="relative overflow-hidden mb-6 -mx-4 sm:-mx-6"
+            style={{
+              maskImage: 'linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%)',
+            }}
+          >
+            <div
+              className="flex w-max py-2"
+              style={{ animation: 'marquee 22s linear infinite' }}
+            >
+              {[0, 1].map(copy => (
+                <span key={copy} className="flex items-center font-mono text-[9px] uppercase tracking-[0.22em] text-white/20 whitespace-nowrap select-none">
+                  Mistrial
+                  <span className="mx-5 text-white/10">·</span>
+                  Highstakes
+                  <span className="mx-5 text-white/10">·</span>
+                  Crossfire
+                  <span className="mx-5 text-white/10">·</span>
+                  Oracle Arena
+                  <span className="mx-5 text-white/10">·</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
           <p className="text-white/48 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
             Genjury runs every game on GenLayer's Optimistic AI — an on-chain AI Judge
             that deliberates, rules, and settles each verdict with no house, no edge.
