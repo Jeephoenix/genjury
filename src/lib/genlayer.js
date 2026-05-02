@@ -582,10 +582,23 @@ export async function callMethodForResult(address, fn, args = [], valueWei = 0n,
 function friendlyTxError(e) {
   if (!e) return 'Unknown error'
   if (typeof e === 'string') return e
-  if (e.code === 4001 || /user rejected|user denied/i.test(e.message || '')) {
+  const _m = e.message || ''
+  const _c = e.code
+  if (_c === 4001 || /user rejected|user denied|cancel/i.test(_m))
     return 'You rejected the request in your wallet.'
-  }
-  return e.shortMessage || e.message || String(e)
+  if (/only a getter|Cannot set property ethereum|read.only/i.test(_m))
+    return 'A wallet extension conflict was detected. Disable other wallet extensions and refresh.'
+  if (/wrong network|unrecognized chain/i.test(_m))
+    return 'Wrong network — please switch to the correct network in your wallet.'
+  if (/timeout|timed out/i.test(_m))
+    return 'Request timed out. Please try again.'
+  if (/insufficient funds/i.test(_m))
+    return 'Insufficient funds to complete this transaction.'
+  if (/no web3|no wallet|not found|not installed/i.test(_m))
+    return 'No wallet detected. Install MetaMask or another Web3 wallet.'
+  if (/network|rpc|econnrefused|fetch failed/i.test(_m))
+    return 'Network error — check your connection and try again.'
+  return e.shortMessage || e.message || 'Transaction failed. Please try again.'
 }
 
 export async function getGenBalanceWei(addr) {
