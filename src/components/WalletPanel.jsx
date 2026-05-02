@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Copy, LogOut, Wallet as WalletIcon, X, ExternalLink,
-  RefreshCw, ChevronRight, AlertCircle, Zap,
+  RefreshCw, ChevronRight, AlertCircle, Zap, AlertTriangle,
 } from 'lucide-react'
 import {
   myAddress,
@@ -11,10 +11,13 @@ import {
   subscribeWallet,
   getNetworkInfo,
   getNetworkName,
+  getChain,
   getChainNativeSymbol,
   getGenBalanceWei,
   formatGen,
   fundAccount,
+  getChosenProvider,
+  switchToCorrectChain,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
 import WalletSelectorModal from './WalletSelectorModal'
@@ -31,6 +34,8 @@ export default function WalletPanel() {
   const [showSelector, setShowSelector] = useState(false)
   const [funding, setFunding]           = useState(false)
   const [fundDone, setFundDone]         = useState(false)
+  const [wrongChain, setWrongChain]     = useState(false)
+  const [switching, setSwitching]       = useState(false)
 
   const net         = getNetworkInfo()
   const networkName = getNetworkName()
@@ -40,6 +45,19 @@ export default function WalletPanel() {
   const resetGame = useGameStore((s) => s.resetGame)
 
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
+
+  const checkChain = useCallback(async () => {
+    if (!isWalletConnected()) { setWrongChain(false); return }
+    const provider = getChosenProvider()
+    if (!provider) { setWrongChain(false); return }
+    try {
+      const cur      = await provider.request({ method: 'eth_chainId' })
+      const expected = `0x${getChain().id.toString(16)}`
+      setWrongChain(cur !== expected)
+    } catch {
+      setWrongChain(false)
+    }
+  }, [])
 
   const connected = isWalletConnected()
   const address   = myAddress()
@@ -61,7 +79,8 @@ export default function WalletPanel() {
   useEffect(() => {
     setBalanceWei(null)
     if (open && address) refreshBalance()
-  }, [open, address, refreshBalance])
+    if (open) checkChain()
+  }, [open, address, refreshBalance, checkChain])
 
   // Reset selector when panel closes
   useEffect(() => {
@@ -90,6 +109,19 @@ export default function WalletPanel() {
     resetGame()
     disconnectInjectedWallet()
     addToast('Wallet disconnected', 'info')
+  }
+
+  const handleSwitchNetwork = async () => {
+    if (switching) return
+    setSwitching(true)
+    const ok = await switchToCorrectChain(getChosenProvider())
+    if (ok) {
+      setWrongChain(false)
+      addToast('Switched to ' + net.label, 'success')
+    } else {
+      addToast('Switch cancelled — try switching manually in your wallet.', 'error')
+    }
+    setSwitching(false)
   }
 
   const handleFund = async () => {
@@ -174,19 +206,43 @@ export default function WalletPanel() {
                 {connected ? (
                   <>
                     {/* Network row */}
-                    <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] px-3.5 py-3 flex items-center gap-3">
+                    <div className={`rounded-xl px-3.5 py-3 flex items-center gap-3 transition-colors ${wrongChain ? 'bg-gold/[0.07] border border-gold/25' : 'bg-white/[0.04] border border-white/[0.08]'}`}>
                       <div className="relative flex-shrink-0">
-                        <div className="w-2.5 h-2.5 rounded-full bg-neon" />
-                        <div className="absolute inset-0 rounded-full bg-neon animate-ping opacity-40" />
+                        <div className={`w-2.5 h-2.5 rounded-full ${wrongChain ? 'bg-gold' : 'bg-neon'}`} />
+                        {!wrongChain && <div className="absolute inset-0 rounded-full bg-neon animate-ping opacity-40" />}
                       </div>
                       <div>
                         <p className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-0.5">Network</p>
-                        <p className="text-white text-sm font-medium">{net.label}</p>
+                        <p className={`text-sm font-medium ${wrongChain ? 'text-gold' : 'text-white'}`}>
+                          {wrongChain ? 'Wrong network' : net.label}
+                        </p>
                       </div>
                       <div className="ml-auto">
-                        <span className="badge bg-neon/10 border border-neon/25 text-neon text-[10px]">LIVE</span>
+                        {wrongChain ? (
+                          <span className="badge bg-gold/10 border border-gold/25 text-gold text-[10px]">MISMATCH</span>
+                        ) : (
+                          <span className="badge bg-neon/10 border border-neon/25 text-neon text-[10px]">LIVE</span>
+                        )}
                       </div>
                     </div>
+
+                    {/* Switch Network card — shown when on wrong chain */}
+                    {wrongChain && (
+                      <div className="rounded-xl bg-gold/[0.08] border border-gold/25 px-3.5 py-3 flex items-center gap-3">
+                        <AlertTriangle className="w-4 h-4 text-gold flex-shrink-0" strokeWidth={2} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gold text-xs font-semibold leading-tight">Switch to {net.label}</p>
+                          <p className="text-gold/55 text-[11px] mt-0.5 leading-tight">Your wallet is on a different network</p>
+                        </div>
+                        <button
+                          onClick={handleSwitchNetwork}
+                          disabled={switching}
+                          className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-gold/15 border border-gold/30 text-gold text-xs font-semibold hover:bg-gold/25 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait"
+                        >
+                          {switching ? 'Switching…' : 'Switch'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Address */}
                     <div>
