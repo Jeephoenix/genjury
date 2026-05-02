@@ -581,6 +581,49 @@ export async function getGenBalanceWei(addr) {
   return 0n
 }
 
+  // ── Studionet / localnet dev-fund helper ────────────────────────────────────
+  //
+  // Calls the node's debug_fundAccount JSON-RPC method to credit an address with
+  // test GEN.  Only available on studionet and localnet — throws on public
+  // testnets so it can never be accidentally called in a production build where
+  // the env var points at bradbury/asimov.
+  //
+  // GenLayer Studio RPC signature:
+  //   debug_fundAccount(address: string, amount: hex-string)
+  //   e.g. params: ["0xABC…", "0x56BC75E2D63100000"]  // 100 GEN in wei
+
+  const FUND_DEFAULT_WEI = 100n * 10n ** 18n  // 100 GEN
+
+  export async function fundAccount(address, amountWei = FUND_DEFAULT_WEI) {
+    const key = getNetworkName()
+    if (key !== 'studionet' && key !== 'localnet') {
+      throw new Error('debug_fundAccount is only available on studionet and localnet.')
+    }
+    const chain = getChain()
+    const rpc = import.meta.env.VITE_GENLAYER_RPC || chain?.rpcUrls?.default?.http?.[0]
+    if (!rpc) throw new Error('No RPC URL configured for this network.')
+
+    const amount = typeof amountWei === 'bigint' ? amountWei : BigInt(amountWei || 0)
+    const res = await fetch(rpc, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id:      Date.now(),
+        method:  'debug_fundAccount',
+        params:  [address, `0x${amount.toString(16)}`],
+      }),
+    })
+
+    if (!res.ok) throw new Error(`RPC request failed: HTTP ${res.status}`)
+    const data = await res.json()
+    if (data?.error) {
+      const msg = data.error.message || JSON.stringify(data.error)
+      throw new Error(`debug_fundAccount: ${msg}`)
+    }
+    return data?.result ?? null
+  }
+
 const GEN_DECIMALS = 18n
 
 export function formatGen(wei, maxFractionDigits = 6) {
