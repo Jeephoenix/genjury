@@ -536,8 +536,24 @@ input[type="range"]::-webkit-slider-thumb:hover {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Mobile bottom-sheet slide-up */
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
 .modal-overlay { animation: overlayIn 0.25s ease; }
 .modal-panel   { animation: panelSlideUp 0.35s cubic-bezier(0.16,1,0.3,1); }
+
+/* Sheet panel: bottom-sheet on mobile, card on desktop */
+.sheet-panel {
+  animation: sheetUp 0.34s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@media (min-width: 768px) {
+  .sheet-panel {
+    animation: panelSlideUp 0.35s cubic-bezier(0.16,1,0.3,1) forwards;
+  }
+}
 
 /* ── AI pulsing ring ── */
 @keyframes ringExpand {
