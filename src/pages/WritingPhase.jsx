@@ -1,61 +1,72 @@
 import React from 'react'
-import { Drama, Lightbulb, Send } from 'lucide-react'
+import { Drama, Lightbulb, Send, PenLine } from 'lucide-react'
 import useGameStore from '../lib/store'
 import TimerRing from '../components/TimerRing'
 import Avatar from '../components/Avatar'
 
 export default function WritingPhase() {
-  const players = useGameStore(s => s.players)
-  const myId = useGameStore(s => s.myId)
-  const deceiverIndex = useGameStore(s => s.deceiverIndex)
-  const category = useGameStore(s => s.category)
-  const statements = useGameStore(s => s.statements)
-  const lieIndex = useGameStore(s => s.lieIndex)
-  const setStatement = useGameStore(s => s.setStatement)
-  const setLieIndex = useGameStore(s => s.setLieIndex)
-  const submitStatements = useGameStore(s => s.submitStatements)
-  const timer = useGameStore(s => s.timer)
-  const timerMax = useGameStore(s => s.timerMax)
+  const players        = useGameStore((s) => s.players)
+  const myId           = useGameStore((s) => s.myId)
+  const deceiverIndex  = useGameStore((s) => s.deceiverIndex)
+  const category       = useGameStore((s) => s.category)
+  const statements     = useGameStore((s) => s.statements)
+  const lieIndex       = useGameStore((s) => s.lieIndex)
+  const setStatement   = useGameStore((s) => s.setStatement)
+  const setLieIndex    = useGameStore((s) => s.setLieIndex)
+  const submitStatements = useGameStore((s) => s.submitStatements)
+  const timer          = useGameStore((s) => s.timer)
+  const timerMax       = useGameStore((s) => s.timerMax)
 
-  const deceiver = players[deceiverIndex]
+  const deceiver   = players[deceiverIndex]
   const isDeceiver = deceiver?.id === myId
-  const letters = ['A', 'B', 'C']
-  const canSubmit = statements.every(s => s.trim().length >= 3) && lieIndex !== null
+  const letters    = ['A', 'B', 'C']
+  const canSubmit  = statements.every((s) => s.trim().length >= 3) && lieIndex !== null
 
-  // Auto-submit when timer runs out
   React.useEffect(() => {
-    if (timer === 0 && isDeceiver) {
-      // Auto-fill if needed and submit
-      if (canSubmit) submitStatements()
-    }
+    if (timer === 0 && isDeceiver && canSubmit) submitStatements()
   }, [timer])
 
+  // ── Waiting screen (non-deceiver) ──
   if (!isDeceiver) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-8 animate-fade-in">
         <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <Avatar name={deceiver?.name} color={deceiver?.color} size={64} />
+          <div className="relative inline-block mb-5">
+            <Avatar name={deceiver?.name} color={deceiver?.color} size={72} />
+            <div
+              className="absolute -inset-3 rounded-full blur-2xl pointer-events-none"
+              style={{ background: (deceiver?.color || '#a259ff') + '30' }}
+            />
           </div>
-          <h2 className="font-display text-3xl font-700 text-white mb-2">
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/35 mb-2">Deceiver is writing</div>
+          <h2 className="font-display font-bold text-2xl sm:text-3xl text-white mb-2">
             <span style={{ color: deceiver?.color }}>{deceiver?.name}</span> is the Deceiver
           </h2>
-          <p className="text-white/40">They're crafting their web of lies in the <span className="text-plasma">{category}</span> category…</p>
+          <p className="text-white/40 text-sm">
+            They're crafting their web of lies in the{' '}
+            <span className="text-plasma font-medium">{category}</span> category…
+          </p>
         </div>
 
-        <div className="card w-full max-w-sm text-center">
+        <div className="glass rounded-2xl border border-white/[0.08] p-6 w-full max-w-sm text-center">
           <TimerRing seconds={timer} max={timerMax} size={80} />
-          <p className="text-white/30 text-xs mt-4 font-mono">Waiting for statements…</p>
+          <p className="text-white/25 text-xs mt-4 font-mono tracking-wider">
+            Waiting for statements…
+          </p>
         </div>
 
-        <div className="flex flex-col gap-3 w-full max-w-sm">
-          {['Statement A', 'Statement B', 'Statement C'].map((label, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4">
+        {/* Placeholder statement cards */}
+        <div className="flex flex-col gap-2.5 w-full max-w-sm">
+          {letters.map((letter, i) => (
+            <div key={i} className="glass rounded-2xl border border-white/[0.06] p-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/[0.07] flex items-center justify-center font-display font-700 text-white/30">
-                  {letters[i]}
+                <div className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center font-display font-bold text-white/20">
+                  {letter}
                 </div>
-                <div className="flex-1 h-4 bg-white/[0.06] rounded-full animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 bg-white/[0.05] rounded-full animate-pulse w-4/5" />
+                  <div className="h-2.5 bg-white/[0.03] rounded-full animate-pulse w-3/5" style={{ animationDelay: `${i * 0.15}s` }} />
+                </div>
               </div>
             </div>
           ))}
@@ -64,66 +75,85 @@ export default function WritingPhase() {
     )
   }
 
+  // ── Deceiver writing screen ──
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-8 gap-6 animate-slide-up">
+    <div className="min-h-screen flex flex-col items-center px-4 py-10 gap-6 animate-slide-up">
       <div className="w-full max-w-lg">
+
         {/* Header */}
         <div className="text-center mb-8">
-          <span className="badge bg-signal/20 text-signal border border-signal/30 text-sm mb-4 inline-flex items-center gap-1.5">
+          <div className="inline-flex items-center gap-2 badge bg-signal/15 text-signal border border-signal/30 mb-4">
             <Drama className="w-3.5 h-3.5" strokeWidth={2.25} /> You are the Deceiver
-          </span>
-          <h2 className="font-display text-3xl font-700 text-white mb-2">
+          </div>
+          <h2 className="font-display font-bold text-2xl sm:text-3xl text-white mb-2">
             Write 2 truths and 1 lie
           </h2>
-          <p className="text-white/40">
-            Category: <span className="text-neon">{category}</span>
+          <p className="text-white/40 text-sm">
+            Category:{' '}
+            <span className="text-neon font-medium">{category}</span>
           </p>
         </div>
 
-        {/* Statements */}
+        {/* Statement inputs */}
         <div className="space-y-4 mb-6">
-          {statements.map((stmt, i) => (
-            <div key={i} className="relative">
-              <div className="flex items-start gap-3">
-                <button
-                  onClick={() => setLieIndex(i)}
-                  className={`flex-shrink-0 mt-3 w-9 h-9 rounded-xl flex items-center justify-center font-display font-700 text-sm transition-all ${
-                    lieIndex === i
-                      ? 'bg-signal text-white shadow-lg'
-                      : 'bg-white/[0.07] text-white/40 hover:bg-white/10'
-                  }`}
-                  title="Mark as the lie"
-                >
-                  {letters[i]}
-                </button>
-                <div className="flex-1">
-                  <textarea
-                    className="input"
-                    placeholder={`Statement ${letters[i]}${lieIndex === i ? ' (THE LIE)' : ' — write a truth or lie…'}`}
-                    value={stmt}
-                    onChange={e => setStatement(i, e.target.value)}
-                    rows={2}
-                    maxLength={200}
-                    style={{ borderColor: lieIndex === i ? '#ff6b35' : undefined }}
-                  />
-                  <div className="flex justify-between mt-1">
-                    <span className={`text-xs font-mono inline-flex items-center gap-1 ${lieIndex === i ? 'text-signal' : 'text-white/20'}`}>
-                      {lieIndex === i ? (<><Drama className="w-3 h-3" /> This is the LIE</>) : 'Tap letter to mark as lie'}
-                    </span>
-                    <span className="text-white/20 text-xs">{stmt.length}/200</span>
+          {statements.map((stmt, i) => {
+            const isLie = lieIndex === i
+            return (
+              <div key={i} className="relative">
+                <div className="flex items-start gap-3">
+                  {/* Letter / lie marker button */}
+                  <button
+                    onClick={() => setLieIndex(i)}
+                    className={`flex-shrink-0 mt-3 w-10 h-10 rounded-xl flex items-center justify-center font-display font-bold text-sm transition-all duration-200 ${
+                      isLie
+                        ? 'bg-signal text-white shadow-[0_0_18px_rgba(255,107,53,0.4)] scale-105'
+                        : 'bg-white/[0.07] text-white/40 hover:bg-white/12 hover:text-white/70'
+                    }`}
+                    title="Mark as the lie"
+                  >
+                    {letters[i]}
+                  </button>
+
+                  <div className="flex-1">
+                    <textarea
+                      className="input"
+                      placeholder={`Statement ${letters[i]}${isLie ? ' — THE LIE' : ' — truth or lie…'}`}
+                      value={stmt}
+                      onChange={(e) => setStatement(i, e.target.value)}
+                      rows={2}
+                      maxLength={200}
+                      style={{
+                        borderColor: isLie ? 'rgba(255,107,53,0.5)' : undefined,
+                        background:  isLie ? 'rgba(255,107,53,0.05)' : undefined,
+                        boxShadow:   isLie ? '0 0 0 3px rgba(255,107,53,0.08)' : undefined,
+                      }}
+                    />
+                    <div className="flex justify-between items-center mt-1.5 px-0.5">
+                      <span className={`text-[11px] font-mono inline-flex items-center gap-1.5 transition-colors ${
+                        isLie ? 'text-signal' : 'text-white/20'
+                      }`}>
+                        {isLie ? (
+                          <><Drama className="w-3 h-3" /> This is the LIE</>
+                        ) : (
+                          <>Tap letter to mark as lie</>
+                        )}
+                      </span>
+                      <span className="text-white/20 text-[11px] font-mono">{stmt.length}/200</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Hint */}
-        <div className="card bg-white/[0.03] border-white/[0.06] mb-6">
-          <div className="flex gap-3 text-sm text-white/40">
-            <Lightbulb className="w-4 h-4 flex-shrink-0 mt-0.5 text-gold/70" strokeWidth={2.25} />
-            <p>Make your lie believable. The more specific and plausible it sounds, the harder it is to detect. Tap a letter to mark it as the lie.</p>
-          </div>
+        <div className="glass rounded-xl border border-white/[0.07] px-4 py-3.5 mb-6 flex gap-3">
+          <Lightbulb className="w-4 h-4 flex-shrink-0 mt-0.5 text-gold/65" strokeWidth={2.25} />
+          <p className="text-white/40 text-sm leading-relaxed">
+            Make your lie believable. Specific, plausible statements are harder to detect.
+            Tap a letter badge to mark it as the lie.
+          </p>
         </div>
 
         {/* Submit */}
@@ -135,7 +165,7 @@ export default function WritingPhase() {
           {canSubmit ? (
             <><Send className="w-4 h-4" strokeWidth={2.25} /> Submit & Let the Game Begin</>
           ) : (
-            'Fill all 3 statements and mark the lie'
+            <><PenLine className="w-4 h-4" strokeWidth={2.25} /> Fill all 3 statements and mark the lie</>
           )}
         </button>
       </div>
