@@ -36,12 +36,12 @@ export default function WalletButton({ compact = false }) {
   return (
     <button
       onClick={() => setOpen(true)}
-      className={`group inline-flex items-center gap-2 rounded-xl border border-neon/35 bg-neon/8 text-neon font-semibold uppercase tracking-wider transition-all duration-200 hover:bg-neon/15 hover:border-neon/55 hover:shadow-[0_0_24px_rgba(127,255,110,0.3)] active:scale-95 ${
+      className={`group inline-flex items-center gap-2 rounded-xl border border-crimson/40 bg-crimson/10 text-crimson font-semibold uppercase tracking-wider transition-all duration-200 hover:bg-crimson/18 hover:border-crimson/60 hover:shadow-[0_0_24px_rgba(232,0,45,0.3)] active:scale-95 ${
         compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs'
       }`}
       aria-label="Connect wallet"
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse flex-shrink-0" />
+      <span className="w-1.5 h-1.5 rounded-full bg-crimson animate-pulse flex-shrink-0" />
       <Wallet className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} strokeWidth={2.25} />
       {!compact && <span>Connect</span>}
     </button>
