@@ -116,7 +116,7 @@ export default function HomePage() {
       <section className="text-center animate-slide-up relative overflow-hidden">
         {/* Ambient background glows */}
         <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-plasma/6 blur-[80px] pointer-events-none animate-hero-glow" />
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-[300px] h-[200px] rounded-full bg-neon/5 blur-[60px] pointer-events-none" style={{ animationDelay: '2s', animation: 'heroGlow 10s ease-in-out 2s infinite' }} />
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-[300px] h-[200px] rounded-full bg-crimson/5 blur-[60px] pointer-events-none" style={{ animationDelay: '2s', animation: 'heroGlow 10s ease-in-out 2s infinite' }} />
 
         <div className="relative">
           {/* Chain badge */}
