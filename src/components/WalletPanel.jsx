@@ -80,7 +80,6 @@ export default function WalletPanel() {
   }
 
   const handleDisconnect = () => {
-    if (!confirm('Disconnect your wallet? Any active game session will end.')) return
     resetGame()
     disconnectInjectedWallet()
     addToast('Wallet disconnected', 'info')
