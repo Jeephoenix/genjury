@@ -44,7 +44,7 @@ export default function App() {
       <div className="min-h-screen bg-void bg-grid relative flex flex-col">
         {/* Ambient glows */}
         <div className="fixed top-0 left-1/4 w-96 h-96 bg-plasma/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-neon/4 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-crimson/4 rounded-full blur-3xl pointer-events-none" />
         <div className="fixed top-1/2 left-0 w-64 h-64 bg-ice/3 rounded-full blur-3xl pointer-events-none" />
 
         <NetworkBanner />
