@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import useGameStore, { PHASES } from './lib/store'
+import { isValidRoomCode, normalizeRoomCode } from './lib/genlayer'
 import HomePage from './pages/HomePage'
 import MistrialPage from './pages/MistrialPage'
 import LobbyPage from './pages/LobbyPage'
@@ -24,15 +25,25 @@ import ErrorBoundary from './components/ErrorBoundary'
 import OnboardingModal from './components/OnboardingModal'
 
 export default function App() {
-  const phase     = useGameStore(s => s.phase)
-  const roomCode  = useGameStore(s => s.roomCode)
-  const activeTab = useGameStore(s => s.activeTab)
-  const tickTimer = useGameStore(s => s.tickTimer)
+  const phase        = useGameStore(s => s.phase)
+  const roomCode     = useGameStore(s => s.roomCode)
+  const activeTab    = useGameStore(s => s.activeTab)
+  const tickTimer    = useGameStore(s => s.tickTimer)
+  const setActiveTab = useGameStore(s => s.setActiveTab)
 
   useEffect(() => {
     const interval = setInterval(tickTimer, 1000)
     return () => clearInterval(interval)
   }, [tickTimer])
+
+  // Deep-link: ?join=CODE → auto-navigate to Mistrial tab so the
+  // JoinInviteSheet fires even if the user lands on a different tab.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw  = new URLSearchParams(window.location.search).get('join') || ''
+    const code = normalizeRoomCode(raw)
+    if (isValidRoomCode(code)) setActiveTab('mistrial')
+  }, [setActiveTab])
 
   const inGame    = roomCode && phase !== PHASES.LOBBY
   const showTopNav = !inGame
