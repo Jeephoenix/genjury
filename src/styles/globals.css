@@ -93,11 +93,7 @@ body::before {
 .text-glow-ice    { text-shadow: 0 0 12px rgba(56,217,245,0.7), 0 0 30px rgba(56,217,245,0.3); }
 .text-glow-signal { text-shadow: 0 0 12px rgba(255,107,53,0.7), 0 0 30px rgba(255,107,53,0.3); }
 
-/* ── Tabular numbers ──
-   font-mono elements use JetBrains Mono (monospaced) so digits are already
-   equal-width, but we also activate the OpenType tnum feature for max precision.
-   .tnum applies tabular nums to Satoshi (body font) contexts — scores, XP, levels.
-*/
+/* ── Tabular numbers ── */
 .font-mono,
 [class~="font-mono"] {
   font-variant-numeric: tabular-nums lining-nums;
@@ -267,10 +263,9 @@ body::before {
 .btn:hover::after { opacity: 1; }
 .btn:active { transform: scale(0.97); }
 
-/* Ripple on btn click */
 .btn:focus-visible {
-  outline: 2px solid rgba(255,255,255,0.3);
-  outline-offset: 2px;
+  outline: 2px solid rgba(255,255,255,0.35);
+  outline-offset: 3px;
 }
 
 .btn-neon {
@@ -339,6 +334,27 @@ body::before {
   box-shadow: none !important;
 }
 
+/* ── Skip-to-content link (accessibility) ── */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  background: var(--plasma);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: top 0.15s;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 1rem;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 /* ── Card ── */
 .card {
   background: var(--panel);
@@ -366,6 +382,9 @@ body::before {
   border-color: var(--plasma); 
   box-shadow: 0 0 0 3px rgba(162,89,255,0.12), 0 0 20px rgba(162,89,255,0.1);
   background: rgba(162,89,255,0.04);
+}
+.input:focus-visible {
+  outline: none;
 }
 
 textarea.input { resize: vertical; min-height: 80px; }
@@ -506,6 +525,11 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
   box-shadow: 0 0 18px rgba(162,89,255,0.7);
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid rgba(162,89,255,0.5);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 /* ── Glow dot ── */
@@ -649,6 +673,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transform: translateY(-1px);
 }
 
+.btn-connect:focus-visible {
+  outline: 2px solid rgba(162,89,255,0.5);
+  outline-offset: 3px;
+}
+
+.btn-connect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 /* ── Hero glow animation ── */
 @keyframes heroGlow {
   0%, 100% { opacity: 0.04; transform: scale(1); }
@@ -701,6 +736,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transform: translateY(-2px);
 }
 
+.vote-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.3);
+  outline-offset: 2px;
+}
+
 /* ── OnBoarding ── */
 @keyframes iconBounce {
   0%, 100% { transform: translateY(0) scale(1); }
@@ -744,4 +784,42 @@ input[type="range"]::-webkit-slider-thumb:hover {
     filter: blur(0px);
     transform: translateY(0px);
   }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .float-anim,
+  .float-anim-slow,
+  .float-anim-2,
+  .hero-glow,
+  .hero-glow-2,
+  .icon-bounce,
+  .scan-anim::after,
+  .ai-ring,
+  .ai-ring-2,
+  .ai-ring-3,
+  .orbit-loader,
+  .shimmer-text {
+    animation: none !important;
+  }
+}
+
+/* ── Focus visible global ring ── */
+:focus-visible {
+  outline: 2px solid rgba(162,89,255,0.6);
+  outline-offset: 2px;
+}
+
+/* Suppress default focus ring for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
 }

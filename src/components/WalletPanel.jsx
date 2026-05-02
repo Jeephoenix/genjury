@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Copy, LogOut, Wallet as WalletIcon, X, ExternalLink, RefreshCw, ChevronRight } from 'lucide-react'
+import {
+  Copy, LogOut, Wallet as WalletIcon, X, ExternalLink,
+  RefreshCw, ChevronRight, AlertCircle,
+} from 'lucide-react'
 import {
   myAddress,
   isWalletConnected,
@@ -23,6 +26,7 @@ export default function WalletPanel() {
   const [balanceWei, setBalanceWei] = useState(null)
   const [connecting, setConnecting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const net       = getNetworkInfo()
   const symbol    = getChainNativeSymbol()
@@ -57,6 +61,8 @@ export default function WalletPanel() {
     if (!text) return
     try {
       navigator.clipboard?.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
       addToast(label, 'success')
     } catch {
       addToast('Copy failed', 'error')
@@ -65,7 +71,7 @@ export default function WalletPanel() {
 
   const handleConnect = async () => {
     if (!hasInj) {
-      addToast('No Web3 wallet detected. Install MetaMask first.', 'error')
+      window.open('https://metamask.io/download/', '_blank', 'noopener')
       return
     }
     setConnecting(true)
@@ -88,35 +94,27 @@ export default function WalletPanel() {
   if (!open) return null
 
   return (
-    /* Full-screen overlay */
     <div
       className="fixed inset-0 z-[70] modal-overlay"
       onClick={() => setOpen(false)}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Wallet panel"
     >
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
 
-      {/*
-        Positioning wrapper:
-          Mobile  → anchored to bottom edge (bottom sheet)
-          Desktop → centred in viewport (card modal)
-      */}
       <div className="absolute inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center md:px-4">
-
-        {/* Panel */}
         <div
           className="sheet-panel relative w-full md:max-w-md"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* ── Drag handle (mobile only) ── */}
-          <div className="md:hidden flex justify-center pt-3 pb-0 relative z-10">
+          {/* Drag handle (mobile only) */}
+          <div className="md:hidden flex justify-center pt-3 pb-0 relative z-10" aria-hidden="true">
             <div className="w-10 h-1 rounded-full bg-white/25" />
           </div>
 
-          {/* ── Inner card ── */}
+          {/* Inner card */}
           <div className="glass-strong rounded-t-3xl md:rounded-2xl border-t border-x md:border border-white/[0.1] overflow-hidden max-h-[88vh] overflow-y-auto">
-
-            {/* Top accent line */}
             <div className="h-px bg-gradient-to-r from-transparent via-plasma/60 to-transparent" />
 
             <div className="p-6 space-y-5">
@@ -139,7 +137,7 @@ export default function WalletPanel() {
                 <button
                   onClick={() => setOpen(false)}
                   className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center flex-shrink-0"
-                  aria-label="Close"
+                  aria-label="Close wallet panel"
                 >
                   <X className="w-4 h-4" strokeWidth={2.25} />
                 </button>
@@ -149,7 +147,7 @@ export default function WalletPanel() {
                 <>
                   {/* Network row */}
                   <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] px-3.5 py-3 flex items-center gap-3">
-                    <div className="relative">
+                    <div className="relative flex-shrink-0">
                       <div className="w-2.5 h-2.5 rounded-full bg-neon" />
                       <div className="absolute inset-0 rounded-full bg-neon animate-ping opacity-40" />
                     </div>
@@ -170,7 +168,11 @@ export default function WalletPanel() {
                         {address}
                       </code>
                       <button
-                        className="w-11 h-11 rounded-xl border border-white/[0.08] bg-white/[0.04] hover:bg-white/10 text-white/50 hover:text-white transition-all flex items-center justify-center flex-shrink-0"
+                        className={`w-11 h-11 rounded-xl border transition-all flex items-center justify-center flex-shrink-0 ${
+                          copied
+                            ? 'border-neon/40 bg-neon/10 text-neon'
+                            : 'border-white/[0.08] bg-white/[0.04] hover:bg-white/10 text-white/50 hover:text-white'
+                        }`}
                         onClick={() => copy(address, 'Address copied')}
                         aria-label="Copy address"
                       >
@@ -186,18 +188,33 @@ export default function WalletPanel() {
                       <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">Balance</p>
                       <button
                         onClick={refreshBalance}
-                        className="text-white/30 hover:text-white/60 transition-colors"
+                        className="text-white/30 hover:text-white/65 transition-colors p-0.5 rounded"
                         aria-label="Refresh balance"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} strokeWidth={2.25} />
                       </button>
                     </div>
                     <div className="flex items-baseline gap-2.5">
-                      <span className="font-display font-bold text-3xl text-white tabular-nums">
+                      <span className="font-display font-bold text-3xl text-white tnum">
                         {balanceWei !== null ? formatGen(balanceWei, 4) : '—'}
                       </span>
                       <span className="text-white/40 text-sm font-mono">{symbol}</span>
                     </div>
+
+                    {/* Low balance nudge */}
+                    {balanceWei !== null && balanceWei < 1n * 10n ** 16n && net.faucet && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-gold flex-shrink-0" strokeWidth={2.25} />
+                        <a
+                          href={`${net.faucet}?address=${address}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-gold/70 hover:text-gold text-xs transition-colors underline underline-offset-2"
+                        >
+                          Low balance — get test {symbol} from faucet
+                        </a>
+                      </div>
+                    )}
                   </div>
 
                   {/* Explorer link */}
@@ -217,14 +234,13 @@ export default function WalletPanel() {
 
                   {/* Disconnect */}
                   <button
-                    className="w-full py-3 rounded-xl border border-signal/30 bg-signal/8 text-signal text-sm font-semibold hover:bg-signal/15 hover:border-signal/50 transition-all inline-flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl border border-signal/25 bg-signal/[0.07] text-signal text-sm font-semibold hover:bg-signal/15 hover:border-signal/45 transition-all inline-flex items-center justify-center gap-2 active:scale-[0.98]"
                     onClick={handleDisconnect}
                   >
                     <LogOut className="w-4 h-4" strokeWidth={2.25} />
                     Disconnect Wallet
                   </button>
 
-                  {/* Safe-area spacer for phones with a home bar */}
                   <div className="md:hidden h-[env(safe-area-inset-bottom,0px)]" />
                 </>
               ) : (
@@ -236,55 +252,52 @@ export default function WalletPanel() {
                     <br />Connect a Web3 wallet to play.
                   </div>
 
-                  {/* Connect button */}
+                  {/* Connect / Install button */}
                   <button
                     className="btn-connect"
                     onClick={handleConnect}
-                    disabled={!hasInj || connecting}
+                    disabled={connecting}
+                    aria-busy={connecting}
                   >
                     {connecting ? (
                       <>
-                        <div className="orbit-loader w-5 h-5 border-t-plasma" />
+                        <div className="orbit-loader w-5 h-5" />
                         Connecting…
+                      </>
+                    ) : hasInj ? (
+                      <>
+                        <WalletIcon className="w-4 h-4" strokeWidth={2.25} />
+                        Connect Wallet
+                        <ChevronRight className="w-4 h-4 ml-auto opacity-50" strokeWidth={2.5} />
                       </>
                     ) : (
                       <>
-                        <WalletIcon className="w-4.5 h-4.5" strokeWidth={2.25} />
-                        {hasInj ? 'Connect Wallet' : 'No wallet detected'}
-                        {hasInj && <ChevronRight className="w-4 h-4 ml-auto opacity-50" strokeWidth={2.5} />}
+                        <WalletIcon className="w-4 h-4" strokeWidth={2.25} />
+                        Install MetaMask
+                        <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-50" strokeWidth={2.25} />
                       </>
                     )}
                   </button>
 
                   {!hasInj && (
-                    <div className="text-center space-y-2">
-                      <p className="text-white/35 text-xs">
-                        Install a Web3 wallet to get started
+                    <div className="text-center space-y-1.5">
+                      <p className="text-white/30 text-xs leading-relaxed">
+                        No Web3 wallet detected. MetaMask, Rabby, Coinbase Wallet,<br className="hidden sm:inline" /> and any EIP-1193 wallet work.
                       </p>
-                      <a
-                        href="https://metamask.io"
-                        target="_blank"
-                        rel="noopener"
-                        className="inline-flex items-center gap-1.5 text-plasma/70 hover:text-plasma text-xs transition-colors"
-                      >
-                        Get MetaMask <ExternalLink className="w-3 h-3" strokeWidth={2.25} />
-                      </a>
                     </div>
                   )}
 
                   {hasInj && (
-                    <p className="text-white/25 text-xs text-center font-mono">
+                    <p className="text-white/22 text-xs text-center font-mono">
                       EIP-1193 compatible · {symbol} required for play
                     </p>
                   )}
 
-                  {/* Safe-area spacer for phones with a home bar */}
                   <div className="md:hidden h-[env(safe-area-inset-bottom,0px)]" />
                 </>
               )}
             </div>
 
-            {/* Bottom accent */}
             <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
           </div>
         </div>
