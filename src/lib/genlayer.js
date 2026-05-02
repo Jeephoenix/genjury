@@ -45,6 +45,113 @@ export function hasInjectedProvider() {
   return typeof window !== 'undefined' && !!window.ethereum
 }
 
+// ── Multi-wallet detection ───────────────────────────────────────────────────
+//
+// EIP-5749 / EIP-6963 expose multiple providers in window.ethereum.providers[].
+// Each provider carries fingerprint booleans (isMetaMask, isCoinbaseWallet, …).
+// We normalise these into a plain descriptor array so the UI can render a
+// labelled wallet selector without touching raw provider objects in React state
+// (provider objects are not serialisable).
+//
+// The returned array is stable across calls (same identity if no new wallets).
+
+const WALLET_DEFS = [
+  { key: 'rabby',    label: 'Rabby',            flag: 'isRabby',         icon: 'rabby' },
+  { key: 'coinbase', label: 'Coinbase Wallet',   flag: 'isCoinbaseWallet', icon: 'coinbase' },
+  { key: 'metamask', label: 'MetaMask',          flag: 'isMetaMask',       icon: 'metamask' },
+  { key: 'brave',    label: 'Brave Wallet',      flag: 'isBraveWallet',    icon: 'brave' },
+  { key: 'frame',    label: 'Frame',             flag: 'isFrame',          icon: 'frame' },
+  { key: 'trust',    label: 'Trust Wallet',      flag: 'isTrust',          icon: 'trust' },
+  { key: 'okx',      label: 'OKX Wallet',        flag: 'isOkxWallet',      icon: 'okx' },
+]
+
+function labelProvider(p) {
+  for (const def of WALLET_DEFS) {
+    if (p[def.flag]) return { label: def.label, icon: def.icon, key: def.key }
+  }
+  return { label: 'Browser Wallet', icon: 'generic', key: 'generic' }
+}
+
+// Returns an array of { key, label, icon } — one entry per detected provider.
+// The array index matches the internal _providers array so connectWithProvider
+// can look up the raw provider by index.
+let _providers = []
+
+export function detectWallets() {
+  if (typeof window === 'undefined' || !window.ethereum) return []
+
+  // EIP-5749: some wallets expose window.ethereum.providers[]
+  const multi = window.ethereum.providers
+  if (Array.isArray(multi) && multi.length > 0) {
+    _providers = multi
+  } else {
+    _providers = [window.ethereum]
+  }
+
+  // De-duplicate by label (same wallet may appear twice via different injection methods)
+  const seen = new Set()
+  const result = []
+  for (const p of _providers) {
+    const meta = labelProvider(p)
+    if (!seen.has(meta.key)) {
+      seen.add(meta.key)
+      result.push(meta)
+    }
+  }
+  return result
+}
+
+// Connect using the provider at the given index in the last detectWallets() call.
+// Falls back to window.ethereum if index is out of range.
+export async function connectWithProvider(providerIndex = 0) {
+  const provider = _providers[providerIndex] ?? window.ethereum
+  if (!provider) throw new Error('No Web3 wallet found. Install MetaMask to continue.')
+
+  const accounts = await provider.request({ method: 'eth_requestAccounts' })
+  if (!accounts?.length) throw new Error('Wallet did not return any accounts')
+  const addr = accounts[0]
+
+  // Temporarily swap window.ethereum so ensureCorrectChain uses this provider
+  const prev = window.ethereum
+  window.ethereum = provider
+  try {
+    await ensureCorrectChain()
+  } finally {
+    window.ethereum = prev
+  }
+
+  // Wire events on the chosen provider
+  rememberInjected(addr)
+  _client = null
+  notify()
+
+  const tag = '__genjuryWired'
+  if (!provider[tag]) {
+    provider[tag] = true
+    provider.on?.('accountsChanged', (accs) => {
+      rememberInjected(accs?.[0] ?? null)
+      _client = null
+      notify()
+    })
+    provider.on?.('chainChanged', () => {
+      _client = null
+      notify()
+    })
+  }
+
+  // Store chosen provider so getClient() uses it
+  _chosenProvider = provider
+
+  return addr
+}
+
+// The provider chosen at last connectWithProvider call; used by getClient().
+let _chosenProvider = null
+
+export function getChosenProvider() {
+  return _chosenProvider ?? (typeof window !== 'undefined' ? window.ethereum : null)
+}
+
 export function injectedAddress() {
   if (_injectedAddress) return _injectedAddress
   try {
@@ -236,7 +343,7 @@ export function getClient() {
   _client = createClient({
     chain: buildChain(),
     account: addr,
-    provider: window.ethereum,
+    provider: getChosenProvider(),
   })
   return _client
 }
