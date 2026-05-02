@@ -13,7 +13,9 @@ import {
   hasContractAddress,
 } from '../lib/genlayer'
 
-// Build a one-tap invite URL that deep-links straight into the join flow for
+const FINISHED_PHASES = new Set(['scoreboard', 'completed', 'finished'])
+
+  // Build a one-tap invite URL that deep-links straight into the join flow for
 // a given room code. MistrialPage already handles the ?join=CODE query param.
 function buildInviteUrl(code) {
   if (typeof window === 'undefined' || !code) return ''
@@ -89,6 +91,7 @@ export default function OpenRoundsList({
     for (const r of liveRooms || []) {
       const code = String(r.roomCode || '').toUpperCase()
       if (!code || map.has(code)) continue
+      if (FINISHED_PHASES.has(r.phase)) continue   // skip completed rooms
       map.set(code, {
         code,
         host: r.host,
@@ -103,6 +106,7 @@ export default function OpenRoundsList({
       })
     }
     for (const r of myRooms) {
+      if (r.finished) continue   // game over — keep docket clean
       const existing = map.get(r.code)
       if (existing) { existing.isHost = existing.isHost || !!r.isHost; continue }
       map.set(r.code, {
@@ -136,6 +140,11 @@ export default function OpenRoundsList({
       try {
         const p = await previewRoom(r.code)
         if (cancelled) return
+        // Auto-prune rooms that have finished — they vanish from the docket.
+        if (p && FINISHED_PHASES.has(p.phase)) {
+          forgetJoinedRoom(r.code)
+          return
+        }
         setPreviews((prev) => ({ ...prev, [r.code]: p || 'error' }))
       } catch {
         if (cancelled) return
@@ -221,11 +230,10 @@ export default function OpenRoundsList({
             const players = live ? `${live.playerCount}/${live.maxPlayers || '?'}` : '—'
 
             const isMyRoom  = !!myRooms.find((mr) => mr.code === r.code)
-            const canRejoin = !playable && !isError && isMyRoom
+            const canRejoin  = !playable && !isError && !isLoading && isMyRoom
+            const isLocked   = !playable && !isError && !isLoading && !isMyRoom
 
-            // Show the invite-share button on any joinable (lobby) room, and
-            // also on rooms where the user is already seated (they can invite
-            // others to future rounds by sharing the code).
+            // Show invite button on joinable rooms and rooms you're seated in.
             const showShare = (playable || isMyRoom) && !isError
 
             const wasCopied = copiedCode === r.code
@@ -236,6 +244,8 @@ export default function OpenRoundsList({
                 className={`relative rounded-xl border p-4 hover:border-white/20 transition-colors ${
                   canRejoin
                     ? 'border-plasma/30 bg-plasma/[0.04]'
+                    : isLocked
+                    ? 'border-white/[0.06] bg-white/[0.015] opacity-75'
                     : 'border-white/10 bg-white/[0.03]'
                 }`}
               >
@@ -264,6 +274,16 @@ export default function OpenRoundsList({
                   {r.isHost && (
                     <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">
                       YOUR CASE
+                    </span>
+                  )}
+                  {isLocked && (
+                    <span className="badge bg-white/[0.06] text-white/30 border border-white/10 text-[9px] tracking-widest">
+                      🔒 LOCKED
+                    </span>
+                  )}
+                  {canRejoin && !r.isHost && (
+                    <span className="badge bg-plasma/10 text-plasma/70 border border-plasma/20 text-[9px] tracking-widest">
+                      SEATED
                     </span>
                   )}
 
@@ -317,33 +337,38 @@ export default function OpenRoundsList({
                   <InviteLinkBar code={r.code} wasCopied={wasCopied} onShare={handleShare} />
                 )}
 
-                <button
-                  onClick={() => handleJoin(r)}
-                  disabled={loading || isError || (!playable && !canRejoin)}
-                  className={`w-full py-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
-                    playable ? 'mt-2' : ''
-                  } ${
-                    isError
-                      ? 'bg-white/5 text-white/35 cursor-not-allowed'
-                      : canRejoin
-                        ? 'bg-plasma/15 text-plasma border border-plasma/40 hover:bg-plasma/25'
-                        : playable
-                          ? 'bg-crimson/15 text-crimson border border-crimson/40 hover:bg-crimson/25'
-                          : 'bg-white/5 text-white/35 border border-white/10 cursor-not-allowed'
-                  }`}
-                >
-                  {isError
-                    ? 'Unreachable'
-                    : isLoading
-                      ? 'Loading…'
-                      : canRejoin
-                        ? 'Rejoin your seat'
-                        : !playable
-                          ? 'Trial in session — locked'
-                          : fee > 0n
-                            ? `Take a seat · ${formatGen(fee, 4)} ${symbol}`
-                            : 'Take a seat'}
-                </button>
+                {/* ── Action CTA ─────────────────────────────── */}
+                  {isError ? (
+                    <div className="mt-2 w-full py-2.5 text-center text-white/25 text-xs font-mono rounded-lg border border-dashed border-white/[0.07] select-none">
+                      Unreachable
+                    </div>
+                  ) : isLoading ? (
+                    <div className="mt-2 w-full py-2.5 text-center text-white/30 text-xs font-mono animate-pulse">
+                      Loading…
+                    </div>
+                  ) : playable ? (
+                    <button
+                      onClick={() => handleJoin(r)}
+                      disabled={loading}
+                      className="mt-2 w-full py-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors bg-crimson/15 text-crimson border border-crimson/40 hover:bg-crimson/25 disabled:opacity-50"
+                    >
+                      {fee > 0n
+                        ? `Take a seat · ${formatGen(fee, 4)} ${symbol}`
+                        : 'Take a seat'}
+                    </button>
+                  ) : canRejoin ? (
+                    <button
+                      onClick={() => handleJoin(r)}
+                      disabled={loading}
+                      className="mt-2 w-full py-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors bg-plasma/15 text-plasma border border-plasma/40 hover:bg-plasma/25 disabled:opacity-50"
+                    >
+                      Rejoin your seat
+                    </button>
+                  ) : isLocked ? (
+                    <div className="mt-2 w-full py-2.5 text-center text-white/25 text-[11px] font-mono uppercase tracking-wider rounded-lg border border-white/[0.07] bg-white/[0.02] select-none">
+                      🔒 Courtroom sealed
+                    </div>
+                  ) : null}
               </div>
             )
           })}
@@ -383,6 +408,7 @@ function InviteLinkBar({ code, wasCopied, onShare }) {
 function prettyPhase(p) {
   switch (p) {
     case 'lobby':           return 'Pre-trial'
+    case 'in_session':      return 'In session'
     case 'writing':         return 'Testimony'
     case 'voting':          return 'Deliberation'
     case 'ai_judging':      return 'AI Judge'
