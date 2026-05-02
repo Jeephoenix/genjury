@@ -187,14 +187,9 @@ export async function connectWithProvider(providerIndex = 0) {
   if (!accounts?.length) throw new Error('Wallet did not return any accounts')
   const addr = accounts[0]
 
-  // Temporarily swap window.ethereum so ensureCorrectChain uses this provider
-  const prev = window.ethereum
-  window.ethereum = provider
-  try {
-    await ensureCorrectChain()
-  } finally {
-    window.ethereum = prev
-  }
+  // Pass the chosen provider directly — never write to window.ethereum
+  // (wallets like Rabby define it as getter-only via Object.defineProperty)
+  await ensureCorrectChain(provider)
 
   // Wire events on the chosen provider
   rememberInjected(addr)
@@ -248,19 +243,22 @@ function rememberInjected(addr) {
   } catch {}
 }
 
-async function ensureCorrectChain() {
-  if (!hasInjectedProvider()) throw new Error('No Web3 wallet detected')
+async function ensureCorrectChain(provider) {
+  // Accept an explicit provider; fall back to window.ethereum for the legacy path.
+  // Never *assign* window.ethereum — wallets like Rabby make it getter-only.
+  const eth = provider ?? (typeof window !== 'undefined' ? window.ethereum : null)
+  if (!eth) throw new Error('No Web3 wallet detected')
   const chain = getChain()
   const expected = `0x${chain.id.toString(16)}`
   let current
   try {
-    current = await window.ethereum.request({ method: 'eth_chainId' })
+    current = await eth.request({ method: 'eth_chainId' })
   } catch {
     current = null
   }
   if (current === expected) return
   try {
-    await window.ethereum.request({
+    await eth.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: expected }],
     })
@@ -269,7 +267,7 @@ async function ensureCorrectChain() {
     if (code === 4902 || /unrecognized chain/i.test(err?.message || '')) {
       const rpcUrl = chain.rpcUrls?.default?.http?.[0]
       const explorerUrl = chain.blockExplorers?.default?.url
-      await window.ethereum.request({
+      await eth.request({
         method: 'wallet_addEthereumChain',
         params: [{
           chainId: expected,
