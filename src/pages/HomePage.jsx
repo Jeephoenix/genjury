@@ -180,7 +180,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8 max-w-sm mx-auto">
             <button
               onClick={() => playGame(featured.id)}
-              className="btn btn-neon flex-1 py-3.5 text-sm inline-flex items-center justify-center gap-2"
+              className="btn btn-crimson flex-1 py-3.5 text-sm inline-flex items-center justify-center gap-2"
             >
               <Zap className="w-4 h-4" strokeWidth={2.5} />
               Play {featured.name}
@@ -229,7 +229,7 @@ export default function HomePage() {
 
             <button
               onClick={() => playGame(featured.id)}
-              className="btn btn-neon px-6 py-3.5 text-sm inline-flex items-center justify-center gap-2 sm:flex-shrink-0"
+              className="btn btn-crimson px-6 py-3.5 text-sm inline-flex items-center justify-center gap-2 sm:flex-shrink-0"
             >
               Play now
               <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
@@ -354,7 +354,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center mt-7 max-w-sm mx-auto">
             <button
               onClick={() => playGame(featured.id)}
-              className="btn btn-neon flex-1 py-3.5 text-sm inline-flex items-center justify-center gap-2"
+              className="btn btn-crimson flex-1 py-3.5 text-sm inline-flex items-center justify-center gap-2"
             >
               <Zap className="w-4 h-4" strokeWidth={2.5} />
               Play {featured.name}
