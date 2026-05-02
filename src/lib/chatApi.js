@@ -24,3 +24,15 @@ export async function postChat(roomCode, player, text, kind = 'taunt') {
   })
   return msg
 }
+
+  export async function toggleReaction(roomCode, msgId, emoji, userId) {
+    const r = await fetch('/api/chat', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ roomCode, msgId, emoji, userId }),
+    })
+    if (!r.ok) throw new Error('reaction failed')
+    const data = await r.json()
+    return data.reactions || {}
+  }
+  
