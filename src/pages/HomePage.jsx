@@ -204,11 +204,11 @@ export default function HomePage() {
         </div>
 
         <div className={`relative rounded-2xl border ${FA.border} bg-panel overflow-hidden card-lift`}
-          style={{ boxShadow: '0 0 60px rgba(127,255,110,0.07)' }}>
+          style={{ boxShadow: '0 0 60px rgba(232,0,45,0.07)' }}>
           {/* Top accent */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/50 to-transparent" />
           {/* Corner glow */}
-          <div className="absolute top-0 left-0 w-40 h-40 rounded-full bg-neon/5 blur-3xl pointer-events-none" />
+          <div className="absolute top-0 left-0 w-40 h-40 rounded-full bg-crimson/5 blur-3xl pointer-events-none" />
 
           <div className="relative p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-6">
             <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center ${FA.bg} border ${FA.border} flex-shrink-0 ${FA.text} float-anim`}>
