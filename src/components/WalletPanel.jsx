@@ -1,159 +1,180 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import {
-  Copy, LogOut, Wallet as WalletIcon, X, ExternalLink,
-  RefreshCw, ChevronRight, AlertCircle, Zap, AlertTriangle,
-} from 'lucide-react'
-import {
-  myAddress,
-  isWalletConnected,
-  hasInjectedProvider,
-  disconnectInjectedWallet,
-  subscribeWallet,
-  getNetworkInfo,
-  getNetworkName,
-  getChain,
-  getChainNativeSymbol,
-  getGenBalanceWei,
-  formatGen,
-  fundAccount,
-  getChosenProvider,
-  switchToCorrectChain,
-} from '../lib/genlayer'
-import useGameStore from '../lib/store'
-import WalletSelectorModal from './WalletSelectorModal'
+  import {
+    Copy, LogOut, Wallet as WalletIcon, X, ExternalLink,
+    RefreshCw, AlertCircle, Zap, AlertTriangle,
+  } from 'lucide-react'
+  import {
+    myAddress,
+    isWalletConnected,
+    hasInjectedProvider,
+    connectInjectedWallet,
+    disconnectInjectedWallet,
+    subscribeWallet,
+    getNetworkInfo,
+    getNetworkName,
+    getChain,
+    getChainNativeSymbol,
+    getGenBalanceWei,
+    formatGen,
+    fundAccount,
+    getChosenProvider,
+    switchToCorrectChain,
+  } from '../lib/genlayer'
+  import useGameStore from '../lib/store'
 
-const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
+  const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
 
-export default function WalletPanel() {
-  const open    = useGameStore((s) => s.walletPanelOpen)
-  const setOpen = useGameStore((s) => s.setWalletPanelOpen)
-  const [, force]      = useState(0)
-  const [balanceWei, setBalanceWei] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const [copied, setCopied]         = useState(false)
-  const [showSelector, setShowSelector] = useState(false)
-  const [funding, setFunding]           = useState(false)
-  const [fundDone, setFundDone]         = useState(false)
-  const [wrongChain, setWrongChain]     = useState(false)
-  const [switching, setSwitching]       = useState(false)
+  const friendlyConnectError = (e) => {
+    const msg  = e?.message || ''
+    const code = e?.code
+    if (code === 4001 || /rejected|denied|cancel/i.test(msg))
+      return 'Request cancelled — please approve the connection in your wallet.'
+    if (/only a getter|Cannot set property ethereum|read.only/i.test(msg))
+      return 'A wallet conflict was detected. Disable other wallet extensions and refresh the page.'
+    if (/no web3|no wallet|not found|not installed/i.test(msg))
+      return 'No wallet detected. Make sure your extension is enabled, then refresh.'
+    if (/timeout|timed out/i.test(msg))
+      return 'Connection timed out. Please try again.'
+    if (/network|rpc|econnrefused|fetch failed/i.test(msg))
+      return 'Network error — check your connection and try again.'
+    return 'Could not connect wallet. Please try again.'
+  }
 
-  const net         = getNetworkInfo()
-  const networkName = getNetworkName()
-  const symbol      = getChainNativeSymbol()
-  const isDevNet    = networkName === 'studionet' || networkName === 'localnet'
-  const addToast  = useGameStore((s) => s.addToast)
-  const resetGame = useGameStore((s) => s.resetGame)
+  export default function WalletPanel() {
+    const open    = useGameStore((s) => s.walletPanelOpen)
+    const setOpen = useGameStore((s) => s.setWalletPanelOpen)
+    const [, force]           = useState(0)
+    const [balanceWei, setBalanceWei]     = useState(null)
+    const [refreshing, setRefreshing]     = useState(false)
+    const [copied, setCopied]             = useState(false)
+    const [funding, setFunding]           = useState(false)
+    const [fundDone, setFundDone]         = useState(false)
+    const [wrongChain, setWrongChain]     = useState(false)
+    const [switching, setSwitching]       = useState(false)
+    const [connecting, setConnecting]     = useState(false)
+    const [connectError, setConnectError] = useState('')
 
-  useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
+    const net         = getNetworkInfo()
+    const networkName = getNetworkName()
+    const symbol      = getChainNativeSymbol()
+    const isDevNet    = networkName === 'studionet' || networkName === 'localnet'
+    const addToast    = useGameStore((s) => s.addToast)
+    const resetGame   = useGameStore((s) => s.resetGame)
 
-  const checkChain = useCallback(async () => {
-    if (!isWalletConnected()) { setWrongChain(false); return }
-    const provider = getChosenProvider()
-    if (!provider) { setWrongChain(false); return }
-    try {
-      const cur      = await provider.request({ method: 'eth_chainId' })
-      const expected = `0x${getChain().id.toString(16)}`
-      setWrongChain(cur !== expected)
-    } catch {
-      setWrongChain(false)
-    }
-  }, [])
+    useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
 
-  const connected = isWalletConnected()
-  const address   = myAddress()
-  const hasInj    = hasInjectedProvider()
+    const checkChain = useCallback(async () => {
+      if (!isWalletConnected()) { setWrongChain(false); return }
+      const provider = getChosenProvider()
+      if (!provider) { setWrongChain(false); return }
+      try {
+        const cur      = await provider.request({ method: 'eth_chainId' })
+        const expected = `0x${getChain().id.toString(16)}`
+        setWrongChain(cur !== expected)
+      } catch {
+        setWrongChain(false)
+      }
+    }, [])
 
-  const refreshBalance = useCallback(async () => {
-    if (!address) return
-    setRefreshing(true)
-    try {
-      const wei = await getGenBalanceWei(address)
-      setBalanceWei(wei)
-    } catch {
+    const connected = isWalletConnected()
+    const address   = myAddress()
+    const hasInj    = hasInjectedProvider()
+
+    const refreshBalance = useCallback(async () => {
+      if (!address) return
+      setRefreshing(true)
+      try {
+        const wei = await getGenBalanceWei(address)
+        setBalanceWei(wei)
+      } catch {
+        setBalanceWei(null)
+      } finally {
+        setRefreshing(false)
+      }
+    }, [address])
+
+    useEffect(() => {
       setBalanceWei(null)
-    } finally {
-      setRefreshing(false)
+      if (open && address) refreshBalance()
+      if (open) checkChain()
+      if (open) setConnectError('')
+    }, [open, address, refreshBalance, checkChain])
+
+    const copy = (text, label = 'Copied') => {
+      if (!text) return
+      try {
+        navigator.clipboard?.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1800)
+        addToast(label, 'success')
+      } catch {
+        addToast('Copy failed', 'error')
+      }
     }
-  }, [address])
 
-  useEffect(() => {
-    setBalanceWei(null)
-    if (open && address) refreshBalance()
-    if (open) checkChain()
-  }, [open, address, refreshBalance, checkChain])
-
-  // Reset selector when panel closes
-  useEffect(() => {
-    if (!open) setShowSelector(false)
-  }, [open])
-
-  const copy = (text, label = 'Copied') => {
-    if (!text) return
-    try {
-      navigator.clipboard?.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-      addToast(label, 'success')
-    } catch {
-      addToast('Copy failed', 'error')
+    const handleConnect = async () => {
+      if (connecting || !hasInj) return
+      setConnecting(true)
+      setConnectError('')
+      try {
+        const addr = await connectInjectedWallet()
+        addToast(`Connected ${short(addr)}`, 'success')
+        force((n) => n + 1)
+        checkChain()
+      } catch (e) {
+        setConnectError(friendlyConnectError(e))
+      } finally {
+        setConnecting(false)
+      }
     }
-  }
 
-  const handleConnected = (addr) => {
-    setShowSelector(false)
-    addToast(`Connected ${short(addr)}`, 'success')
-    force((n) => n + 1)
-  }
-
-  const handleDisconnect = () => {
-    resetGame()
-    disconnectInjectedWallet()
-    addToast('Wallet disconnected', 'info')
-  }
-
-  const handleSwitchNetwork = async () => {
-    if (switching) return
-    setSwitching(true)
-    const ok = await switchToCorrectChain(getChosenProvider())
-    if (ok) {
-      setWrongChain(false)
-      addToast('Switched to ' + net.label, 'success')
-    } else {
-      addToast('Switch cancelled — try switching manually in your wallet.', 'error')
+    const handleDisconnect = () => {
+      resetGame()
+      disconnectInjectedWallet()
+      addToast('Wallet disconnected', 'info')
     }
-    setSwitching(false)
-  }
 
-  const handleFund = async () => {
-    if (!address || funding) return
-    setFunding(true)
-    setFundDone(false)
-    try {
-      await fundAccount(address)
-      addToast('100 GEN added to your account', 'success')
-      setFundDone(true)
-      setTimeout(() => setFundDone(false), 3000)
-      // Refresh balance after a short delay so the node has time to update
-      setTimeout(refreshBalance, 800)
-    } catch (e) {
-      const _m = e?.message || ''
-      addToast(
-        /studionet|localnet|only available/i.test(_m)
-          ? 'Faucet is only available on test networks.'
-          : /rpc.*failed|http \d{3}|fetch failed/i.test(_m)
-          ? 'Network request failed — please try again.'
-          : 'Could not add funds. Please try again.',
-        'error'
-      )
-    } finally {
-      setFunding(false)
+    const handleSwitchNetwork = async () => {
+      if (switching) return
+      setSwitching(true)
+      const ok = await switchToCorrectChain(getChosenProvider())
+      if (ok) {
+        setWrongChain(false)
+        addToast('Switched to ' + net.label, 'success')
+      } else {
+        addToast('Switch cancelled — try switching manually in your wallet.', 'error')
+      }
+      setSwitching(false)
     }
-  }
 
-  if (!open) return null
+    const handleFund = async () => {
+      if (!address || funding) return
+      setFunding(true)
+      setFundDone(false)
+      try {
+        await fundAccount(address)
+        addToast('100 GEN added to your account', 'success')
+        setFundDone(true)
+        setTimeout(() => setFundDone(false), 3000)
+        setTimeout(refreshBalance, 800)
+      } catch (e) {
+        const _m = e?.message || ''
+        addToast(
+          /studionet|localnet|only available/i.test(_m)
+            ? 'Faucet is only available on test networks.'
+            : /rpc.*failed|http \d{3}|fetch failed/i.test(_m)
+            ? 'Network request failed — please try again.'
+            : 'Could not add funds. Please try again.',
+          'error'
+        )
+      } finally {
+        setFunding(false)
+      }
+    }
 
-  return (
-    <>
+    if (!open) return null
+
+    return (
       <div
         className="fixed inset-0 z-[70] modal-overlay"
         onClick={() => setOpen(false)}
@@ -173,13 +194,12 @@ export default function WalletPanel() {
               <div className="w-10 h-1 rounded-full bg-white/25" />
             </div>
 
-            {/* Inner card */}
             <div className="glass-strong rounded-t-3xl md:rounded-2xl border-t border-x md:border border-white/[0.1] overflow-hidden max-h-[88vh] overflow-y-auto">
               <div className="h-px bg-gradient-to-r from-transparent via-plasma/60 to-transparent" />
 
               <div className="p-6 space-y-5">
 
-                {/* Header row */}
+                {/* Header */}
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2.5 mb-1">
@@ -191,7 +211,7 @@ export default function WalletPanel() {
                     <p className="text-white/40 text-xs leading-relaxed pl-10">
                       {connected
                         ? `Connected to ${net.label}`
-                        : `Connect a Web3 wallet to play on ${net.label}.`}
+                        : `Connect a wallet to play on ${net.label}.`}
                     </p>
                   </div>
                   <button
@@ -226,7 +246,7 @@ export default function WalletPanel() {
                       </div>
                     </div>
 
-                    {/* Switch Network card — shown when on wrong chain */}
+                    {/* Switch network card */}
                     {wrongChain && (
                       <div className="rounded-xl bg-gold/[0.08] border border-gold/25 px-3.5 py-3 flex items-center gap-3">
                         <AlertTriangle className="w-4 h-4 text-gold flex-shrink-0" strokeWidth={2} />
@@ -285,9 +305,7 @@ export default function WalletPanel() {
                         <span className="text-white/40 text-sm font-mono">{symbol}</span>
                       </div>
 
-                      {/* Fund / faucet nudge */}
                       {isDevNet ? (
-                        /* Studionet / localnet: one-click debug_fundAccount button */
                         <div className="mt-3">
                           <button
                             onClick={handleFund}
@@ -323,7 +341,6 @@ export default function WalletPanel() {
                           </p>
                         </div>
                       ) : balanceWei !== null && balanceWei < 1n * 10n ** 16n && net.faucet ? (
-                        /* Public testnet: link to faucet when balance is low */
                         <div className="mt-3 flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5 text-gold flex-shrink-0" strokeWidth={2.25} />
                           <a
@@ -353,16 +370,6 @@ export default function WalletPanel() {
 
                     <div className="h-px bg-white/[0.06]" />
 
-                    {/* Switch wallet */}
-                    <button
-                      onClick={() => setShowSelector(true)}
-                      className="w-full py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/50 text-sm hover:bg-white/[0.07] hover:text-white/80 hover:border-white/15 transition-all inline-flex items-center justify-center gap-2"
-                    >
-                      <WalletIcon className="w-4 h-4" strokeWidth={2.25} />
-                      Switch wallet
-                      <ChevronRight className="w-4 h-4 ml-auto opacity-40" strokeWidth={2.25} />
-                    </button>
-
                     {/* Disconnect */}
                     <button
                       className="w-full py-3 rounded-xl border border-signal/25 bg-signal/[0.07] text-signal text-sm font-semibold hover:bg-signal/15 hover:border-signal/45 transition-all inline-flex items-center justify-center gap-2 active:scale-[0.98]"
@@ -376,33 +383,60 @@ export default function WalletPanel() {
                   </>
                 ) : (
                   <>
-                    {/* Not-connected info */}
-                    <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] px-4 py-4 text-sm text-white/55 text-center leading-relaxed">
-                      Genjury runs on{' '}
-                      <span className="text-white/80 font-medium">{net.label}</span>.
-                      <br />Connect a Web3 wallet to play.
+                    {/* Not-connected state */}
+                    <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] px-4 py-7 flex flex-col items-center gap-4 text-center">
+                      <div className="w-14 h-14 rounded-2xl bg-plasma/10 border border-plasma/20 flex items-center justify-center">
+                        <WalletIcon className="w-7 h-7 text-plasma/60" strokeWidth={1.75} />
+                      </div>
+                      <div>
+                        <p className="text-white font-display font-semibold text-base">
+                          {hasInj ? 'Wallet detected' : 'No wallet found'}
+                        </p>
+                        <p className="text-white/45 text-sm mt-1.5 leading-relaxed">
+                          {hasInj
+                            ? 'Approve the connection in your wallet to continue.'
+                            : 'Install MetaMask or Rabby to play on GenLayer.'}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Open wallet selector */}
-                    <button
-                      className="btn-connect"
-                      onClick={() => setShowSelector(true)}
-                    >
-                      <WalletIcon className="w-4 h-4" strokeWidth={2.25} />
-                      {hasInj ? 'Choose wallet' : 'Get a wallet'}
-                      <ChevronRight className="w-4 h-4 ml-auto opacity-50" strokeWidth={2.5} />
-                    </button>
-
-                    {!hasInj && (
-                      <p className="text-white/28 text-xs text-center leading-relaxed">
-                        MetaMask, Rabby, Coinbase Wallet and any EIP-1193 wallet works.
-                      </p>
+                    {/* Error message */}
+                    {connectError && (
+                      <div role="alert" className="rounded-xl bg-signal/10 border border-signal/30 px-3.5 py-2.5 text-signal text-xs leading-snug">
+                        {connectError}
+                      </div>
                     )}
 
-                    {hasInj && (
-                      <p className="text-white/22 text-xs text-center font-mono">
-                        EIP-1193 compatible · {symbol} required for play
-                      </p>
+                    {/* Action button */}
+                    {hasInj ? (
+                      <button
+                        onClick={handleConnect}
+                        disabled={connecting}
+                        aria-busy={connecting}
+                        className="w-full py-3.5 rounded-xl bg-plasma text-white font-display font-bold text-sm hover:bg-plasma/90 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-wait inline-flex items-center justify-center gap-2.5 shadow-[0_0_24px_rgba(162,89,255,0.35)]"
+                      >
+                        {connecting ? (
+                          <>
+                            <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin flex-shrink-0" />
+                            Connecting…
+                          </>
+                        ) : (
+                          <>
+                            <WalletIcon className="w-4 h-4 flex-shrink-0" strokeWidth={2.25} />
+                            Connect Wallet
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <a
+                        href="https://metamask.io/download/"
+                        target="_blank"
+                        rel="noopener"
+                        className="w-full py-3.5 rounded-xl border border-white/15 bg-white/[0.05] text-white/70 text-sm font-semibold hover:bg-white/10 hover:text-white transition-all inline-flex items-center justify-center gap-2"
+                      >
+                        <ExternalLink className="w-4 h-4" strokeWidth={2.25} />
+                        Install MetaMask
+                      </a>
                     )}
 
                     <div className="md:hidden h-[env(safe-area-inset-bottom,0px)]" />
@@ -415,14 +449,6 @@ export default function WalletPanel() {
           </div>
         </div>
       </div>
-
-      {/* Wallet selector sheet — rendered on top of the panel at z-[75] */}
-      {showSelector && (
-        <WalletSelectorModal
-          onConnect={handleConnected}
-          onClose={() => setShowSelector(false)}
-        />
-      )}
-    </>
-  )
-}
+    )
+  }
+  
