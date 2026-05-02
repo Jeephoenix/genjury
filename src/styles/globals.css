@@ -31,6 +31,8 @@ body {
   background-color: var(--void);
   color: #fff;
   font-family: 'Satoshi', sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "lnum";
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
