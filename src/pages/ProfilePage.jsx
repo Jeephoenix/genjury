@@ -302,7 +302,7 @@ function ProfileEditor({ profile }) {
         {dirty && (
           <button
             onClick={handleSave}
-            className="px-3.5 py-1.5 rounded-lg border border-neon/35 bg-neon/12 text-neon text-xs font-semibold hover:bg-neon/22 inline-flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-1.5 rounded-lg border border-crimson/35 bg-crimson/12 text-crimson text-xs font-semibold hover:bg-crimson/22 inline-flex items-center gap-1.5 transition-all"
           >
             {saved && <Check className="w-3.5 h-3.5" />}
             {saved ? 'Saved!' : 'Save changes'}
