@@ -35,24 +35,28 @@ export default function App() {
   }, [tickTimer])
 
   const inGame    = roomCode && phase !== PHASES.LOBBY
-  // Show TopNav everywhere except inside an active mid-game phase.
-  // Users in the lobby (pre-game) can still navigate other tabs freely.
   const showTopNav = !inGame
 
   return (
     <ErrorBoundary>
+      {/* Skip-to-content for screen reader / keyboard users */}
+      <a href="#main-content" className="skip-link">Skip to content</a>
+
       <div className="min-h-screen bg-void bg-grid relative flex flex-col">
         {/* Ambient glows */}
-        <div className="fixed top-0 left-1/4 w-96 h-96 bg-plasma/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-crimson/4 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed top-1/2 left-0 w-64 h-64 bg-ice/3 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed top-0 left-1/4 w-96 h-96 bg-plasma/5 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+        <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-crimson/4 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+        <div className="fixed top-1/2 left-0 w-64 h-64 bg-ice/3 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
 
         <NetworkBanner />
         {showTopNav && <TopNav />}
         {inGame && <GameHeader />}
         <WalletPanel />
 
-        <main className={`flex-1 ${inGame ? 'pt-20 md:pt-16' : ''} ${showTopNav ? 'pb-20 md:pb-0' : ''}`}>
+        <main
+          id="main-content"
+          className={`flex-1 ${inGame ? 'pt-20 md:pt-16' : ''} ${showTopNav ? 'pb-20 md:pb-0' : ''}`}
+        >
           {inGame ? (
             <>
               {phase === PHASES.WRITING && <WritingPhase />}
@@ -64,10 +68,6 @@ export default function App() {
             </>
           ) : (
             <>
-              {/* Lobby is shown when user has an active pre-game room and
-                  navigated to the lobby tab. Other tabs work normally even
-                  while sitting in a lobby — users can browse, create, or join
-                  another room without being trapped. */}
               {activeTab === 'lobby' && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
               {activeTab === 'home'        && <HomePage />}
               {activeTab === 'mistrial'    && <MistrialPage />}

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { Home, Gamepad2, Trophy, UserRound, Gavel } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import WalletButton from './WalletButton'
@@ -18,12 +18,14 @@ export default function TopNav() {
 
   const inLobby = !!(roomCode && phase === PHASES.LOBBY)
 
-  const select = (id) => setActiveTab(id)
+  const select = useCallback((id) => {
+    setActiveTab(id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [setActiveTab])
 
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-void/80 backdrop-blur-2xl">
-        {/* Subtle top accent line */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-plasma/40 to-transparent" />
 
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
@@ -43,17 +45,17 @@ export default function TopNav() {
           </button>
 
           {/* Desktop tabs */}
-          <nav className="hidden md:flex items-center gap-0.5 ml-3">
+          <nav className="hidden md:flex items-center gap-0.5 ml-3" aria-label="Primary">
             {TABS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id
               return (
                 <button
                   key={id}
                   onClick={() => select(id)}
-                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plasma/50 ${
                     active
                       ? 'text-white bg-white/[0.07]'
-                      : 'text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]'
                   }`}
                   aria-current={active ? 'page' : undefined}
                 >
@@ -73,14 +75,15 @@ export default function TopNav() {
             {inLobby && (
               <button
                 onClick={() => select('lobby')}
-                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ml-1 ${
+                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon/50 ${
                   activeTab === 'lobby'
                     ? 'text-neon bg-neon/[0.09] border border-neon/25 glow-neon'
                     : 'text-neon/65 hover:text-neon hover:bg-neon/[0.07] border border-neon/15'
                 }`}
+                aria-label={`Active room: ${roomCode}`}
               >
                 <span className="flex items-center gap-1.5">
-                  <span className="dot-live" />
+                  <span className="dot-live" aria-hidden="true" />
                   <Gavel className="w-4 h-4" strokeWidth={2.25} />
                   <span className="font-mono tracking-widest text-[11px]">{roomCode}</span>
                 </span>
@@ -107,10 +110,9 @@ export default function TopNav() {
 
       {/* Mobile bottom tab bar */}
       <nav
-        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-void/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-void/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom,0px)]"
         aria-label="Primary"
       >
-        {/* Top accent line */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-plasma/30 to-transparent" />
 
         <div className={`mx-auto max-w-7xl grid ${inLobby ? 'grid-cols-5' : 'grid-cols-4'}`}>
@@ -120,7 +122,7 @@ export default function TopNav() {
               <button
                 key={id}
                 onClick={() => select(id)}
-                className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-all duration-200 ${
+                className={`relative flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-plasma/40 ${
                   active ? 'text-white' : 'text-white/40 hover:text-white/70'
                 }`}
                 aria-current={active ? 'page' : undefined}
@@ -140,14 +142,15 @@ export default function TopNav() {
           {inLobby && (
             <button
               onClick={() => select('lobby')}
-              className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-all duration-200 ${
+              className={`relative flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-neon/40 ${
                 activeTab === 'lobby' ? 'text-neon' : 'text-neon/50 hover:text-neon'
               }`}
               aria-current={activeTab === 'lobby' ? 'page' : undefined}
+              aria-label={`Active room: ${roomCode}`}
             >
               <div className={`relative p-1.5 rounded-lg transition-all duration-200 ${activeTab === 'lobby' ? 'bg-neon/10' : ''}`}>
                 <Gavel className="w-5 h-5" strokeWidth={2.25} />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-neon border border-void animate-pulse" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-neon border border-void animate-pulse" aria-hidden="true" />
               </div>
               <span className="font-mono tracking-wider">{roomCode}</span>
               {activeTab === 'lobby' && (
