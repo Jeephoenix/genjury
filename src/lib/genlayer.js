@@ -77,31 +77,107 @@ function labelProvider(p) {
 // can look up the raw provider by index.
 let _providers = []
 
-export function detectWallets() {
-  if (typeof window === 'undefined' || !window.ethereum) return []
+  // ── EIP-6963 multi-wallet discovery ─────────────────────────────────────────
+  //
+  // EIP-6963 (Multi Injected Provider Discovery) supersedes the EIP-5749
+  // window.ethereum.providers[] approach.  Wallets announce themselves by:
+  //   1. listening for "eip6963:requestProvider" on window, then
+  //   2. firing "eip6963:announceProvider" with { detail: { info, provider } }
+  //
+  // info shape: { uuid: string, name: string, icon: string (data-URI), rdns: string }
+  //
+  // We collect these into a Map keyed by UUID so late-loading extensions are
+  // automatically picked up.  A lightweight pub/sub lets the selector modal
+  // re-render without polling.
 
-  // EIP-5749: some wallets expose window.ethereum.providers[]
-  const multi = window.ethereum.providers
-  if (Array.isArray(multi) && multi.length > 0) {
-    _providers = multi
-  } else {
-    _providers = [window.ethereum]
+  const _eip6963Map = new Map()   // uuid → { info, provider }
+  const _walletListeners = new Set()
+
+  export function subscribeWalletList(fn) {
+    _walletListeners.add(fn)
+    return () => _walletListeners.delete(fn)
   }
 
-  // De-duplicate by label (same wallet may appear twice via different injection methods)
-  const seen = new Set()
-  const result = []
-  for (const p of _providers) {
-    const meta = labelProvider(p)
-    if (!seen.has(meta.key)) {
-      seen.add(meta.key)
-      result.push(meta)
+  function notifyWalletList() {
+    for (const fn of _walletListeners) { try { fn() } catch {} }
+  }
+
+  // Call once (in the wallet selector modal or app root) to start discovery.
+  // Returns a cleanup function.  Safe to call multiple times — duplicate
+  // listeners are guarded by the "already in map" check.
+  export function initEIP6963() {
+    if (typeof window === 'undefined') return () => {}
+
+    const handler = (event) => {
+      const { info, provider } = event.detail ?? {}
+      if (!info?.uuid || !provider) return
+      if (!_eip6963Map.has(info.uuid)) {
+        _eip6963Map.set(info.uuid, { info, provider })
+        notifyWalletList()
+      }
     }
-  }
-  return result
-}
 
-// Connect using the provider at the given index in the last detectWallets() call.
+    window.addEventListener('eip6963:announceProvider', handler)
+    // Ask already-loaded wallets to re-announce
+    window.dispatchEvent(new Event('eip6963:requestProvider'))
+
+    return () => window.removeEventListener('eip6963:announceProvider', handler)
+  }
+
+  // Returns descriptors from EIP-6963 map (preferred) or EIP-5749 / single
+  // window.ethereum (fallback).  Each descriptor: { key, label, icon, dataIcon?,
+  // providerIndex } where dataIcon is the data-URI from EIP-6963 info when present.
+  
+
+export function detectWallets() {
+    if (typeof window === 'undefined' || !window.ethereum) return []
+
+    // ── EIP-6963 providers (preferred) ──────────────────────────────────────
+    if (_eip6963Map.size > 0) {
+      _providers = []
+      const seen = new Set()
+      const result = []
+      for (const { info, provider } of _eip6963Map.values()) {
+        const rdns = info.rdns ?? ''
+        // Derive a stable key from rdns (io.metamask → metamask) or name
+        const key = rdns.split('.').pop()?.toLowerCase() || info.name.toLowerCase().replace(/\s+/g, '_')
+        if (!seen.has(key)) {
+          seen.add(key)
+          _providers.push(provider)
+          result.push({
+            key,
+            label:         info.name,
+            icon:          'generic',       // inline SVG fallback key
+            dataIcon:      info.icon ?? null, // data-URI (preferred for rendering)
+            providerIndex: _providers.length - 1,
+          })
+        }
+      }
+      return result
+    }
+
+    // ── EIP-5749 fallback: window.ethereum.providers[] ───────────────────────
+    const multi = window.ethereum.providers
+    if (Array.isArray(multi) && multi.length > 0) {
+      _providers = multi
+    } else {
+      _providers = [window.ethereum]
+    }
+
+    const seen = new Set()
+    const result = []
+    for (let i = 0; i < _providers.length; i++) {
+      const meta = labelProvider(_providers[i])
+      if (!seen.has(meta.key)) {
+        seen.add(meta.key)
+        result.push({ ...meta, dataIcon: null, providerIndex: i })
+      }
+    }
+    return result
+  }
+  
+
+// Connect via descriptor.providerIndex from detectWallets().
 // Falls back to window.ethereum if index is out of range.
 export async function connectWithProvider(providerIndex = 0) {
   const provider = _providers[providerIndex] ?? window.ethereum
