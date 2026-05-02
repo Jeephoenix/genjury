@@ -91,6 +91,21 @@ body::before {
 .text-glow-ice    { text-shadow: 0 0 12px rgba(56,217,245,0.7), 0 0 30px rgba(56,217,245,0.3); }
 .text-glow-signal { text-shadow: 0 0 12px rgba(255,107,53,0.7), 0 0 30px rgba(255,107,53,0.3); }
 
+/* ── Tabular numbers ──
+   font-mono elements use JetBrains Mono (monospaced) so digits are already
+   equal-width, but we also activate the OpenType tnum feature for max precision.
+   .tnum applies tabular nums to Satoshi (body font) contexts — scores, XP, levels.
+*/
+.font-mono,
+[class~="font-mono"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
 /* ── Shimmer / gradient text ── */
 .shimmer-text {
   background: linear-gradient(90deg, #7fff6e 0%, #a259ff 25%, #38d9f5 50%, #a259ff 75%, #7fff6e 100%);
