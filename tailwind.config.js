@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Syne', 'sans-serif'],
+        display: ['Space Grotesk', 'sans-serif'],
         body: ['DM Sans', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
@@ -17,6 +17,7 @@ export default {
         signal: '#ff6b35',
         ice: '#38d9f5',
         gold: '#f5c842',
+        crimson: '#e8002d',
         ghost: 'rgba(255,255,255,0.06)',
         'ghost-border': 'rgba(255,255,255,0.1)',
       },
