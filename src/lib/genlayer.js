@@ -189,7 +189,9 @@ export async function connectWithProvider(providerIndex = 0) {
 
   // Pass the chosen provider directly — never write to window.ethereum
   // (wallets like Rabby define it as getter-only via Object.defineProperty)
-  await ensureCorrectChain(provider)
+  // Chain switch is best-effort: connect the wallet regardless of network.
+  // WalletPanel will show a "Switch Network" button if needed.
+  try { await ensureCorrectChain(provider) } catch {}
 
   // Wire events on the chosen provider
   rememberInjected(addr)
@@ -283,6 +285,12 @@ async function ensureCorrectChain(provider) {
   }
 }
 
+// Public: switch wallet to the correct GenLayer network.
+// Returns true on success, false if the user cancels or chain not supported.
+export async function switchToCorrectChain(provider) {
+  try { await ensureCorrectChain(provider); return true } catch { return false }
+}
+
 export async function connectInjectedWallet() {
   if (!hasInjectedProvider()) {
     throw new Error('No Web3 wallet found. Install MetaMask to continue.')
@@ -290,7 +298,7 @@ export async function connectInjectedWallet() {
   const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
   if (!accounts?.length) throw new Error('Wallet did not return any accounts')
   const addr = accounts[0]
-  await ensureCorrectChain()
+  try { await ensureCorrectChain() } catch {}
   rememberInjected(addr)
   _client = null
   notify()
