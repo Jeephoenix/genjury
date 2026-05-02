@@ -14,26 +14,34 @@
   let   dbReady = null
 
   async function ensureSchema() {
-    if (!USE_DB) return
-    if (dbReady) return dbReady
-    dbReady = sql`
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id          TEXT PRIMARY KEY,
-        room_code   TEXT NOT NULL,
-        author_id   TEXT NOT NULL,
-        author_name TEXT NOT NULL,
-        avatar      TEXT,
-        color       TEXT,
-        text        TEXT NOT NULL,
-        kind        TEXT NOT NULL DEFAULT 'taunt',
-        ts          BIGINT NOT NULL,
-        created_at  TIMESTAMPTZ DEFAULT now()
-      );
-      CREATE INDEX IF NOT EXISTS chat_room_ts_idx
-        ON chat_messages (room_code, ts);
-    `
-    return dbReady
-  }
+      if (!USE_DB) return
+      // Two separate statements — Neon's HTTP driver (simple query protocol)
+      // does not guarantee multi-statement support in a single tagged-template call.
+      // Also: never cache a rejected Promise; reset dbReady so the next request can
+      // retry instead of failing permanently for the lifetime of the function instance.
+      if (dbReady) return dbReady
+      dbReady = (async () => {
+        await sql`
+          CREATE TABLE IF NOT EXISTS chat_messages (
+            id          TEXT PRIMARY KEY,
+            room_code   TEXT NOT NULL,
+            author_id   TEXT NOT NULL,
+            author_name TEXT NOT NULL,
+            avatar      TEXT,
+            color       TEXT,
+            text        TEXT NOT NULL,
+            kind        TEXT NOT NULL DEFAULT 'taunt',
+            ts          BIGINT NOT NULL,
+            created_at  TIMESTAMPTZ DEFAULT now()
+          )
+        `
+        await sql`
+          CREATE INDEX IF NOT EXISTS chat_room_ts_idx
+            ON chat_messages (room_code, ts)
+        `
+      })().catch(e => { dbReady = null; throw e })
+      return dbReady
+    }
 
   // ── In-memory fallback (dev / preview without a DB) ──────────────────────────
   // Map<roomCode, Array<row>>  — capped at 500 msgs per room.
