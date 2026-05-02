@@ -15,7 +15,7 @@ export default function Footer() {
         {/* Brand + network */}
         <div className="flex flex-col items-center sm:items-start gap-1.5">
           <div className="flex items-center gap-2">
-            <span className="font-display font-800 text-sm text-white">
+            <span className="font-brand font-800 text-sm text-white">
               Gen<span className="text-crimson text-glow-crimson">jury</span>
             </span>
             <span className="badge bg-white/5 border border-white/10 text-white/40 font-mono text-[10px] tracking-widest">
