@@ -331,7 +331,7 @@ export default function MistrialPage() {
             />
 
             <button
-              className="btn btn-neon w-full py-3.5 text-base inline-flex items-center justify-center gap-2"
+              className="btn btn-crimson w-full py-3.5 text-base inline-flex items-center justify-center gap-2"
               onClick={handleCreate}
               disabled={loading || entryFeeWei === null || !profile.name || !contractConfigured}
             >
