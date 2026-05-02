@@ -98,12 +98,12 @@ body::before {
 */
 .font-mono,
 [class~="font-mono"] {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "lnum";
 }
 .tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "lnum";
 }
 
 /* ── Shimmer / gradient text ── */
