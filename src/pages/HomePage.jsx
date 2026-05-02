@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   ShieldCheck,
   Brain,
@@ -82,6 +82,89 @@ function useCyclingSubtitle(phrases, { charMs = 36, holdMs = 2600, fadeMs = 380,
   }, [started, chars, phase, idx, phrases, charMs, holdMs, fadeMs])
 
   return { text: started ? phrases[idx].slice(0, chars) : '', fading: phase === 'fading' }
+}
+
+// ── Scroll-triggered in-view hook ─────────────────────────────────────────────
+function useInView(threshold = 0.2) {
+  const ref = useRef(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); obs.disconnect() } },
+      { threshold }
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [threshold])
+  return [ref, inView]
+}
+
+// ── How-it-works step panel ───────────────────────────────────────────────────
+// Self-contained so hooks are called at component level, not inside .map()
+const ACCENT_GLOW = { plasma: 'rgba(162,89,255,0.22)', neon: 'rgba(127,255,110,0.18)', gold: 'rgba(245,200,66,0.20)' }
+
+function HowStep({ Icon, color, step, title, body, index }) {
+  const [ref, inView] = useInView(0.15)
+  const delay = index * 160
+  const a = ACCENT[color]
+
+  return (
+    <div ref={ref} className="relative flex flex-col items-center text-center px-4 pt-4 pb-8">
+      {/* Watermark step number — sits behind everything */}
+      <div
+        className={`absolute top-0 left-1/2 -translate-x-1/2 font-display font-black text-[88px] leading-none select-none pointer-events-none ${a.text}`}
+        style={{ opacity: inView ? 0.07 : 0, transition: `opacity 0.8s ease ${delay}ms` }}
+        aria-hidden="true"
+      >
+        {step}
+      </div>
+
+      <div className="relative flex flex-col items-center w-full">
+        {/* Icon */}
+        <div
+          className={`w-11 h-11 rounded-2xl ${a.bg} border ${a.border} ${a.text} flex items-center justify-center mb-4`}
+          style={{
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(12px)',
+            transition: `opacity 0.4s ease ${delay}ms, transform 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+            boxShadow: inView ? `0 0 22px ${ACCENT_GLOW[color]}` : 'none',
+          }}
+        >
+          <Icon className="w-5 h-5" strokeWidth={2.25} />
+        </div>
+
+        {/* Step label */}
+        <div
+          className={`font-mono text-[9px] uppercase tracking-[0.26em] ${a.text} mb-2.5`}
+          style={{ opacity: inView ? 0.48 : 0, transition: `opacity 0.4s ease ${delay + 80}ms` }}
+        >
+          Step {step}
+        </div>
+
+        {/* Title — char reveal on enter */}
+        <h3 className="font-display font-bold text-white text-xl mb-3 min-h-[1.75rem]">
+          {inView
+            ? <CharReveal text={title} startDelay={delay + 100} charMs={26} />
+            : <span style={{ opacity: 0 }}>{title}</span>
+          }
+        </h3>
+
+        {/* Body — fade + lift */}
+        <p
+          className="text-white/45 text-sm leading-relaxed max-w-[230px]"
+          style={{
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(8px)',
+            transition: `opacity 0.55s ease ${delay + 300}ms, transform 0.55s cubic-bezier(0.16,1,0.3,1) ${delay + 300}ms`,
+          }}
+        >
+          {body}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 const HOW_IT_WORKS = [
@@ -434,8 +517,8 @@ export default function HomePage() {
       </section>
 
       {/* ── How it works ── */}
-      <section className="mt-16 sm:mt-20 animate-slide-up" style={{ animationDelay: '0.16s' }}>
-        <div className="text-center mb-10">
+      <section className="mt-20 sm:mt-28">
+        <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.25em] text-white/35 mb-3 px-3 py-1 rounded-full border border-white/[0.07] bg-white/[0.03]">
             How it works
           </div>
@@ -444,30 +527,19 @@ export default function HomePage() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {HOW_IT_WORKS.map(({ Icon, color, step, title, body }) => {
-            const a = ACCENT[color]
-            return (
-              <div
-                key={title}
-                className={`relative rounded-2xl border ${a.border} bg-white/[0.025] p-5 sm:p-6 overflow-hidden`}
-              >
-                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full ${a.bg} blur-2xl opacity-40 pointer-events-none`} />
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl ${a.bg} border ${a.border} ${a.text} flex items-center justify-center`}>
-                      <Icon className="w-5 h-5" strokeWidth={2.25} />
-                    </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-[0.2em] ${a.text} opacity-60`}>
-                      Step {step}
-                    </span>
-                  </div>
-                  <h3 className="font-display font-bold text-white text-lg mb-2">{title}</h3>
-                  <p className="text-white/50 text-sm leading-relaxed">{body}</p>
-                </div>
-              </div>
-            )
-          })}
+        <div className="relative grid grid-cols-1 sm:grid-cols-3">
+          {/* Connecting line — desktop only, sits at icon midpoint (pt-4 + h-11/2 = 37px) */}
+          <div
+            className="hidden sm:block absolute top-[2.3125rem] left-[calc(16.67%+1.375rem)] right-[calc(16.67%+1.375rem)] h-px pointer-events-none"
+            style={{ background: 'linear-gradient(90deg, rgba(162,89,255,0.22), rgba(255,255,255,0.06) 50%, rgba(245,200,66,0.22))' }}
+          />
+
+          {/* Mobile vertical connector — thin line between steps */}
+          <div className="sm:hidden absolute top-[4.5rem] bottom-[4.5rem] left-1/2 -translate-x-1/2 w-px bg-gradient-to-b from-plasma/20 via-white/6 to-gold/20 pointer-events-none" />
+
+          {HOW_IT_WORKS.map(({ Icon, color, step, title, body }, i) => (
+            <HowStep key={step} Icon={Icon} color={color} step={step} title={title} body={body} index={i} />
+          ))}
         </div>
       </section>
 
