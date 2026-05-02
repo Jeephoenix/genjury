@@ -126,7 +126,14 @@ body::before {
 }
 
 .gradient-text-neon {
-  background: linear-gradient(135deg, #7fff6e 0%, #38d9f5 100%);
+  background: linear-gradient(135deg, #e8002d 0%, #a259ff 60%, #38d9f5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-crimson {
+  background: linear-gradient(135deg, #e8002d 0%, #a259ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
