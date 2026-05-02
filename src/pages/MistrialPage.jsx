@@ -371,15 +371,28 @@ export default function MistrialPage() {
             />
 
             <button
-              className="btn btn-neon w-full py-3 text-base"
+              className="btn btn-neon w-full py-3 text-base inline-flex items-center justify-center gap-2 relative"
               onClick={handleCreate}
               disabled={loading || entryFeeWei === null || !profile.name || !contractConfigured}
             >
-              {loading
-                ? 'Filing case on-chain…'
-                : entryFeeWei && entryFeeWei > 0n
-                  ? `File case · stake ${formatGen(entryFeeWei, 6)} ${symbol}`
-                  : 'File case'}
+              {loading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4 text-black/60" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Filing case on-chain…
+                </>
+              ) : !connected ? (
+                <>
+                  <Wallet className="w-4 h-4" strokeWidth={2.25} />
+                  Connect wallet to file case
+                </>
+              ) : entryFeeWei && entryFeeWei > 0n ? (
+                `File case · stake ${formatGen(entryFeeWei, 6)} ${symbol}`
+              ) : (
+                'File case'
+              )}
             </button>
           </div>
         )}
@@ -406,9 +419,17 @@ export default function MistrialPage() {
             <button
               onClick={handleJoinByCode}
               disabled={loading || !validJoinCode}
-              className="px-4 py-2 rounded-lg border border-plasma/40 bg-plasma/15 text-plasma text-sm font-semibold hover:bg-plasma/25 disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-plasma/40 bg-plasma/15 text-plasma text-sm font-semibold hover:bg-plasma/25 disabled:opacity-50 inline-flex items-center gap-2"
             >
-              Take a seat
+              {loading ? (
+                <>
+                  <svg className="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Joining…
+                </>
+              ) : 'Take a seat'}
             </button>
           </div>
         )}

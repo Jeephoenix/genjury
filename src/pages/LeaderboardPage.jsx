@@ -221,22 +221,29 @@ export default function LeaderboardPage() {
 
 function EmptyState({ loading, hasRooms, connected }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-12 text-center">
-      <Trophy className="w-8 h-8 text-white/30 mx-auto mb-3" />
-      <div className="text-white/80 font-display font-700 text-lg">
-        {loading ? 'Loading on-chain players…'
-          : !hasRooms ? 'No rooms tracked yet'
-          : 'No players found in your rooms'}
+    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-14 text-center">
+      <Trophy className="w-10 h-10 text-gold/30 mx-auto mb-4" />
+      <div className="text-white/85 font-display font-700 text-xl mb-2">
+        {loading ? 'Reading on-chain scores…'
+          : !hasRooms ? 'The board is empty'
+          : 'No players found yet'}
       </div>
-      <div className="text-white/50 text-sm mt-2 max-w-md mx-auto">
+      <div className="text-white/45 text-sm max-w-md mx-auto leading-relaxed">
         {loading
-          ? 'Reading scoreboards from the rooms you have joined.'
+          ? 'Fetching scoreboards from every room you have joined.'
           : !hasRooms
-            ? 'Join a room or create one — the leaderboard ranks every player you have shared a game with.'
+            ? 'The leaderboard fills as rooms complete. Join your first case to appear here — your rank will update automatically after each game.'
             : connected
-              ? 'Once players join the rooms you have created or joined, they will show up here.'
-              : 'Connect your wallet to see your own rank highlighted.'}
+              ? 'Once players finish games in the rooms you\'ve joined, they\'ll rank here. Play more to grow the board.'
+              : 'Connect your wallet to see your rank highlighted among other jurors.'}
       </div>
+      {!loading && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <div className="text-white/20 text-xs font-mono">
+            ℹ︎ This board aggregates only rooms you personally joined — not a global feed.
+          </div>
+        </div>
+      )}
     </div>
   )
 }

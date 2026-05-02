@@ -14,6 +14,48 @@ const PHASE_LABELS = {
   [PHASES.SCOREBOARD]: 'FINAL SCORES',
 }
 
+// Ordered pipeline shown in the phase stepper
+const PHASE_STEPS = [
+  { phase: PHASES.WRITING,        label: 'Write' },
+  { phase: PHASES.VOTING,         label: 'Vote' },
+  { phase: PHASES.AI_JUDGING,     label: 'Judge' },
+  { phase: PHASES.OBJECTION,      label: 'Object' },
+  { phase: PHASES.REVEAL,         label: 'Reveal' },
+  { phase: PHASES.SCOREBOARD,     label: 'Score' },
+]
+
+function PhaseStepperBar({ phase }) {
+  const currentIdx = PHASE_STEPS.findIndex(s => s.phase === phase)
+  // Objection vote is same visual step as Objection
+  const effectiveIdx = phase === PHASES.OBJECTION_VOTE ? 3 : currentIdx
+  return (
+    <div className="hidden sm:flex items-center gap-0.5">
+      {PHASE_STEPS.map((step, i) => {
+        const done    = i < effectiveIdx
+        const active  = i === effectiveIdx
+        return (
+          <React.Fragment key={step.phase}>
+            <div
+              className={`relative flex items-center justify-center rounded-full text-[9px] font-mono tracking-widest transition-all duration-300 ${
+                active
+                  ? 'w-14 h-5 bg-plasma/30 border border-plasma/60 text-plasma'
+                  : done
+                  ? 'w-4 h-4 bg-neon/20 border border-neon/40 text-neon/70'
+                  : 'w-4 h-4 bg-white/5 border border-white/10 text-white/20'
+              }`}
+            >
+              {active ? step.label : done ? '✓' : ''}
+            </div>
+            {i < PHASE_STEPS.length - 1 && (
+              <div className={`w-3 h-px transition-colors duration-300 ${done ? 'bg-neon/40' : 'bg-white/10'}`} />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function GameHeader() {
   const phase             = useGameStore(s => s.phase)
   const round             = useGameStore(s => s.round)
@@ -81,13 +123,14 @@ export default function GameHeader() {
         </div>
       )}
 
-      {/* Phase label — grows to fill available space */}
-      <div className="flex-1 flex flex-col items-center min-w-0 px-1">
+      {/* Phase label + stepper — grows to fill available space */}
+      <div className="flex-1 flex flex-col items-center min-w-0 px-1 gap-1">
         <div className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[10px] sm:text-xs tracking-widest truncate max-w-full">
           {PHASE_LABELS[phase] || ''}
         </div>
+        <PhaseStepperBar phase={phase} />
         {category && phase !== PHASES.SCOREBOARD && (
-          <span className="text-white/30 text-[10px] font-mono mt-0.5 truncate max-w-full hidden sm:block">{category}</span>
+          <span className="text-white/30 text-[10px] font-mono truncate max-w-full hidden lg:block">{category}</span>
         )}
       </div>
 

@@ -191,12 +191,16 @@ export default function ProfilePage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Mini label="Games joined" value={stats.games} icon={Activity} />
-            <Mini label="Wins"         value={stats.wins} icon={Trophy} accent="gold" />
-            <Mini label="Total XP"     value={stats.xp} icon={Flame} accent="signal" />
-            <Mini label="Win rate"     value={`${winRate}%`} icon={ShieldCheck} accent="neon" />
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <Mini label="Games joined" value={stats.games} icon={Activity} />
+              <Mini label="Wins"         value={stats.wins} icon={Trophy} accent="gold" />
+              <Mini label="Total XP"     value={stats.xp} icon={Flame} accent="signal" />
+              <Mini label="Win rate"     value={`${winRate}%`} icon={ShieldCheck} accent="neon" />
+            </div>
+            {/* XP progress to next level */}
+            <XpBar xp={stats.xp} level={stats.level} />
+          </>
         )}
       </div>
 
@@ -388,6 +392,30 @@ function ProfileEditor({ profile }) {
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+function XpBar({ xp, level }) {
+  // XP needed to reach next level: level × 100
+  const xpForNext = level * 100
+  const xpIntoLevel = xp % xpForNext
+  const pct = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100))
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-mono uppercase tracking-wider text-white/40">
+          Level {level} → Level {level + 1}
+        </div>
+        <div className="text-xs font-mono text-plasma">{xpIntoLevel} / {xpForNext} XP</div>
+      </div>
+      <div className="progress-bar">
+        <div
+          className="progress-fill bg-gradient-to-r from-plasma to-neon"
+          style={{ width: `${pct}%`, animation: 'xpFill 0.8s ease-out' }}
+        />
+      </div>
+      <div className="text-[10px] font-mono text-white/25 mt-1.5">{pct}% to next level</div>
     </div>
   )
 }

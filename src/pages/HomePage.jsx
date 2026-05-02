@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ShieldCheck,
   Brain,
@@ -10,9 +10,11 @@ import {
   Wallet,
   Gamepad2,
   Trophy,
+  Users,
+  Activity,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
-import { getChainNativeSymbol } from '../lib/genlayer'
+import { getChainNativeSymbol, readContractView, hasContractAddress } from '../lib/genlayer'
 import MistrialMark from '../components/MistrialMark'
 
 const HOW_IT_WORKS = [
@@ -79,6 +81,18 @@ export default function HomePage() {
   const setActiveTab = useGameStore((s) => s.setActiveTab)
   const symbol = getChainNativeSymbol()
 
+  const [houseStats, setHouseStats] = useState(null)
+  useEffect(() => {
+    if (!hasContractAddress()) return
+    ;(async () => {
+      try {
+        const raw = await readContractView('get_house_info', [])
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        setHouseStats(parsed)
+      } catch {}
+    })()
+  }, [])
+
   const playGame = (id) => {
     if (id === 'mistrial') setActiveTab('mistrial')
     else setActiveTab('games')
@@ -122,6 +136,28 @@ export default function HomePage() {
             </span>
           ))}
         </div>
+
+        {/* Live stats bar */}
+        {houseStats && (
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-5">
+            <div className="flex items-center gap-1.5 text-white/40 text-xs font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
+              <span className="text-white/70">{Number(houseStats.totalGamesPlayed || 0)}</span> games played
+            </div>
+            {houseStats.openRoomsCount > 0 && (
+              <div className="flex items-center gap-1.5 text-white/40 text-xs font-mono">
+                <Activity className="w-3 h-3 text-signal" />
+                <span className="text-signal">{houseStats.openRoomsCount}</span> active rooms
+              </div>
+            )}
+            {houseStats.totalPlayersEver > 0 && (
+              <div className="flex items-center gap-1.5 text-white/40 text-xs font-mono">
+                <Users className="w-3 h-3 text-ice" />
+                <span className="text-ice/80">{houseStats.totalPlayersEver}</span> jurors
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Primary CTAs */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8 max-w-md mx-auto">

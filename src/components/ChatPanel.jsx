@@ -20,6 +20,12 @@ export default function ChatPanel() {
   const [, force]           = useState(0)
   const scrollRef = useRef(null)
 
+  // Auto-collapse chat during active game phases to avoid covering gameplay UI
+  const activePhase = phase === PHASES.WRITING || phase === PHASES.VOTING
+  useEffect(() => {
+    if (activePhase) setOpen(false)
+  }, [activePhase])
+
   // Re-render when the user updates their profile so chat shows the new
   // name / avatar without a refresh.
   useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])

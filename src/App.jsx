@@ -21,6 +21,7 @@ import ChatPanel from './components/ChatPanel'
 import NetworkBanner from './components/NetworkBanner'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
+import OnboardingModal from './components/OnboardingModal'
 
 export default function App() {
   const phase     = useGameStore(s => s.phase)
@@ -82,6 +83,7 @@ export default function App() {
         <ToastContainer />
         <TxStatusBanner />
         <ChatPanel />
+        <OnboardingModal />
       </div>
     </ErrorBoundary>
   )

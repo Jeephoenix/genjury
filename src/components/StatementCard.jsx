@@ -36,11 +36,15 @@ export default function StatementCard({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`statement-card w-full text-left rounded-2xl p-5 transition-all cursor-pointer relative overflow-hidden ${disabled && !revealed ? 'cursor-default' : ''}`}
+      className={`statement-card w-full text-left rounded-2xl p-5 transition-all cursor-pointer relative overflow-hidden ${disabled && !revealed ? 'cursor-default' : ''} ${selected && !revealed ? 'scale-[1.02]' : ''}`}
       style={{
         background: getBg(),
         border: `1px solid ${getBorderColor()}`,
-        boxShadow: revealed && isLie ? '0 0 20px rgba(255,107,53,0.2)' : selected ? '0 0 20px rgba(162,89,255,0.15)' : 'none',
+        boxShadow: revealed && isLie
+          ? '0 0 20px rgba(255,107,53,0.2)'
+          : selected
+          ? '0 0 24px rgba(162,89,255,0.25), 0 0 0 1px rgba(162,89,255,0.4)'
+          : 'none',
       }}
     >
       {/* Vote bar fill */}
