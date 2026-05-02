@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import useGameStore, { PHASES } from './lib/store'
-import { isValidRoomCode, normalizeRoomCode } from './lib/genlayer'
+import { isValidRoomCode, normalizeRoomCode, autoReconnect } from './lib/genlayer'
 import HomePage from './pages/HomePage'
 import MistrialPage from './pages/MistrialPage'
 import LobbyPage from './pages/LobbyPage'
@@ -35,6 +35,11 @@ export default function App() {
     const interval = setInterval(tickTimer, 1000)
     return () => clearInterval(interval)
   }, [tickTimer])
+
+  // Silently reconnect on page load if the user previously approved this site.
+  // Uses eth_accounts (no popup) — only restores if already authorised.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { autoReconnect() }, [])
 
   // Deep-link: ?join=CODE → auto-navigate to Mistrial tab so the
   // JoinInviteSheet fires even if the user lands on a different tab.
