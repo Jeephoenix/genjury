@@ -45,7 +45,7 @@ export default function RevealPhase() {
   const showConfetti = iWasRight || myXP > 100
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-10 gap-6 animate-slide-up relative">
+    <div className="min-h-screen flex flex-col items-center px-4 py-10 gap-6 animate-slide-up relative overflow-x-hidden">
       {showConfetti && <Confetti />}
 
       <div className="w-full max-w-lg relative z-10">
