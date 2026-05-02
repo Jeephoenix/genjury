@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import useGameStore, { PHASES } from './lib/store'
-import { isValidRoomCode, normalizeRoomCode } from './lib/genlayer'
+import { isValidRoomCode, normalizeRoomCode, autoReconnect } from './lib/genlayer'
 import HomePage from './pages/HomePage'
 import MistrialPage from './pages/MistrialPage'
 import LobbyPage from './pages/LobbyPage'
