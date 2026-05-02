@@ -122,10 +122,10 @@ export default function ProfilePage() {
 
       {/* Connect wallet CTA */}
       {!connected && (
-        <div className="glass rounded-2xl border border-neon/25 p-5 mb-6 mt-5 flex items-center gap-4"
-          style={{ background: 'rgba(127,255,110,0.04)' }}>
+        <div className="glass rounded-2xl border border-crimson/25 p-5 mb-6 mt-5 flex items-center gap-4 relative overflow-hidden"
+          style={{ background: 'rgba(232,0,45,0.04)' }}>
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/40 to-transparent" />
-          <div className="w-12 h-12 rounded-xl bg-neon/10 border border-neon/25 flex items-center justify-center text-neon flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-crimson/10 border border-crimson/25 flex items-center justify-center text-crimson flex-shrink-0">
             <Lock className="w-6 h-6" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
@@ -134,7 +134,7 @@ export default function ProfilePage() {
           </div>
           <button
             onClick={() => setOpenWallet(true)}
-            className="btn btn-neon px-4 py-2.5 text-sm inline-flex items-center gap-2 flex-shrink-0"
+            className="btn btn-crimson px-4 py-2.5 text-sm inline-flex items-center gap-2 flex-shrink-0"
           >
             <Wallet className="w-4 h-4" /> Connect
           </button>
