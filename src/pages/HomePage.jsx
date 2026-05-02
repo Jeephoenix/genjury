@@ -18,6 +18,72 @@ import useGameStore from '../lib/store'
 import { getChainNativeSymbol, readContractView, hasContractAddress } from '../lib/genlayer'
 import MistrialMark from '../components/MistrialMark'
 
+// ── Hero char-reveal component ────────────────────────────────────────────────
+// Each character appears individually with blur+lift, staggered by `charMs`.
+function CharReveal({ text, startDelay = 0, charMs = 38, className = '' }) {
+  return (
+    <span className={className} aria-label={text}>
+      {text.split('').map((ch, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          style={{
+            display: 'inline-block',
+            opacity: 0,
+            animation: 'charReveal 0.34s cubic-bezier(0.16,1,0.3,1) forwards',
+            animationDelay: `${startDelay + i * charMs}ms`,
+            whiteSpace: ch === ' ' ? 'pre' : undefined,
+          }}
+        >{ch}</span>
+      ))}
+    </span>
+  )
+}
+
+// ── TV-subtitle cycling hook ──────────────────────────────────────────────────
+// Phases: waiting → typing (char by char) → holding → fading → next phrase
+const SUBTITLE_PHRASES = [
+  'Mistrial — bluff the AI Judge on-chain.',
+  'Highstakes — verifiable shuffles, zero house.',
+  'Crossfire — trivia graded by Optimistic AI.',
+  'Oracle Arena — predict it. Chain decides.',
+]
+
+function useCyclingSubtitle(phrases, { charMs = 36, holdMs = 2600, fadeMs = 380, startDelay = 0 } = {}) {
+  const [started, setStarted] = useState(startDelay === 0)
+  const [idx,     setIdx]     = useState(0)
+  const [chars,   setChars]   = useState(0)
+  const [phase,   setPhase]   = useState('typing')
+
+  useEffect(() => {
+    if (started) return
+    const t = setTimeout(() => setStarted(true), startDelay)
+    return () => clearTimeout(t)
+  }, [started, startDelay])
+
+  useEffect(() => {
+    if (!started) return
+    const phrase = phrases[idx]
+    if (phase === 'typing') {
+      if (chars < phrase.length) {
+        const t = setTimeout(() => setChars(c => c + 1), charMs)
+        return () => clearTimeout(t)
+      }
+      const t = setTimeout(() => setPhase('holding'), 60)
+      return () => clearTimeout(t)
+    }
+    if (phase === 'holding') {
+      const t = setTimeout(() => setPhase('fading'), holdMs)
+      return () => clearTimeout(t)
+    }
+    // fading
+    const t = setTimeout(() => { setIdx(i => (i + 1) % phrases.length); setChars(0); setPhase('typing') }, fadeMs)
+    return () => clearTimeout(t)
+  }, [started, chars, phase, idx, phrases, charMs, holdMs, fadeMs])
+
+  return { text: started ? phrases[idx].slice(0, chars) : '', fading: phase === 'fading' }
+}
+
 const HOW_IT_WORKS = [
   {
     Icon: Gamepad2,
@@ -100,6 +166,10 @@ export default function HomePage() {
     })()
   }, [])
 
+  const { text: subtitleText, fading: subtitleFading } = useCyclingSubtitle(SUBTITLE_PHRASES, {
+    startDelay: 2100,
+  })
+
   const playGame = (id) => {
     if (id === 'mistrial') setActiveTab('mistrial')
     else setActiveTab('games')
@@ -126,15 +196,30 @@ export default function HomePage() {
             <ShieldCheck className="w-3.5 h-3.5 text-neon ml-0.5" />
           </div>
 
-          <h1 className="font-display font-extrabold text-5xl sm:text-7xl text-white tracking-tight leading-[0.94] mb-5">
-            Provably fair games,
-            <br />
-            <span className="shimmer-text">judged on-chain.</span>
+          {/* ── Main headline ── letter-by-letter reveal */}
+          <h1 className="font-display font-extrabold text-5xl sm:text-7xl tracking-tight leading-[0.9] mb-4">
+            <span className="block text-white">
+              <CharReveal text="Every game." startDelay={200} />
+            </span>
+            <span className="block text-crimson">
+              {/* LINE2 starts after LINE1 finishes: 200 + 11 chars × 38ms + 110ms gap */}
+              <CharReveal text="AI-judged. On-chain." startDelay={750} />
+            </span>
           </h1>
 
-          <p className="text-white/50 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
-            Genjury is a courthouse of on-chain games where an AI Judge rules every case.
-            Stake {symbol}, summon a jury, and let the chain hand down the verdict.
+          {/* ── TV cycling subtitle ── */}
+          <div className="h-6 mb-5 flex items-center justify-center overflow-hidden">
+            <span
+              className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/38 select-none"
+              style={{ transition: 'opacity 380ms ease', opacity: subtitleFading ? 0 : 1 }}
+            >
+              {subtitleText || '\u00A0'}
+            </span>
+          </div>
+
+          <p className="text-white/48 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
+            Genjury runs every game on GenLayer's Optimistic AI — an on-chain AI Judge
+            that deliberates, rules, and settles each verdict with no house, no edge.
           </p>
 
           {/* Mechanic pills */}
