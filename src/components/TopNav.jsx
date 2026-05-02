@@ -95,10 +95,10 @@ export default function TopNav() {
 
           {/* Right cluster */}
           <div className="flex items-center gap-2">
-            <div className="hidden sm:block">
+            <div className="hidden md:block">
               <WalletButton />
             </div>
-            <div className="sm:hidden">
+            <div className="md:hidden">
               <WalletButton compact />
             </div>
           </div>
