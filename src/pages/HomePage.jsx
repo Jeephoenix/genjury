@@ -306,6 +306,32 @@ export default function HomePage() {
               <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
             </button>
           </div>
+
+          {/* ── Built on GenLayer trust strip ── */}
+          <div className="mt-8 flex items-center justify-center">
+            <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-sm">
+              {/* Layered-hexagon mark — evokes GenLayer's "layers" identity */}
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" className="flex-shrink-0">
+                <path d="M2 6L9 2.5L16 6L9 9.5L2 6Z"     stroke="#a259ff" strokeWidth="1.25" fill="none" strokeOpacity="0.75"/>
+                <path d="M2 9.5L9 13L16 9.5"              stroke="#a259ff" strokeWidth="1.25" fill="none" strokeOpacity="0.45"/>
+                <path d="M2 13L9 16.5L16 13"              stroke="#a259ff" strokeWidth="1.25" fill="none" strokeOpacity="0.22"/>
+              </svg>
+
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col items-start leading-none">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.22em] text-white/28">Built on</span>
+                  <span className="font-display font-bold text-[13px] text-white/52 tracking-tight mt-[2px]">GenLayer</span>
+                </div>
+
+                <span className="text-white/12 text-base font-thin mx-0.5">|</span>
+
+                <div className="flex flex-col items-start leading-none">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.22em] text-white/28">Powered by</span>
+                  <span className="font-mono text-[11px] text-plasma/55 tracking-wide mt-[2px]">Optimistic AI</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
