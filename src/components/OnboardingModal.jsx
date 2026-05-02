@@ -14,12 +14,12 @@ const STEP_COLORS = {
     dotActive: 'bg-plasma shadow-[0_0_8px_#a259ff]',
   },
   neon: {
-    bg: 'bg-neon/10',
-    border: 'border-neon/25',
-    icon: 'text-neon',
-    glow: 'shadow-[0_0_60px_rgba(127,255,110,0.10)]',
-    dot: 'bg-neon',
-    dotActive: 'bg-neon shadow-[0_0_8px_#7fff6e]',
+    bg: 'bg-crimson/10',
+    border: 'border-crimson/25',
+    icon: 'text-crimson',
+    glow: 'shadow-[0_0_60px_rgba(232,0,45,0.10)]',
+    dot: 'bg-crimson',
+    dotActive: 'bg-crimson shadow-[0_0_8px_#e8002d]',
   },
   ice: {
     bg: 'bg-ice/10',
@@ -165,7 +165,7 @@ export default function OnboardingModal() {
               <button
                 onClick={() => (isLast ? dismiss() : setStep((s) => s + 1))}
                 className={`btn flex-1 py-2.5 text-sm inline-flex items-center justify-center gap-2 ${
-                  cur.color === 'neon' ? 'btn-neon' : cur.color === 'gold' ? 'btn-gold' : 'btn-plasma'
+                  cur.color === 'neon' ? 'btn-crimson' : cur.color === 'gold' ? 'btn-gold' : 'btn-plasma'
                 }`}
               >
                 {isLast ? "Let's play" : 'Next'}
