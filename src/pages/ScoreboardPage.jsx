@@ -55,7 +55,7 @@ export default function ScoreboardPage() {
   const iAmTopPlayer = myRank === 1
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-16 gap-8 animate-slide-up relative">
+    <div className="min-h-screen flex flex-col items-center px-4 py-16 gap-8 animate-slide-up relative overflow-x-hidden">
       {iAmTopPlayer && <Confetti duration={5000} />}
 
       <div className="w-full max-w-lg">
