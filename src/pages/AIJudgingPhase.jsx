@@ -26,7 +26,7 @@ export default function AIJudgingPhase() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-10 animate-fade-in">
 
       {/* AI Brain — enhanced orbit animation */}
-      <div className="relative flex items-center justify-center">
+      <div className="relative flex items-center justify-center overflow-hidden" style={{ width: '14rem', height: '14rem' }}>
         {/* Outermost pulse rings */}
         <div className="absolute w-56 h-56 rounded-full border border-plasma/10 animate-ping" style={{ animationDuration: '2.5s' }} />
         <div className="absolute w-48 h-48 rounded-full border border-plasma/15 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }} />
