@@ -336,29 +336,19 @@ export function disconnectInjectedWallet() {
 // provider, then restores _chosenProvider when the remembered address is still
 // authorised. Call once from the app root on mount.
 export async function autoReconnect() {
-  const stored = injectedAddress()
-  if (!stored) return false
+    const stored = injectedAddress()
+    if (!stored) return false
 
-  // Give EIP-6963 wallets ~300 ms to announce via eip6963:announceProvider
-  await new Promise((r) => setTimeout(r, 300))
+    const provider = typeof window !== 'undefined' ? window.ethereum : undefined
+    if (!provider) return false
 
-  // EIP-6963 providers first, then window.ethereum fallback
-  const candidates = []
-  if (_eip6963Map.size > 0) {
-    for (const { provider } of _eip6963Map.values()) candidates.push(provider)
-  }
-  if (typeof window !== 'undefined' && window.ethereum && !candidates.includes(window.ethereum)) {
-    candidates.push(window.ethereum)
-  }
-
-  for (const provider of candidates) {
     try {
       const accounts = await provider.request({ method: 'eth_accounts' })
       if (
         Array.isArray(accounts) &&
         accounts.some((a) => a.toLowerCase() === stored.toLowerCase())
       ) {
-        // Still authorised — restore state silently
+        // Still authorised — restore state silently without any wallet popup
         _chosenProvider = provider
         _client = null
         const tag = '__genjuryWired'
@@ -378,16 +368,14 @@ export async function autoReconnect() {
         return true
       }
     } catch {
-      // Provider not ready — try next
+      // Wallet not ready or permission revoked
     }
+
+    // Permission revoked — clear stored address
+    rememberInjected(null)
+    notify()
+    return false
   }
-
-  // No provider confirmed the stored address — permission revoked
-  rememberInjected(null)
-  notify()
-  return false
-}
-
 export function myAddress() {
   return injectedAddress()
 }
