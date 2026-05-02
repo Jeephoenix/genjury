@@ -34,6 +34,7 @@ function safeRead() {
           lastSeenAt: Number(r.lastSeenAt) || 0,
           isHost:     !!r.isHost,
           label:      r.label ? String(r.label).slice(0, 32) : '',
+          finished:   !!r.finished,
         }
       })
       .filter(Boolean)
@@ -85,6 +86,17 @@ export function forgetJoinedRoom(rawCode) {
   safeWrite(arr)
   notify()
 }
+  export function markRoomFinished(rawCode) {
+    const code = normalizeRoomCode(rawCode)
+    if (!isValidRoomCode(code)) return
+    const arr = safeRead()
+    const entry = arr.find((r) => r.code === code)
+    if (!entry) return
+    entry.finished = true
+    safeWrite(arr)
+    notify()
+  }
+  
 
 export function clearJoinedRooms() {
   safeWrite([])
