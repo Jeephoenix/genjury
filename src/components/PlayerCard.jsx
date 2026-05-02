@@ -1,6 +1,7 @@
 import React from 'react'
 import Avatar from './Avatar'
 import { Crown, Bot as BotIcon } from 'lucide-react'
+import XpFlyout from './XpFlyout'
 
 export default function PlayerCard({ player, showXP = false, xpGained = 0, isDeceiver = false, rank = null }) {
   const xpToNextLevel = 500
@@ -16,12 +17,14 @@ export default function PlayerCard({ player, showXP = false, xpGained = 0, isDec
 
   return (
     <div
-      className="card relative overflow-hidden hover-highlight transition-all duration-200"
+      className="card relative overflow-visible hover-highlight transition-all duration-200"
       style={{
         borderColor:  isDeceiver ? player.color + '33' : undefined,
         background:   isDeceiver ? player.color + '08' : undefined,
       }}
     >
+      {/* Floating XP flyout — fires whenever xpGained changes to > 0 */}
+      <XpFlyout value={xpGained} color={player.color} origin="top-1 right-2" />
       {/* Deceiver badge — top-right corner */}
       {isDeceiver && (
         <div
