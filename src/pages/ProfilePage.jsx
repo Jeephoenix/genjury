@@ -10,7 +10,10 @@ import {
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
 import { getProfile, setProfile, subscribeProfile } from '../lib/profile'
-import { listJoinedRooms, subscribeJoinedRooms } from '../lib/joinedRooms'
+import {
+    listJoinedRooms, subscribeJoinedRooms,
+    listFinishedRooms, dismissFinishedRoom,
+  } from '../lib/joinedRooms'
 import Avatar from '../components/Avatar'
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
@@ -21,70 +24,69 @@ export default function ProfilePage() {
   const setActiveTab  = useGameStore((s) => s.setActiveTab)
   const addToast      = useGameStore((s) => s.addToast)
   const loading       = useGameStore((s) => s.loading)
+  const enterRoom     = useGameStore((s) => s.enterRoom)
 
   const [, force] = useState(0)
   useEffect(() => subscribeWallet(()  => force((n) => n + 1)), [])
   useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])
 
-  const [rooms, setRooms] = useState(() => listJoinedRooms())
-  useEffect(() => subscribeJoinedRooms(() => setRooms(listJoinedRooms())), [])
+  const [rooms,         setRooms]         = useState(() => listJoinedRooms())
+  const [finishedRooms, setFinishedRooms] = useState(() => listFinishedRooms())
+  useEffect(() => subscribeJoinedRooms(() => {
+    setRooms(listJoinedRooms())
+    setFinishedRooms(listFinishedRooms())
+  }), [])
 
   const connected = isWalletConnected()
   const address   = myAddress()
   const profile   = getProfile()
 
   const [stats,   setStats]   = useState({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
-  const [history, setHistory] = useState([])
 
-  useEffect(() => {
-    let cancelled = false
-    if (!address) { setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 }); setHistory([]); return }
-    setStats((s) => ({ ...s, loading: true }))
-    ;(async () => {
-      let games = 0, wins = 0, xp = 0, level = 1
-      const hist = []
-      const me   = address.toLowerCase()
-      if (!hasContractAddress()) { setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 }); setHistory([]); return }
-      await Promise.all(rooms.map(async (r) => {
-        try {
-          const raw    = await readContractView('get_room_state', [r.code])
-          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
-          if (!parsed?.roomCode) return
-          const players = parsed?.players || {}
-          const rec = players[me] || players[address] || null
-          if (rec) {
-            games += 1
-            xp    += Number(rec.xp || 0)
-            level  = Math.max(level, Number(rec.level || 1))
-            const won = (parsed?.winnerAddress || '').toLowerCase() === me
-            if (won) wins += 1
-            hist.push({
-              code:        r.code,
-              phase:       parsed?.phase || 'unknown',
-              playerCount: Number(parsed?.playerCount || 0),
-              maxPlayers:  Number(parsed?.maxPlayers || 0),
-              entryFee:    parsed?.entryFee || '0',
-              prizePool:   parsed?.prizePool || '0',
-              role:        r.isHost ? 'Host' : 'Juror',
-              won,
-              xpInRoom:    Number(rec.xp || 0),
-            })
-          }
-        } catch { /* ignore unreachable rooms */ }
-      }))
-      if (cancelled) return
-      setStats({ loading: false, games, wins, xp, level })
-      setHistory(hist.sort((a, b) => Number(b.xpInRoom) - Number(a.xpInRoom)))
-    })()
-    return () => { cancelled = true }
-  }, [address, rooms])
+  // Aggregate stats from locally-stored finished rooms (instant, no RPC).
+    // Supplement with live active-room data only if rooms exist.
+    useEffect(() => {
+      let cancelled = false
+      if (!address) {
+        setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
+        return
+      }
+
+      // Seed instantly from stored finished-room metadata (no RPC needed).
+      const games = finishedRooms.length
+      const wins  = finishedRooms.filter((r) => r.myRank === 1).length
+      let   xp    = finishedRooms.reduce((s, r) => s + (r.myXP || 0), 0)
+      let   level = 1
+      setStats({ loading: rooms.length > 0, games, wins, xp, level })
+
+      // Scan active (in-progress) rooms on-chain for any additional live XP.
+      if (!hasContractAddress() || rooms.length === 0) return
+      ;(async () => {
+        const me = address.toLowerCase()
+        await Promise.all(rooms.map(async (r) => {
+          try {
+            const raw    = await readContractView('get_room_state', [r.code])
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+            if (!parsed?.roomCode) return
+            const rec = (parsed?.players || {})[me] || (parsed?.players || {})[address] || null
+            if (rec) {
+              xp    += Number(rec.xp || 0)
+              level  = Math.max(level, Number(rec.level || 1))
+            }
+          } catch {}
+        }))
+        if (cancelled) return
+        setStats({ loading: false, games, wins, xp, level })
+      })()
+      return () => { cancelled = true }
+    }, [address, rooms, finishedRooms])
 
   const winRate = stats.games > 0 ? Math.round((stats.wins / stats.games) * 100) : 0
 
   const handleResume = (code) => {
     if (loading) return
     if (!isWalletConnected()) { setOpenWallet(true); return }
-    joinRoom(code)
+    enterRoom(code)
   }
 
   return (
@@ -179,56 +181,85 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Game history */}
-      <div className="glass rounded-2xl border border-white/[0.08] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display font-bold text-base text-white">Game history</h2>
-          <button
-            onClick={() => setActiveTab('games')}
-            className="text-plasma/70 hover:text-plasma text-xs font-semibold inline-flex items-center gap-1 transition-colors"
-          >
-            Browse rooms <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {!connected ? (
-          <EmptyHistorySlot icon={Activity} label="Connect a wallet to see your match history." />
-        ) : history.length === 0 ? (
-          <EmptyHistorySlot icon={Activity} label="No games yet — join a room to build your history." />
-        ) : (
-          <div className="divide-y divide-white/[0.05]">
-            {history.map((h) => (
-              <div key={h.code} className="py-3.5 flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 ${
-                  h.won ? 'bg-gold/12 border-gold/30 text-gold' : 'bg-white/[0.04] border-white/[0.09] text-white/45'
-                }`}>
-                  {h.won ? <Trophy className="w-4.5 h-4.5" strokeWidth={2} /> : <Activity className="w-4.5 h-4.5" strokeWidth={2} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-sm font-medium truncate">
-                    {h.role} · <span className="capitalize">{h.phase}</span>
-                    {h.won && <span className="ml-2 badge bg-gold/12 text-gold border border-gold/25 text-[9px]">WIN</span>}
-                  </div>
-                  <div className="text-white/30 text-[11px] font-mono truncate tracking-wider mt-0.5">
-                    Case <span className="text-white/55">{h.code}</span>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-[10px] text-white/35 mb-0.5">XP earned</div>
-                  <div className="text-sm font-mono text-white font-medium">{h.xpInRoom}</div>
-                </div>
-                <button
-                  onClick={() => handleResume(h.code)}
-                  disabled={loading}
-                  className="ml-1 px-3 py-2 rounded-lg border border-plasma/35 bg-plasma/10 text-plasma text-xs font-semibold hover:bg-plasma/20 disabled:opacity-50 transition-all"
-                >
-                  Open
-                </button>
-              </div>
-            ))}
+      {/* Case history — sourced from localStorage, instant, no RPC */}
+        <div className="glass rounded-2xl border border-white/[0.08] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display font-bold text-base text-white inline-flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-gold" strokeWidth={2} />
+              Case history
+            </h2>
+            <button
+              onClick={() => setActiveTab('games')}
+              className="text-plasma/70 hover:text-plasma text-xs font-semibold inline-flex items-center gap-1 transition-colors"
+            >
+              Browse rooms <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        )}
-      </div>
+
+          {!connected ? (
+            <EmptyHistorySlot icon={Activity} label="Connect a wallet to start earning verdicts." />
+          ) : finishedRooms.length === 0 ? (
+            <EmptyHistorySlot icon={Activity} label="No completed cases yet — your verdicts will appear here." />
+          ) : (
+            <div className="divide-y divide-white/[0.05]">
+              {finishedRooms.map((h) => {
+                const isWin     = h.myRank === 1
+                const rankEmoji = h.myRank === 1 ? '🥇' : h.myRank === 2 ? '🥈' : h.myRank === 3 ? '🥉' : h.myRank ? `#${h.myRank}` : '—'
+                const dateStr   = h.finishedAt
+                  ? new Date(h.finishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                  : null
+                return (
+                  <div key={h.code} className="py-3.5 flex items-center gap-3 group">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 text-base select-none ${
+                      isWin ? 'bg-gold/12 border-gold/30' : 'bg-white/[0.04] border-white/[0.08]'
+                    }`}>
+                      {rankEmoji}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-white text-sm font-medium font-mono tracking-wider">{h.code}</span>
+                        {h.isHost && <span className="badge bg-plasma/12 text-plasma border border-plasma/25 text-[9px]">HOST</span>}
+                        {isWin  && <span className="badge bg-gold/12 text-gold border border-gold/25 text-[9px]">WIN</span>}
+                      </div>
+                      <div className="text-white/35 text-[11px] flex items-center gap-2 flex-wrap">
+                        {h.category    && <span className="capitalize">{h.category}</span>}
+                        {h.rounds > 0  && <span>{h.rounds}/{h.maxRounds || h.rounds} rounds</span>}
+                        {h.playerCount > 0 && <span>{h.playerCount} players</span>}
+                        {dateStr       && <span className="text-white/20">{dateStr}</span>}
+                      </div>
+                    </div>
+
+                    {h.myXP > 0 && (
+                      <div className="text-right flex-shrink-0 mr-1">
+                        <div className="text-[10px] text-white/30 mb-0.5">XP</div>
+                        <div className="text-sm font-mono font-bold text-signal">+{h.myXP}</div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => handleResume(h.code)}
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded-lg border border-plasma/30 bg-plasma/[0.08] text-plasma text-xs font-semibold hover:bg-plasma/20 disabled:opacity-50 transition-all opacity-0 group-hover:opacity-100"
+                      title="Re-open this case"
+                    >
+                      View
+                    </button>
+
+                    <button
+                      onClick={() => dismissFinishedRoom(h.code)}
+                      className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all opacity-0 group-hover:opacity-100"
+                      title="Remove from history"
+                      aria-label="Dismiss"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
     </div>
   )
 }
