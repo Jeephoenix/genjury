@@ -110,7 +110,7 @@ export default function GameHeader() {
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <img src="/logo.png" alt="" className="w-6 h-6 object-contain" />
           <span className="font-display font-extrabold text-base text-white tracking-tight">
-            Gen<span className="text-neon text-glow-neon">jury</span>
+            Gen<span className="text-crimson text-glow-crimson">jury</span>
           </span>
         </div>
 
