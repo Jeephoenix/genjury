@@ -187,14 +187,11 @@ export async function connectWithProvider(providerIndex = 0) {
   if (!accounts?.length) throw new Error('Wallet did not return any accounts')
   const addr = accounts[0]
 
-  // Temporarily swap window.ethereum so ensureCorrectChain uses this provider
-  const prev = window.ethereum
-  window.ethereum = provider
-  try {
-    await ensureCorrectChain()
-  } finally {
-    window.ethereum = prev
-  }
+  // Pass the chosen provider directly — never write to window.ethereum
+  // (wallets like Rabby define it as getter-only via Object.defineProperty)
+  // Chain switch is best-effort: connect the wallet regardless of network.
+  // WalletPanel will show a "Switch Network" button if needed.
+  try { await ensureCorrectChain(provider) } catch {}
 
   // Wire events on the chosen provider
   rememberInjected(addr)
@@ -248,19 +245,22 @@ function rememberInjected(addr) {
   } catch {}
 }
 
-async function ensureCorrectChain() {
-  if (!hasInjectedProvider()) throw new Error('No Web3 wallet detected')
+async function ensureCorrectChain(provider) {
+  // Accept an explicit provider; fall back to window.ethereum for the legacy path.
+  // Never *assign* window.ethereum — wallets like Rabby make it getter-only.
+  const eth = provider ?? (typeof window !== 'undefined' ? window.ethereum : null)
+  if (!eth) throw new Error('No Web3 wallet detected')
   const chain = getChain()
   const expected = `0x${chain.id.toString(16)}`
   let current
   try {
-    current = await window.ethereum.request({ method: 'eth_chainId' })
+    current = await eth.request({ method: 'eth_chainId' })
   } catch {
     current = null
   }
   if (current === expected) return
   try {
-    await window.ethereum.request({
+    await eth.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: expected }],
     })
@@ -269,7 +269,7 @@ async function ensureCorrectChain() {
     if (code === 4902 || /unrecognized chain/i.test(err?.message || '')) {
       const rpcUrl = chain.rpcUrls?.default?.http?.[0]
       const explorerUrl = chain.blockExplorers?.default?.url
-      await window.ethereum.request({
+      await eth.request({
         method: 'wallet_addEthereumChain',
         params: [{
           chainId: expected,
@@ -285,6 +285,12 @@ async function ensureCorrectChain() {
   }
 }
 
+// Public: switch wallet to the correct GenLayer network.
+// Returns true on success, false if the user cancels or chain not supported.
+export async function switchToCorrectChain(provider) {
+  try { await ensureCorrectChain(provider); return true } catch { return false }
+}
+
 export async function connectInjectedWallet() {
   if (!hasInjectedProvider()) {
     throw new Error('No Web3 wallet found. Install MetaMask to continue.')
@@ -292,7 +298,7 @@ export async function connectInjectedWallet() {
   const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
   if (!accounts?.length) throw new Error('Wallet did not return any accounts')
   const addr = accounts[0]
-  await ensureCorrectChain()
+  try { await ensureCorrectChain() } catch {}
   rememberInjected(addr)
   _client = null
   notify()
@@ -323,6 +329,53 @@ export function disconnectInjectedWallet() {
   notify()
 }
 
+// ── Auto-reconnect on page load ──────────────────────────────────────────────
+//
+// Silently re-establishes a previously approved wallet connection without any
+// popup. Uses eth_accounts (read-only, no user prompt) against every detected
+// provider, then restores _chosenProvider when the remembered address is still
+// authorised. Call once from the app root on mount.
+export async function autoReconnect() {
+    const stored = injectedAddress()
+    if (!stored) return false
+
+    const provider = typeof window !== 'undefined' ? window.ethereum : undefined
+    if (!provider) return false
+
+    try {
+      const accounts = await provider.request({ method: 'eth_accounts' })
+      if (
+        Array.isArray(accounts) &&
+        accounts.some((a) => a.toLowerCase() === stored.toLowerCase())
+      ) {
+        // Still authorised — restore state silently without any wallet popup
+        _chosenProvider = provider
+        _client = null
+        const tag = '__genjuryWired'
+        if (!provider[tag]) {
+          provider[tag] = true
+          provider.on?.('accountsChanged', (accs) => {
+            rememberInjected(accs?.[0] ?? null)
+            _client = null
+            notify()
+          })
+          provider.on?.('chainChanged', () => {
+            _client = null
+            notify()
+          })
+        }
+        notify()
+        return true
+      }
+    } catch {
+      // Wallet not ready or permission revoked
+    }
+
+    // Permission revoked — clear stored address
+    rememberInjected(null)
+    notify()
+    return false
+  }
 export function myAddress() {
   return injectedAddress()
 }
@@ -582,10 +635,23 @@ export async function callMethodForResult(address, fn, args = [], valueWei = 0n,
 function friendlyTxError(e) {
   if (!e) return 'Unknown error'
   if (typeof e === 'string') return e
-  if (e.code === 4001 || /user rejected|user denied/i.test(e.message || '')) {
+  const _m = e.message || ''
+  const _c = e.code
+  if (_c === 4001 || /user rejected|user denied|cancel/i.test(_m))
     return 'You rejected the request in your wallet.'
-  }
-  return e.shortMessage || e.message || String(e)
+  if (/only a getter|Cannot set property ethereum|read.only/i.test(_m))
+    return 'A wallet extension conflict was detected. Disable other wallet extensions and refresh.'
+  if (/wrong network|unrecognized chain/i.test(_m))
+    return 'Wrong network — please switch to the correct network in your wallet.'
+  if (/timeout|timed out/i.test(_m))
+    return 'Request timed out. Please try again.'
+  if (/insufficient funds/i.test(_m))
+    return 'Insufficient funds to complete this transaction.'
+  if (/no web3|no wallet|not found|not installed/i.test(_m))
+    return 'No wallet detected. Install MetaMask or another Web3 wallet.'
+  if (/network|rpc|econnrefused|fetch failed/i.test(_m))
+    return 'Network error — check your connection and try again.'
+  return e.shortMessage || e.message || 'Transaction failed. Please try again.'
 }
 
 export async function getGenBalanceWei(addr) {
