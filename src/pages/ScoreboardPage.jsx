@@ -85,7 +85,7 @@ export default function ScoreboardPage() {
             <h2 className="font-display font-bold text-3xl sm:text-4xl text-white mb-1">
               <span style={{ color: winner.color }}>{winner.name}</span> wins!
             </h2>
-            <p className="text-white/35 text-sm mb-3">{winner.xp} XP · Level {winner.level}</p>
+            <p className="text-white/35 text-sm mb-3 tnum">{winner.xp} XP · Level {winner.level}</p>
 
             <span className="inline-flex items-center gap-1.5 badge bg-gold/15 text-gold border border-gold/30 text-sm">
               <Trophy className="w-3.5 h-3.5" /> Genjury Champion
@@ -228,9 +228,9 @@ export default function ScoreboardPage() {
               </div>
 
               <div className="text-right flex-shrink-0">
-                <div className="font-display font-bold text-xl" style={{ color: p.color }}>{p.xp}</div>
+                <div className="font-display font-bold text-xl tnum" style={{ color: p.color }}>{p.xp}</div>
                 <div className="text-white/25 text-[10px] font-mono">XP</div>
-                <div className="text-white/20 text-[10px]">Lv.{p.level}</div>
+                <div className="text-white/20 text-[10px] tnum">Lv.{p.level}</div>
               </div>
             </div>
           ))}
@@ -272,7 +272,7 @@ export default function ScoreboardPage() {
                           </span>
                         </td>
                       ))}
-                      <td className="py-2.5 text-right font-display font-bold" style={{ color: p.color }}>
+                      <td className="py-2.5 text-right font-display font-bold tnum" style={{ color: p.color }}>
                         {p.xp}
                       </td>
                     </tr>
