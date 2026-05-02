@@ -725,3 +725,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .podium-1 { animation: podiumGlow 3s ease-in-out infinite; }
+
+/* ── Hero char-reveal animation ── */
+@keyframes charReveal {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px);
+  }
+}
