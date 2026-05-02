@@ -121,13 +121,13 @@ export default function MistrialPage() {
       <div className="text-center mb-12 animate-slide-up">
         <div className="flex items-center justify-center mb-7">
           <div className="relative">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-neon/[0.09] border border-neon/25 flex items-center justify-center text-neon"
-              style={{ boxShadow: '0 0 40px rgba(127,255,110,0.18), inset 0 1px 0 rgba(127,255,110,0.15)' }}>
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-crimson/[0.09] border border-crimson/25 flex items-center justify-center text-crimson"
+              style={{ boxShadow: '0 0 40px rgba(232,0,45,0.18), inset 0 1px 0 rgba(232,0,45,0.15)' }}>
               <MistrialMark className="w-14 h-14 sm:w-16 sm:h-16" />
             </div>
             {/* Animated pulse ring */}
-            <div className="absolute inset-0 rounded-3xl border border-neon/30 animate-ping opacity-20 pointer-events-none" />
-            <div className="absolute -inset-3 rounded-3xl bg-neon/10 blur-2xl opacity-40 pointer-events-none" />
+            <div className="absolute inset-0 rounded-3xl border border-crimson/30 animate-ping opacity-20 pointer-events-none" />
+            <div className="absolute -inset-3 rounded-3xl bg-crimson/10 blur-2xl opacity-40 pointer-events-none" />
           </div>
         </div>
 
@@ -222,7 +222,7 @@ export default function MistrialPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
           <div>
             <h2 className="font-display font-bold text-base text-white inline-flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-neon" strokeWidth={2} />
+              <Sparkles className="w-4 h-4 text-crimson" strokeWidth={2} />
               Open a new case
             </h2>
             <p className="text-white/40 text-sm">
@@ -231,7 +231,7 @@ export default function MistrialPage() {
           </div>
           <button
             onClick={() => setShowCreate((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-neon/30 bg-neon/[0.08] text-neon text-sm font-semibold hover:bg-neon/15 transition-all flex-shrink-0"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-crimson/30 bg-crimson/[0.08] text-crimson text-sm font-semibold hover:bg-crimson/15 transition-all flex-shrink-0"
           >
             <Plus className="w-4 h-4" strokeWidth={2.25} />
             {showCreate ? 'Hide' : 'Open new case'}
