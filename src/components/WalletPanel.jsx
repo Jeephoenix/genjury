@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Copy, LogOut, Wallet as WalletIcon, X, ExternalLink,
-  RefreshCw, ChevronRight, AlertCircle,
+  RefreshCw, ChevronRight, AlertCircle, Zap,
 } from 'lucide-react'
 import {
   myAddress,
@@ -10,9 +10,11 @@ import {
   disconnectInjectedWallet,
   subscribeWallet,
   getNetworkInfo,
+  getNetworkName,
   getChainNativeSymbol,
   getGenBalanceWei,
   formatGen,
+  fundAccount,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
 import WalletSelectorModal from './WalletSelectorModal'
@@ -27,9 +29,13 @@ export default function WalletPanel() {
   const [refreshing, setRefreshing] = useState(false)
   const [copied, setCopied]         = useState(false)
   const [showSelector, setShowSelector] = useState(false)
+  const [funding, setFunding]           = useState(false)
+  const [fundDone, setFundDone]         = useState(false)
 
-  const net       = getNetworkInfo()
-  const symbol    = getChainNativeSymbol()
+  const net         = getNetworkInfo()
+  const networkName = getNetworkName()
+  const symbol      = getChainNativeSymbol()
+  const isDevNet    = networkName === 'studionet' || networkName === 'localnet'
   const addToast  = useGameStore((s) => s.addToast)
   const resetGame = useGameStore((s) => s.resetGame)
 
@@ -84,6 +90,24 @@ export default function WalletPanel() {
     resetGame()
     disconnectInjectedWallet()
     addToast('Wallet disconnected', 'info')
+  }
+
+  const handleFund = async () => {
+    if (!address || funding) return
+    setFunding(true)
+    setFundDone(false)
+    try {
+      await fundAccount(address)
+      addToast('100 GEN added to your account', 'success')
+      setFundDone(true)
+      setTimeout(() => setFundDone(false), 3000)
+      // Refresh balance after a short delay so the node has time to update
+      setTimeout(refreshBalance, 800)
+    } catch (e) {
+      addToast(e?.message || 'Fund failed', 'error')
+    } finally {
+      setFunding(false)
+    }
   }
 
   if (!open) return null
@@ -197,8 +221,45 @@ export default function WalletPanel() {
                         <span className="text-white/40 text-sm font-mono">{symbol}</span>
                       </div>
 
-                      {/* Low balance nudge */}
-                      {balanceWei !== null && balanceWei < 1n * 10n ** 16n && net.faucet && (
+                      {/* Fund / faucet nudge */}
+                      {isDevNet ? (
+                        /* Studionet / localnet: one-click debug_fundAccount button */
+                        <div className="mt-3">
+                          <button
+                            onClick={handleFund}
+                            disabled={funding}
+                            aria-busy={funding}
+                            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
+                              fundDone
+                                ? 'border-neon/40 bg-neon/10 text-neon'
+                                : funding
+                                ? 'border-plasma/30 bg-plasma/10 text-plasma/60 cursor-wait'
+                                : 'border-plasma/25 bg-plasma/[0.08] text-plasma hover:bg-plasma/15 hover:border-plasma/45 active:scale-[0.98]'
+                            }`}
+                          >
+                            {funding ? (
+                              <>
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-plasma/30 border-t-plasma animate-spin flex-shrink-0" />
+                                Funding…
+                              </>
+                            ) : fundDone ? (
+                              <>
+                                <Zap className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.25} />
+                                100 GEN added!
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.25} />
+                                Fund 100 GEN
+                              </>
+                            )}
+                          </button>
+                          <p className="text-white/20 text-[10px] text-center font-mono mt-1.5">
+                            dev only · debug_fundAccount
+                          </p>
+                        </div>
+                      ) : balanceWei !== null && balanceWei < 1n * 10n ** 16n && net.faucet ? (
+                        /* Public testnet: link to faucet when balance is low */
                         <div className="mt-3 flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5 text-gold flex-shrink-0" strokeWidth={2.25} />
                           <a
@@ -210,7 +271,7 @@ export default function WalletPanel() {
                             Low balance — get test {symbol} from faucet
                           </a>
                         </div>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Explorer link */}
