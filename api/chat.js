@@ -39,6 +39,14 @@
           CREATE INDEX IF NOT EXISTS chat_room_ts_idx
             ON chat_messages (room_code, ts)
         `
+        await sql`
+          CREATE TABLE IF NOT EXISTS chat_reactions (
+            msg_id  TEXT NOT NULL,
+            emoji   TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            PRIMARY KEY (msg_id, emoji, user_id)
+          )
+        `
       })().catch(e => { dbReady = null; throw e })
       return dbReady
     }
@@ -47,10 +55,14 @@
   // Map<roomCode, Array<row>>  — capped at 500 msgs per room.
   // NOTE: Each Vercel function instance has its own Map; scale-out = separate
   // in-memory stores. Acceptable for dev; use DATABASE_URL for production.
-  const _mem = new Map()
+  const _mem          = new Map()  // roomCode → msg[]
+  const _memReactions = new Map()  // msgId    → { emoji: userId[] }
 
   function memGet(room, since) {
-    return (_mem.get(room) || []).filter(m => m.ts > since).slice(-100)
+    return (_mem.get(room) || [])
+      .filter(m => m.ts > since)
+      .slice(-100)
+      .map(m => ({ ...m, reactions: _memReactions.get(m.id) || {} }))
   }
 
   function memPost(roomCode, msg) {
@@ -94,7 +106,23 @@
             ORDER BY ts ASC
             LIMIT 100
           `
-          return res.status(200).json({ messages: rows })
+          // Attach reactions to each message
+          let messages = rows
+          if (rows.length) {
+            const msgIds = rows.map(r => r.id)
+            const rxRows = await sql`
+              SELECT msg_id, emoji, user_id FROM chat_reactions
+              WHERE msg_id = ANY(${msgIds})
+            `
+            const rxMap = {}
+            for (const rx of rxRows) {
+              if (!rxMap[rx.msg_id]) rxMap[rx.msg_id] = {}
+              if (!rxMap[rx.msg_id][rx.emoji]) rxMap[rx.msg_id][rx.emoji] = []
+              rxMap[rx.msg_id][rx.emoji].push(rx.user_id)
+            }
+            messages = rows.map(r => ({ ...r, reactions: rxMap[r.id] || {} }))
+          }
+          return res.status(200).json({ messages })
         }
         return res.status(200).json({ messages: memGet(room, since) })
       }
@@ -127,7 +155,53 @@
         return res.status(200).json({ ok: true })
       }
 
-      res.setHeader('Allow', 'GET, POST')
+      if (req.method === 'PATCH') {
+        const body = typeof req.body === 'string'
+          ? (() => { try { return JSON.parse(req.body) } catch { return {} } })()
+          : (req.body || {})
+        const { roomCode, msgId, emoji, userId } = body
+        const VALID = ['👍', '🔥', '⚖️']
+        if (!roomCode || !msgId || !emoji || !userId || !VALID.includes(emoji)) {
+          return res.status(400).json({ error: 'bad payload' })
+        }
+
+        if (USE_DB) {
+          await ensureSchema()
+          const exists = await sql`
+            SELECT 1 FROM chat_reactions
+            WHERE msg_id = ${msgId} AND emoji = ${emoji} AND user_id = ${userId}
+          `
+          if (exists.length) {
+            await sql`
+              DELETE FROM chat_reactions
+              WHERE msg_id = ${msgId} AND emoji = ${emoji} AND user_id = ${userId}
+            `
+          } else {
+            await sql`
+              INSERT INTO chat_reactions (msg_id, emoji, user_id)
+              VALUES (${msgId}, ${emoji}, ${userId})
+              ON CONFLICT DO NOTHING
+            `
+          }
+          const all = await sql`SELECT emoji, user_id FROM chat_reactions WHERE msg_id = ${msgId}`
+          const reactions = {}
+          for (const r of all) {
+            if (!reactions[r.emoji]) reactions[r.emoji] = []
+            reactions[r.emoji].push(r.user_id)
+          }
+          return res.status(200).json({ ok: true, reactions })
+        } else {
+          const cur = { ...(_memReactions.get(msgId) || {}) }
+          const users = cur[emoji] ? [...cur[emoji]] : []
+          const idx = users.indexOf(userId)
+          if (idx >= 0) { users.splice(idx, 1) } else { users.push(userId) }
+          if (users.length) { cur[emoji] = users } else { delete cur[emoji] }
+          _memReactions.set(msgId, cur)
+          return res.status(200).json({ ok: true, reactions: cur })
+        }
+      }
+
+      res.setHeader('Allow', 'GET, POST, PATCH')
       return res.status(405).end()
     } catch (e) {
       console.error('[chat api]', e)
