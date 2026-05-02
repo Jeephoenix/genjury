@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Wallet } from 'lucide-react'
+import { Wallet, ChevronDown } from 'lucide-react'
 import {
   myAddress,
   isWalletConnected,
@@ -17,27 +17,33 @@ export default function WalletButton({ compact = false }) {
   const connected = isWalletConnected()
   const address   = myAddress()
 
+  if (connected) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className={`group inline-flex items-center gap-2 rounded-xl border border-plasma/30 bg-plasma/10 text-white transition-all duration-200 hover:bg-plasma/18 hover:border-plasma/50 hover:shadow-[0_0_20px_rgba(162,89,255,0.2)] ${
+          compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs'
+        }`}
+        aria-label="Open wallet panel"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_6px_#7fff6e] flex-shrink-0" />
+        <span className="font-mono tracking-tight text-white/90">{short(address)}</span>
+        {!compact && <ChevronDown className="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors" strokeWidth={2.5} />}
+      </button>
+    )
+  }
+
   return (
     <button
       onClick={() => setOpen(true)}
-      className={`group inline-flex items-center gap-2 rounded-lg border transition-all duration-200 ${
-        connected
-          ? 'border-plasma/40 bg-plasma/10 text-white hover:bg-plasma/20 hover:border-plasma/60'
-          : 'border-neon/40 bg-neon/10 text-neon hover:bg-neon/20 hover:border-neon/60 hover:shadow-[0_0_20px_rgba(127,255,110,0.35)]'
-      } ${compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs'}`}
-      aria-label="Open wallet panel"
+      className={`group inline-flex items-center gap-2 rounded-xl border border-neon/35 bg-neon/8 text-neon font-semibold uppercase tracking-wider transition-all duration-200 hover:bg-neon/15 hover:border-neon/55 hover:shadow-[0_0_24px_rgba(127,255,110,0.3)] active:scale-95 ${
+        compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs'
+      }`}
+      aria-label="Connect wallet"
     >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          connected ? 'bg-plasma' : 'bg-neon animate-pulse'
-        }`}
-      />
-      <Wallet className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} -ml-0.5`} strokeWidth={2.25} />
-      {connected ? (
-        <span className="font-mono tracking-tight">{short(address)}</span>
-      ) : (
-        <span className="font-semibold uppercase tracking-wider">Connect</span>
-      )}
+      <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse flex-shrink-0" />
+      <Wallet className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} strokeWidth={2.25} />
+      {!compact && <span>Connect</span>}
     </button>
   )
 }
