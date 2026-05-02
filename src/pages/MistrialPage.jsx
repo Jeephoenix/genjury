@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   Drama, Brain, Vote, Coins, ArrowLeft, Plus, Sparkles,
   ChevronDown, ChevronUp, Info, Gavel, Wallet, Trophy,
-  Building2, UserPlus, Zap,
+  Building2, Zap,
 } from 'lucide-react'
 import useGameStore from '../lib/store'
 import MistrialMark from '../components/MistrialMark'
+import JoinInviteSheet from '../components/JoinInviteSheet'
 import OpenRoundsList from '../components/OpenRoundsList'
 import {
   parseGen, formatGen, getChainNativeSymbol,
@@ -64,13 +65,10 @@ export default function MistrialPage() {
         params.delete('join')
         const qs = params.toString()
         window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
-        const readyToJoin = isWalletConnected() && hasContractAddress() && getProfile().name
-        if (readyToJoin) {
-          joinRoom(code)
-        } else {
-          setInvitedCode(code)
-          setJoinCodeInput(code)
-          setShowJoinByCode(true)
+            // Always show the invite sheet so the player can confirm their name.
+        setInvitedCode(code)
+        setJoinCodeInput(code)
+        setShowJoinByCode(true)
           rememberJoinedRoom(code)
         }
       }
@@ -180,34 +178,13 @@ export default function MistrialPage() {
         </div>
       )}
 
-      {/* Invite banner */}
-      {invitedCode && (
-        <div className="glass rounded-2xl border border-neon/25 bg-neon/[0.04] p-5 mb-6 animate-slide-up">
-          <div className="flex items-start gap-3">
-            <UserPlus className="w-5 h-5 text-neon mt-0.5 flex-shrink-0" strokeWidth={2} />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-display font-bold text-white text-sm mb-1">
-                You've been invited to case{' '}
-                <span className="text-neon font-mono tracking-widest">{invitedCode}</span>
-              </h3>
-              <p className="text-white/50 text-sm">
-                {!connected
-                  ? 'Connect your wallet and set a player name, then click "Take a seat" below.'
-                  : !getProfile().name
-                  ? 'Set a player name in your profile, then click "Take a seat" below.'
-                  : 'Click "Take a seat" in the join form below to enter the courtroom.'}
-              </p>
-            </div>
-            <button
-              onClick={() => setInvitedCode(null)}
-              className="text-white/25 hover:text-white/60 flex-shrink-0 text-xl leading-none transition-colors"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Invite sheet — rendered when the user lands via a ?join=CODE link */}
+        {invitedCode && (
+          <JoinInviteSheet
+            code={invitedCode}
+            onDismiss={() => setInvitedCode(null)}
+          />
+        )}
 
       {/* Open docket */}
       <div className="glass rounded-2xl border border-white/[0.08] p-5 mb-5 animate-slide-up" style={{ animationDelay: '0.05s' }}>
