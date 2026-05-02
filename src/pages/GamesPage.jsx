@@ -187,7 +187,7 @@ export default function GamesPage() {
                 {live ? (
                   <button
                     onClick={() => handlePlay(g.id)}
-                    className="btn btn-neon w-full py-3 text-sm inline-flex items-center justify-center gap-2"
+                    className="btn btn-crimson w-full py-3 text-sm inline-flex items-center justify-center gap-2"
                   >
                     <Zap className="w-4 h-4" strokeWidth={2.5} />
                     Play now
