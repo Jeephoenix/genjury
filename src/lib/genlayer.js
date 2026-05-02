@@ -333,7 +333,7 @@ export function isWalletConnected() {
 
 export const isInjectedActive = isWalletConnected
 
-const DEFAULT_NETWORK = 'bradbury'
+const DEFAULT_NETWORK = 'studionet'
 
 const NETWORK_INFO = {
   bradbury: {
@@ -347,7 +347,7 @@ const NETWORK_INFO = {
     faucet:   'https://testnet-faucet.genlayer.foundation',
   },
   studionet: {
-    label:    'GenLayer Studio (local)',
+    label:    'GenLayer Studio',
     explorer: null,
     faucet:   null,
   },
@@ -379,10 +379,10 @@ export function getNetworkInfo() {
 
 export function getChain() {
   const key = getNetworkName()
-  if (key === 'studionet') return studionet
   if (key === 'localnet')  return localnet
   if (key === 'asimov')    return testnetAsimov
-  return testnetBradbury
+  if (key === 'bradbury')  return testnetBradbury
+  return studionet
 }
 
 export function getChainNativeSymbol() {
