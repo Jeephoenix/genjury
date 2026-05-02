@@ -104,7 +104,7 @@ export default function MistrialPage() {
   const validJoinCode = isValidRoomCode(normalizeRoomCode(joinCodeInput))
 
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 py-10 sm:py-14 relative">
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 py-10 sm:py-14 relative overflow-x-hidden">
 
       {/* Back */}
       <div className="mb-6">
