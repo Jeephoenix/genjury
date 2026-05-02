@@ -726,6 +726,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .podium-1 { animation: podiumGlow 3s ease-in-out infinite; }
 
+/* ── Game ticker marquee ── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
 /* ── Hero char-reveal animation ── */
 @keyframes charReveal {
   from {
