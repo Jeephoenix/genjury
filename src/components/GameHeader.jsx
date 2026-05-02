@@ -130,9 +130,14 @@ export default function GameHeader() {
           This avoids the .badge display:inline-flex overriding Tailwind's `hidden`.
         */}
         {showPot && (
-          <div className="hidden md:flex flex-shrink-0 items-center gap-1.5 badge bg-gold/10 border border-gold/30 text-gold font-mono text-xs">
-            <Coins className="w-3.5 h-3.5" />
-            <span>{formatGen(displayPotWei, 3)} {symbol}</span>
+          /* Wrapper carries hidden/md:flex — NEVER put .badge on the same element as hidden
+             because globals.css .badge{display:inline-flex} comes after @tailwind utilities
+             and overrides the hidden utility in the cascade. */
+          <div className="hidden md:flex flex-shrink-0">
+            <span className="badge bg-gold/10 border border-gold/30 text-gold font-mono text-xs flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5" />
+              <span>{formatGen(displayPotWei, 3)} {symbol}</span>
+            </span>
           </div>
         )}
 
