@@ -26,7 +26,7 @@ import {
   getChainNativeSymbol,
 } from './genlayer'
 import { getProfile } from './profile'
-import { rememberJoinedRoom, forgetJoinedRoom } from './joinedRooms'
+import { rememberJoinedRoom, forgetJoinedRoom, markRoomFinished } from './joinedRooms'
 
 export const PHASES = {
   LOBBY:          'lobby',
@@ -271,11 +271,17 @@ function applyContractState(get, s) {
     winnerAddress:         norm(s.winnerAddress) || null,
     winnerWinningsWei:     safeBigInt(s.winnerWinnings),
     prizeDistributed:      !!s.prizeDistributed,
+    houseFeesCollectedWei: safeBigInt(s.houseFeesCollected ?? s.houseFeesCollectedWei),
   }
 
   if (phaseChanged) {
     next.timer = PHASE_TIMERS[newPhase] ?? 0
     next.timerMax = PHASE_TIMERS[newPhase] ?? 0
+    // When a room reaches scoreboard, mark it finished in localStorage so the
+    // docket removes it automatically without requiring a manual dismiss.
+    if (newPhase === PHASES.SCOREBOARD && local.roomCode) {
+      markRoomFinished(local.roomCode)
+    }
   }
 
   useGameStore.setState(next)
@@ -382,6 +388,7 @@ const useGameStore = create((set, get) => ({
   winnerAddress:         null,
   winnerWinningsWei:     0n,
   prizeDistributed:      true,
+  houseFeesCollectedWei: 0n,
 
   // Live-lobby caches: rooms in-lobby (joinable) and rooms mid-game (spectating
   // info only — joining is gated by phase).
@@ -574,7 +581,7 @@ const useGameStore = create((set, get) => ({
 
       if (roomPhase !== 'lobby' && !alreadyIn) {
         set({ loading: false })
-        pushToast('error', 'This case is already in session — the courtroom is locked to new spectators. You can only re-enter rooms you joined during the lobby.')
+        pushToast('error', 'This case is already in session. Only players who joined during the lobby can enter.')
         return
       }
 
@@ -630,7 +637,7 @@ const useGameStore = create((set, get) => ({
           const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
 
           if (roomPhase !== 'lobby' && !alreadyIn) {
-            pushToast('error', 'This case is already in session — only players who joined during the lobby can enter.')
+            pushToast('error', 'This case is already in session. Only players who joined during the lobby can enter.')
             return
           }
 
@@ -1003,6 +1010,7 @@ const useGameStore = create((set, get) => ({
       winnerAddress:         null,
       winnerWinningsWei:     0n,
       prizeDistributed:      true,
+      houseFeesCollectedWei: 0n,
       activeTab:             'home',
     })
   },
