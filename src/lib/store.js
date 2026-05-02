@@ -440,6 +440,12 @@ const useGameStore = create((set, get) => ({
   }),
   clearChat: () => set({ chatMessages: [] }),
 
+    patchChatReaction: (msgId, reactions) => set((s) => ({
+      chatMessages: s.chatMessages.map((m) =>
+        m.id === msgId ? { ...m, reactions } : m
+      ),
+    })),
+
   // ── Live lobby loaders ────────────────────────────────────────────────────
   loadOpenRooms: async () => {
     if (!hasContractAddress()) return
