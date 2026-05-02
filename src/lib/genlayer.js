@@ -430,17 +430,62 @@ export function getClient() {
 // every player. Set VITE_GENJURY_CONTRACT to the deployed address; the app
 // throws on any read/write attempt if it's missing or malformed.
 
-export function getContractAddress() {
-  const raw = import.meta.env.VITE_GENJURY_CONTRACT
-  if (!raw) return null
-  const trimmed = String(raw).trim()
-  if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
-    console.warn('[genjury] VITE_GENJURY_CONTRACT is set but is not a valid 0x… address.')
+// Runtime override key — lets the platform owner configure the contract
+  // address directly in the browser without requiring a redeploy.
+  const STORAGE_CONTRACT_KEY = 'genjury_contract_v1'
+  const _contractListeners   = new Set()
+
+  function notifyContract() {
+    for (const fn of _contractListeners) { try { fn() } catch {} }
+  }
+
+  export function subscribeContractAddress(fn) {
+    _contractListeners.add(fn)
+    return () => _contractListeners.delete(fn)
+  }
+
+  function isValidAddress(raw) {
+    return typeof raw === 'string' && /^0x[0-9a-fA-F]{40}$/.test(raw.trim())
+  }
+
+  export function getContractAddress() {
+    // 1. Build-time env var (highest priority)
+    const envRaw = import.meta.env.VITE_GENJURY_CONTRACT
+    if (envRaw) {
+      const trimmed = String(envRaw).trim()
+      if (isValidAddress(trimmed)) return trimmed
+      console.warn('[genjury] VITE_GENJURY_CONTRACT is set but is not a valid 0x… address.')
+    }
+    // 2. Runtime override stored in localStorage by the platform owner
+    try {
+      const stored = localStorage.getItem(STORAGE_CONTRACT_KEY)
+      if (stored && isValidAddress(stored)) return stored.trim()
+    } catch {}
     return null
   }
-  return trimmed
-}
 
+  // Allow the platform owner to set / clear the address at runtime.
+  export function setRuntimeContractAddress(addr) {
+    if (!addr) {
+      try { localStorage.removeItem(STORAGE_CONTRACT_KEY) } catch {}
+      notifyContract()
+      return null
+    }
+    const trimmed = String(addr).trim()
+    if (!isValidAddress(trimmed)) {
+      throw new Error('Invalid contract address — must be a 0x… 40-hex-char address.')
+    }
+    try { localStorage.setItem(STORAGE_CONTRACT_KEY, trimmed) } catch {}
+    notifyContract()
+    return trimmed
+  }
+
+  export function clearRuntimeContractAddress() {
+    try { localStorage.removeItem(STORAGE_CONTRACT_KEY) } catch {}
+    notifyContract()
+  }
+
+  
 export function hasContractAddress() {
   return !!getContractAddress()
 }
