@@ -206,7 +206,7 @@ export default function HomePage() {
         <div className={`relative rounded-2xl border ${FA.border} bg-panel overflow-hidden card-lift`}
           style={{ boxShadow: '0 0 60px rgba(127,255,110,0.07)' }}>
           {/* Top accent */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neon/60 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/50 to-transparent" />
           {/* Corner glow */}
           <div className="absolute top-0 left-0 w-40 h-40 rounded-full bg-neon/5 blur-3xl pointer-events-none" />
 
