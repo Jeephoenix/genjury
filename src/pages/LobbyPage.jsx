@@ -213,7 +213,7 @@ export default function LobbyPage() {
         {/* Start button */}
         {isHost && (
           <button
-            className="btn btn-neon w-full py-5 text-lg inline-flex items-center justify-center gap-2"
+            className="btn btn-crimson w-full py-5 text-lg inline-flex items-center justify-center gap-2"
             disabled={!canStart}
             onClick={startGame}
           >
