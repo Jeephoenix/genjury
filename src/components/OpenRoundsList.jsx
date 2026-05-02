@@ -328,7 +328,7 @@ export default function OpenRoundsList({
                       : canRejoin
                         ? 'bg-plasma/15 text-plasma border border-plasma/40 hover:bg-plasma/25'
                         : playable
-                          ? 'bg-neon/15 text-neon border border-neon/40 hover:bg-neon/25'
+                          ? 'bg-crimson/15 text-crimson border border-crimson/40 hover:bg-crimson/25'
                           : 'bg-white/5 text-white/35 border border-white/10 cursor-not-allowed'
                   }`}
                 >
