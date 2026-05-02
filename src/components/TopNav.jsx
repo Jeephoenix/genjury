@@ -38,7 +38,7 @@ export default function TopNav() {
               <div className="absolute inset-0 rounded-full bg-neon/25 blur-lg opacity-0 group-hover:opacity-100 transition-all duration-300" />
             </div>
             <span className="font-display font-extrabold text-lg text-white tracking-tight">
-              Gen<span className="text-neon text-glow-neon">jury</span>
+              Gen<span className="text-crimson text-glow-crimson">jury</span>
             </span>
           </button>
 
@@ -57,12 +57,12 @@ export default function TopNav() {
                   }`}
                   aria-current={active ? 'page' : undefined}
                 >
-                  <Icon className={`w-4 h-4 transition-colors ${active ? 'text-neon' : ''}`} strokeWidth={2.25} />
+                  <Icon className={`w-4 h-4 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
                   <span>{label}</span>
                   {active && (
                     <>
-                      <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-neon/50 via-neon to-neon/50 shadow-[0_0_8px_#7fff6e]" />
-                      <span className="absolute inset-0 rounded-xl bg-neon/[0.03]" />
+                      <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-crimson/50 via-crimson to-crimson/50 shadow-[0_0_8px_#e8002d]" />
+                      <span className="absolute inset-0 rounded-xl bg-crimson/[0.03]" />
                     </>
                   )}
                 </button>
