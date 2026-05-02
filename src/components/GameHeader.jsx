@@ -38,14 +38,14 @@ function PhaseStepperBar({ phase }) {
                 active
                   ? 'w-14 h-5 bg-plasma/30 border border-plasma/60 text-plasma'
                   : done
-                  ? 'w-4 h-4 bg-neon/20 border border-neon/40 text-neon/70'
+                  ? 'w-4 h-4 bg-crimson/20 border border-crimson/40 text-crimson/70'
                   : 'w-4 h-4 bg-white/5 border border-white/10 text-white/20'
               }`}
             >
               {active ? step.label : done ? '✓' : ''}
             </div>
             {i < PHASE_STEPS.length - 1 && (
-              <div className={`w-3 h-px transition-colors duration-300 ${done ? 'bg-neon/40' : 'bg-white/10'}`} />
+              <div className={`w-3 h-px transition-colors duration-300 ${done ? 'bg-crimson/40' : 'bg-white/10'}`} />
             )}
           </React.Fragment>
         )
@@ -165,7 +165,7 @@ export default function GameHeader() {
             <div
               key={i}
               className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                i < round - 1 ? 'bg-neon' : i === round - 1 ? 'bg-plasma animate-pulse' : 'bg-white/15'
+                i < round - 1 ? 'bg-crimson' : i === round - 1 ? 'bg-plasma animate-pulse' : 'bg-white/15'
               }`}
             />
           ))}
@@ -186,7 +186,7 @@ export default function GameHeader() {
           className={`hidden md:inline-flex flex-shrink-0 items-center gap-1 px-2 py-1 rounded-lg border text-xs font-mono transition-all ${
             confirmLeave
               ? 'border-signal/60 bg-signal/15 text-signal animate-pulse'
-              : 'border-neon/30 bg-neon/10 text-neon hover:bg-neon/20'
+              : 'border-crimson/30 bg-crimson/10 text-crimson hover:bg-crimson/20'
           }`}
         >
           {confirmLeave
@@ -233,7 +233,7 @@ export default function GameHeader() {
             <div
               key={i}
               className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                i < round - 1 ? 'bg-neon' : i === round - 1 ? 'bg-plasma animate-pulse' : 'bg-white/15'
+                i < round - 1 ? 'bg-crimson' : i === round - 1 ? 'bg-plasma animate-pulse' : 'bg-white/15'
               }`}
             />
           ))}
@@ -259,7 +259,7 @@ export default function GameHeader() {
           className={`flex-shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md border text-[10px] font-mono transition-all ${
             confirmLeave
               ? 'border-signal/60 bg-signal/15 text-signal animate-pulse'
-              : 'border-neon/25 bg-neon/8 text-neon'
+              : 'border-crimson/25 bg-crimson/8 text-crimson'
           }`}
         >
           {confirmLeave
