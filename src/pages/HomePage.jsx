@@ -20,7 +20,7 @@ import MistrialMark from '../components/MistrialMark'
 
 // ── Hero char-reveal component ────────────────────────────────────────────────
 // Each character appears individually with blur+lift, staggered by `charMs`.
-function CharReveal({ text, startDelay = 0, charMs = 38, className = '' }) {
+function CharReveal({ text, startDelay = 0, charMs = 22, className = '' }) {
   return (
     <span className={className} aria-label={text}>
       {text.split('').map((ch, i) => (
@@ -30,7 +30,7 @@ function CharReveal({ text, startDelay = 0, charMs = 38, className = '' }) {
           style={{
             display: 'inline-block',
             opacity: 0,
-            animation: 'charReveal 0.34s cubic-bezier(0.16,1,0.3,1) forwards',
+            animation: 'charReveal 0.28s cubic-bezier(0.16,1,0.3,1) forwards',
             animationDelay: `${startDelay + i * charMs}ms`,
             whiteSpace: ch === ' ' ? 'pre' : undefined,
           }}
@@ -43,10 +43,10 @@ function CharReveal({ text, startDelay = 0, charMs = 38, className = '' }) {
 // ── TV-subtitle cycling hook ──────────────────────────────────────────────────
 // Phases: waiting → typing (char by char) → holding → fading → next phrase
 const SUBTITLE_PHRASES = [
-  'Mistrial — bluff the AI Judge on-chain.',
-  'Highstakes — verifiable shuffles, zero house.',
-  'Crossfire — trivia graded by Optimistic AI.',
-  'Oracle Arena — predict it. Chain decides.',
+  'Mistrial — bluff the AI Judge.',
+  'Highstakes — zero house edge.',
+  'Crossfire — AI-graded trivia.',
+  'Oracle Arena — chain decides.',
 ]
 
 function useCyclingSubtitle(phrases, { charMs = 36, holdMs = 2600, fadeMs = 380, startDelay = 0 } = {}) {
@@ -167,7 +167,8 @@ export default function HomePage() {
   }, [])
 
   const { text: subtitleText, fading: subtitleFading } = useCyclingSubtitle(SUBTITLE_PHRASES, {
-    startDelay: 2100,
+    charMs: 28,
+    startDelay: 1200,
   })
 
   const playGame = (id) => {
@@ -197,20 +198,20 @@ export default function HomePage() {
           </div>
 
           {/* ── Main headline ── letter-by-letter reveal */}
-          <h1 className="font-display font-extrabold text-5xl sm:text-7xl tracking-tight leading-[0.9] mb-4">
+          <h1 className="font-display font-extrabold text-[2.35rem] sm:text-6xl tracking-tight leading-[0.92] mb-4">
             <span className="block text-white">
-              <CharReveal text="Every game." startDelay={200} />
+              <CharReveal text="Every game." startDelay={150} />
             </span>
             <span className="block text-crimson">
-              {/* LINE2 starts after LINE1 finishes: 200 + 11 chars × 38ms + 110ms gap */}
-              <CharReveal text="AI-judged. On-chain." startDelay={750} />
+              {/* LINE2: 150 + 11 chars × 22ms + 55ms gap = ~447ms */}
+              <CharReveal text="AI-judged. On-chain." startDelay={447} />
             </span>
           </h1>
 
           {/* ── TV cycling subtitle ── */}
-          <div className="h-6 mb-5 flex items-center justify-center overflow-hidden">
+          <div className="h-5 mb-5 flex items-center justify-center">
             <span
-              className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/38 select-none"
+              className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/38 select-none whitespace-nowrap"
               style={{ transition: 'opacity 380ms ease', opacity: subtitleFading ? 0 : 1 }}
             >
               {subtitleText || '\u00A0'}
