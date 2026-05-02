@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Scale, X, Send } from 'lucide-react'
+import { MessageSquare, Scale, X, Send, ChevronRight } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import { fetchSince, postChat } from '../lib/chatApi'
 import { getProfile, subscribeProfile, displayName } from '../lib/profile'
@@ -18,28 +18,23 @@ export default function ChatPanel() {
   const [text, setText]     = useState('')
   const [unread, setUnread] = useState(0)
   const [, force]           = useState(0)
-  const scrollRef = useRef(null)
+  const scrollRef           = useRef(null)
+  const inputRef            = useRef(null)
 
-  // Auto-collapse chat during active game phases to avoid covering gameplay UI
-  const activePhase = phase === PHASES.WRITING || phase === PHASES.VOTING
+  const activePhase    = phase === PHASES.WRITING || phase === PHASES.VOTING
+  const objectionMode  = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
+
+  // Auto-collapse during active timed phases
   useEffect(() => {
     if (activePhase) setOpen(false)
   }, [activePhase])
 
-  // Re-render when the user updates their profile so chat shows the new
-  // name / avatar without a refresh.
   useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])
 
-  const objectionMode =
-    phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
-
-  // Identity for outgoing chat — wallet address (or fallback id) + profile.
-  // No longer requires the user to be in the on-chain players list, so they
-  // can chat in the lobby and as soon as they open a room.
   const profile = getProfile()
-  const meId = myId || (myAddress() || '').toLowerCase() || 'guest'
+  const meId    = myId || (myAddress() || '').toLowerCase() || 'guest'
 
-  // ── Poll for new messages while we're in a room ────────────────────
+  // ── Poll for new messages ──────────────────────────────────────────
   useEffect(() => {
     if (!roomCode) return
     let cancelled = false
@@ -64,13 +59,9 @@ export default function ChatPanel() {
             kind:       m.kind,
             ts:         Number(m.ts),
           })
-          if (!open && m.author_id !== meId) {
-            setUnread(u => u + 1)
-          }
+          if (!open && m.author_id !== meId) setUnread(u => u + 1)
         }
-      } catch {
-        /* ignore transient errors */
-      }
+      } catch { /* ignore transient errors */ }
     }
 
     tick()
@@ -79,16 +70,17 @@ export default function ChatPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomCode, objectionMode, open, pushChat, meId])
 
-  // ── Auto-scroll + clear unread when opening ────────────────────────
+  // ── Scroll to bottom + clear unread on open ────────────────────────
   useEffect(() => {
-    if (open) setUnread(0)
-    if (scrollRef.current) {
+    if (open) {
+      setUnread(0)
+      setTimeout(() => inputRef.current?.focus(), 120)
+    }
+    if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages, open])
 
-  // Chat is available the moment the user is in a room — including the
-  // lobby — so people can coordinate before the first round.
   if (!roomCode) return null
 
   async function submit(e) {
@@ -104,130 +96,170 @@ export default function ChatPanel() {
         color:  profile.color,
       }
       const optimistic = await postChat(
-        roomCode,
-        player,
-        t,
+        roomCode, player, t,
         objectionMode ? 'objection' : 'taunt',
       )
       pushChat(optimistic)
     } catch {
-      // Re-fill on failure so the user doesn't lose their text.
       setText(t)
     }
   }
 
+  const panelTitle = objectionMode
+    ? <><Scale className="w-4 h-4 text-neon" strokeWidth={2.25} />Objections</>
+    : <><MessageSquare className="w-4 h-4 text-plasma" strokeWidth={2.25} />Table Talk</>
+
   return (
     <>
-      {/* Floating toggle */}
+      {/* ── Floating toggle button ── */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-4 right-4 z-40 px-4 py-3 rounded-full bg-plasma/20 border border-plasma/40 text-plasma backdrop-blur shadow-lg hover:bg-plasma/30 transition inline-flex items-center gap-2"
+        className="fixed bottom-4 right-4 z-40 px-4 py-2.5 rounded-full glass border border-plasma/35 text-plasma hover:bg-plasma/20 hover:border-plasma/55 transition-all duration-200 inline-flex items-center gap-2 shadow-lg backdrop-blur-xl"
         aria-label="Toggle chat"
       >
-        <MessageSquare className="w-4 h-4" strokeWidth={2.25} />
-        <span className="text-sm font-semibold">Chat</span>
-        {unread > 0 && (
-          <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-neon text-void text-xs font-bold">
-            {unread}
+        {open
+          ? <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+          : <MessageSquare className="w-4 h-4" strokeWidth={2.25} />
+        }
+        <span className="text-sm font-semibold">{open ? 'Close' : 'Chat'}</span>
+        {!open && unread > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-neon text-void text-xs font-bold">
+            {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
       <AnimatePresence>
         {open && (
-          <motion.aside
-            initial={{ x: 360, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 360, opacity: 0 }}
-            transition={{ type: 'spring', damping: 24, stiffness: 220 }}
-            className="fixed bottom-20 right-4 z-40 w-[340px] max-h-[60vh] flex flex-col rounded-2xl border border-white/10 bg-void/90 backdrop-blur-xl shadow-2xl"
-          >
-            <header className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-              <div className="text-sm uppercase tracking-wider text-white/70 inline-flex items-center gap-2">
-                {objectionMode ? (
-                  <>
-                    <Scale className="w-4 h-4 text-neon" strokeWidth={2.25} />
-                    Objections
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare className="w-4 h-4 text-plasma" strokeWidth={2.25} />
-                    Table Talk
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-white/50 hover:text-white"
-                aria-label="Close chat"
-              >
-                <X className="w-4 h-4" strokeWidth={2.25} />
-              </button>
-            </header>
+          <>
+            {/*
+              ── Backdrop (mobile only) ──
+              Tapping outside the drawer closes it.
+              Hidden on sm+ since the panel is just a floating card there.
+            */}
+            <motion.div
+              key="chat-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 sm:hidden"
+              onClick={() => setOpen(false)}
+              aria-hidden="true"
+            />
 
-            <div
-              ref={scrollRef}
-              className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
+            {/*
+              ── Drawer / Panel ──
+              Mobile  : full-height right drawer (slides in from right edge)
+              Desktop : small floating card above the toggle button
+            */}
+            <motion.aside
+              key="chat-panel"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 240, mass: 0.9 }}
+              className={[
+                // shared
+                'fixed right-0 z-50 flex flex-col',
+                'border-white/[0.08] bg-void/95 backdrop-blur-2xl shadow-2xl',
+                // mobile: full height, full width, no rounded corners, border-l only
+                'top-0 bottom-0 w-full border-l',
+                // desktop: floating card with rounded corners, constrained size
+                'sm:top-auto sm:bottom-20 sm:w-[340px] sm:max-h-[65vh] sm:rounded-2xl sm:border sm:border-white/10',
+              ].join(' ')}
+              aria-label="Chat panel"
             >
-              {messages.length === 0 && (
-                <div className="text-white/40 text-sm text-center py-6">
-                  No messages yet. Be the first to say something.
+              {/* Top accent line */}
+              <div className="h-px bg-gradient-to-r from-transparent via-plasma/50 to-transparent flex-shrink-0" />
+
+              {/*
+                ── Panel header ──
+                On mobile: extra top padding to clear the 2-row game header (80 px).
+                On desktop: normal padding.
+              */}
+              <div className="flex items-center justify-between px-4 py-3 pt-[84px] sm:pt-3 border-b border-white/[0.07] flex-shrink-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white/80 uppercase tracking-wider">
+                  {panelTitle}
                 </div>
-              )}
-              {messages.map(m => (
-                <div key={m.id} className="flex items-start gap-2">
-                  <Avatar
-                    name={m.authorName}
-                    src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
-                    color={m.color}
-                    size={24}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className="text-xs font-semibold"
-                        style={{ color: m.color || '#a259ff' }}
-                      >
-                        {m.authorName || 'Player'}
-                      </span>
-                      {m.kind === 'objection' && (
-                        <span className="text-[10px] uppercase tracking-wider text-neon">
-                          objection
-                        </span>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
+                  aria-label="Close chat"
+                >
+                  <X className="w-4 h-4" strokeWidth={2.25} />
+                </button>
+              </div>
+
+              {/* ── Message list ── */}
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto px-3 py-3 space-y-3 overscroll-contain"
+              >
+                {messages.length === 0 && (
+                  <div className="text-white/30 text-sm text-center py-10 flex flex-col items-center gap-2">
+                    <MessageSquare className="w-8 h-8 text-white/10" strokeWidth={1.5} />
+                    <span>No messages yet.</span>
+                    <span className="text-xs text-white/20">Be the first to say something.</span>
+                  </div>
+                )}
+                {messages.map(m => (
+                  <div key={m.id} className={`flex items-start gap-2.5 ${m.authorId === meId ? 'flex-row-reverse' : ''}`}>
+                    <Avatar
+                      name={m.authorName}
+                      src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
+                      color={m.color}
+                      size={28}
+                    />
+                    <div className={`flex-1 min-w-0 ${m.authorId === meId ? 'items-end' : 'items-start'} flex flex-col`}>
+                      {m.authorId !== meId && (
+                        <div className="flex items-baseline gap-1.5 mb-0.5">
+                          <span className="text-xs font-semibold" style={{ color: m.color || '#a259ff' }}>
+                            {m.authorName || 'Player'}
+                          </span>
+                          {m.kind === 'objection' && (
+                            <span className="text-[10px] uppercase tracking-wider text-neon font-bold">objection</span>
+                          )}
+                        </div>
                       )}
-                    </div>
-                    <div className="text-sm text-white/90 break-words">
-                      {m.text}
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-sm break-words max-w-[85%] leading-snug ${
+                          m.authorId === meId
+                            ? 'bg-plasma/20 border border-plasma/25 text-white rounded-tr-sm'
+                            : 'bg-white/[0.06] border border-white/[0.07] text-white/90 rounded-tl-sm'
+                        }`}
+                      >
+                        {m.text}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            <form
-              onSubmit={submit}
-              className="p-2 border-t border-white/10 flex gap-2"
-            >
-              <input
-                value={text}
-                onChange={e => setText(e.target.value)}
-                maxLength={280}
-                placeholder={
-                  objectionMode ? 'Object! Coordinate!' : 'Say something…'
-                }
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-plasma/60"
-              />
-              <button
-                type="submit"
-                disabled={!text.trim()}
-                className="px-3 py-2 rounded-lg bg-plasma/30 border border-plasma/50 text-plasma text-sm font-semibold hover:bg-plasma/40 disabled:opacity-40 inline-flex items-center gap-1.5"
-                aria-label="Send"
+              {/* ── Input bar ── */}
+              <form
+                onSubmit={submit}
+                className="flex gap-2 p-3 border-t border-white/[0.07] flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
               >
-                <Send className="w-3.5 h-3.5" strokeWidth={2.25} />
-                Send
-              </button>
-            </form>
-          </motion.aside>
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  maxLength={280}
+                  placeholder={objectionMode ? 'Object! Coordinate!' : 'Say something…'}
+                  className="flex-1 bg-white/[0.05] border border-white/[0.09] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-plasma/50 focus:bg-white/[0.07] transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={!text.trim()}
+                  className="w-11 h-11 rounded-xl bg-plasma/25 border border-plasma/40 text-plasma hover:bg-plasma/35 hover:border-plasma/60 disabled:opacity-30 transition-all flex items-center justify-center flex-shrink-0"
+                  aria-label="Send message"
+                >
+                  <Send className="w-4 h-4" strokeWidth={2.25} />
+                </button>
+              </form>
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
     </>
