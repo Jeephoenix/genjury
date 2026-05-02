@@ -110,7 +110,7 @@ body::before {
 
 /* ── Shimmer / gradient text ── */
 .shimmer-text {
-  background: linear-gradient(90deg, #7fff6e 0%, #a259ff 25%, #38d9f5 50%, #a259ff 75%, #7fff6e 100%);
+  background: linear-gradient(90deg, #e8002d 0%, #a259ff 30%, #38d9f5 55%, #a259ff 75%, #e8002d 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
