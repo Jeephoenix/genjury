@@ -18,13 +18,14 @@ export default function TopNav() {
 
   const inLobby = !!(roomCode && phase === PHASES.LOBBY)
 
-  const select = (id) => {
-    setActiveTab(id)
-  }
+  const select = (id) => setActiveTab(id)
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-void/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-void/80 backdrop-blur-2xl">
+        {/* Subtle top accent line */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-plasma/40 to-transparent" />
+
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
           {/* Brand */}
           <button
@@ -33,54 +34,58 @@ export default function TopNav() {
             aria-label="Genjury home"
           >
             <div className="relative">
-              <img src="/logo.png" alt="" className="w-8 h-8 object-contain" />
-              <div className="absolute inset-0 rounded-full bg-neon/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+              <img src="/logo.png" alt="" className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110" />
+              <div className="absolute inset-0 rounded-full bg-neon/25 blur-lg opacity-0 group-hover:opacity-100 transition-all duration-300" />
             </div>
-            <span className="font-display font-800 text-lg text-white tracking-tight">
+            <span className="font-display font-extrabold text-lg text-white tracking-tight">
               Gen<span className="text-neon text-glow-neon">jury</span>
             </span>
           </button>
 
           {/* Desktop tabs */}
-          <nav className="hidden md:flex items-center gap-1 mx-4">
+          <nav className="hidden md:flex items-center gap-0.5 ml-3">
             {TABS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id
               return (
                 <button
                   key={id}
                   onClick={() => select(id)}
-                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                     active
-                      ? 'text-white bg-white/5'
-                      : 'text-white/55 hover:text-white hover:bg-white/5'
+                      ? 'text-white bg-white/[0.07]'
+                      : 'text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
                   }`}
                   aria-current={active ? 'page' : undefined}
                 >
-                  <Icon className="w-4 h-4" strokeWidth={2.25} />
+                  <Icon className={`w-4 h-4 transition-colors ${active ? 'text-neon' : ''}`} strokeWidth={2.25} />
                   <span>{label}</span>
                   {active && (
-                    <span className="absolute inset-x-3 -bottom-px h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+                    <>
+                      <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-neon/50 via-neon to-neon/50 shadow-[0_0_8px_#7fff6e]" />
+                      <span className="absolute inset-0 rounded-xl bg-neon/[0.03]" />
+                    </>
                   )}
                 </button>
               )
             })}
-            {/* In-Room pill — only visible while sitting in an active lobby */}
+
+            {/* In-Room pill */}
             {inLobby && (
               <button
                 onClick={() => select('lobby')}
-                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ml-1 ${
                   activeTab === 'lobby'
-                    ? 'text-neon bg-neon/10 border border-neon/30'
-                    : 'text-neon/70 hover:text-neon hover:bg-neon/10 border border-neon/20'
+                    ? 'text-neon bg-neon/[0.09] border border-neon/25 glow-neon'
+                    : 'text-neon/65 hover:text-neon hover:bg-neon/[0.07] border border-neon/15'
                 }`}
               >
-                <span className="relative flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
+                <span className="flex items-center gap-1.5">
+                  <span className="dot-live" />
                   <Gavel className="w-4 h-4" strokeWidth={2.25} />
                   <span className="font-mono tracking-widest text-[11px]">{roomCode}</span>
                 </span>
                 {activeTab === 'lobby' && (
-                  <span className="absolute inset-x-3 -bottom-px h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+                  <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-neon/40 via-neon to-neon/40 shadow-[0_0_8px_#7fff6e]" />
                 )}
               </button>
             )}
@@ -102,9 +107,12 @@ export default function TopNav() {
 
       {/* Mobile bottom tab bar */}
       <nav
-        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-void/85 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-void/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)]"
         aria-label="Primary"
       >
+        {/* Top accent line */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-plasma/30 to-transparent" />
+
         <div className={`mx-auto max-w-7xl grid ${inLobby ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id
@@ -112,35 +120,38 @@ export default function TopNav() {
               <button
                 key={id}
                 onClick={() => select(id)}
-                className={`relative flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
-                  active ? 'text-white' : 'text-white/55 hover:text-white'
+                className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-all duration-200 ${
+                  active ? 'text-white' : 'text-white/40 hover:text-white/70'
                 }`}
                 aria-current={active ? 'page' : undefined}
               >
-                <Icon className="w-5 h-5" strokeWidth={2.25} />
-                <span>{label}</span>
+                <div className={`p-1.5 rounded-lg transition-all duration-200 ${active ? 'bg-white/[0.07]' : ''}`}>
+                  <Icon className={`w-5 h-5 transition-colors ${active ? 'text-neon' : ''}`} strokeWidth={2.25} />
+                </div>
+                <span className="tracking-wide">{label}</span>
                 {active && (
-                  <span className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+                  <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-neon to-transparent shadow-[0_0_8px_#7fff6e]" />
                 )}
               </button>
             )
           })}
-          {/* In-Room tab — shown on mobile when sitting in an active lobby */}
+
+          {/* In-Room tab */}
           {inLobby && (
             <button
               onClick={() => select('lobby')}
-              className={`relative flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
-                activeTab === 'lobby' ? 'text-neon' : 'text-neon/60 hover:text-neon'
+              className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-all duration-200 ${
+                activeTab === 'lobby' ? 'text-neon' : 'text-neon/50 hover:text-neon'
               }`}
               aria-current={activeTab === 'lobby' ? 'page' : undefined}
             >
-              <span className="relative">
+              <div className={`relative p-1.5 rounded-lg transition-all duration-200 ${activeTab === 'lobby' ? 'bg-neon/10' : ''}`}>
                 <Gavel className="w-5 h-5" strokeWidth={2.25} />
-                <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-neon animate-pulse border border-void" />
-              </span>
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-neon border border-void animate-pulse" />
+              </div>
               <span className="font-mono tracking-wider">{roomCode}</span>
               {activeTab === 'lobby' && (
-                <span className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-neon to-transparent" />
+                <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-neon to-transparent shadow-[0_0_8px_#7fff6e]" />
               )}
             </button>
           )}
