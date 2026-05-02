@@ -84,12 +84,10 @@ export default function MistrialPage() {
         params.delete('join')
         const qs = params.toString()
         window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
-            // Always show the invite sheet so the player can confirm their name.
+        // Always show the invite sheet so the player can confirm their name.
         setInvitedCode(code)
         setJoinCodeInput(code)
         setShowJoinByCode(true)
-          rememberJoinedRoom(code)
-        }
       }
     }
   }, [joinRoom])
@@ -210,7 +208,7 @@ export default function MistrialPage() {
                       disabled={!contractInput.trim()}
                       className="btn px-4 py-2.5 text-sm font-semibold bg-signal/15 text-signal border border-signal/35 hover:bg-signal/25 disabled:opacity-50 flex-shrink-0"
                     >
-                      Save &amp; reload
+                      Save & reload
                     </button>
                   </div>
                 )}

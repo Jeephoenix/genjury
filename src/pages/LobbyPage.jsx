@@ -100,7 +100,32 @@ export default function LobbyPage() {
                 : <><Copy className="w-4 h-4" /> Copy Code</>}
             </button>
           </div>
-          <p className="text-white/25 text-xs mt-3 font-mono tracking-wide">
+          {/* Tap-to-copy invite link — works on mobile without the share sheet */}
+            {joinUrl && (
+              <div className="mt-3 flex items-center gap-1.5">
+                <input
+                  readOnly
+                  value={joinUrl}
+                  onClick={(e) => e.currentTarget.select()}
+                  className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-white/40 text-[11px] font-mono truncate focus:outline-none focus:border-plasma/40 cursor-text"
+                  aria-label="Invite link"
+                />
+                <button
+                  onClick={shareLink}
+                  title={linkCopied ? 'Copied!' : 'Copy invite link'}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border transition-all ${
+                    linkCopied
+                      ? 'bg-neon/15 border-neon/35 text-neon'
+                      : 'bg-white/[0.04] border-white/[0.08] text-white/35 hover:text-plasma hover:border-plasma/35'
+                  }`}
+                >
+                  {linkCopied
+                    ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
+                </button>
+              </div>
+            )}
+            <p className="text-white/25 text-xs mt-3 font-mono tracking-wide">
             Room code: <span className="text-white/60 tracking-[0.22em]">{roomCode}</span>
           </p>
         </div>
