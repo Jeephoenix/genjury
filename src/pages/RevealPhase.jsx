@@ -218,7 +218,7 @@ export default function RevealPhase() {
 
         {/* Continue CTA */}
         <button
-          className="btn btn-neon w-full py-4 text-base inline-flex items-center justify-center gap-2"
+          className="btn btn-crimson w-full py-4 text-base inline-flex items-center justify-center gap-2"
           onClick={nextRound}
         >
           {round >= maxRounds ? (
