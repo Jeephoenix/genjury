@@ -86,13 +86,42 @@ export function forgetJoinedRoom(rawCode) {
   safeWrite(arr)
   notify()
 }
-  export function markRoomFinished(rawCode) {
+  export function markRoomFinished(rawCode, meta = {}) {
     const code = normalizeRoomCode(rawCode)
     if (!isValidRoomCode(code)) return
     const arr = safeRead()
-    const entry = arr.find((r) => r.code === code)
-    if (!entry) return
-    entry.finished = true
+    let entry = arr.find((r) => r.code === code)
+    if (!entry) {
+      // Room was never in the registry (e.g. player browsed in) — create a stub.
+      entry = { code, lastSeenAt: Date.now(), isHost: false, label: '', finished: false }
+      arr.unshift(entry)
+    }
+    entry.finished   = true
+    entry.finishedAt = entry.finishedAt || meta.finishedAt || Date.now()
+    if (meta.category)    entry.category    = String(meta.category).slice(0, 64)
+    if (meta.rounds)      entry.rounds      = Number(meta.rounds)
+    if (meta.maxRounds)   entry.maxRounds   = Number(meta.maxRounds)
+    if (meta.playerCount) entry.playerCount = Number(meta.playerCount)
+    if (meta.myRank)      entry.myRank      = Number(meta.myRank)
+    if (meta.myXP != null) entry.myXP       = Number(meta.myXP)
+    if (meta.winnerName)  entry.winnerName  = String(meta.winnerName).slice(0, 32)
+    safeWrite(arr)
+    notify()
+  }
+
+  // List only rooms that have finished (for the profile history panel).
+  export function listFinishedRooms() {
+    const arr = safeRead()
+    return arr
+      .filter((r) => r.finished)
+      .sort((a, b) => (b.finishedAt || b.lastSeenAt) - (a.finishedAt || a.lastSeenAt))
+  }
+
+  // Permanently remove a finished room from the history.
+  export function dismissFinishedRoom(rawCode) {
+    const code = normalizeRoomCode(rawCode)
+    if (!isValidRoomCode(code)) return
+    const arr = safeRead().filter((r) => r.code !== code)
     safeWrite(arr)
     notify()
   }
