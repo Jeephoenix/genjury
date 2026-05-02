@@ -30,7 +30,7 @@ html, body, #root {
 body {
   background-color: var(--void);
   color: #fff;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Satoshi', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -320,7 +320,7 @@ body::before {
   border-radius: 10px;
   padding: 0.875rem 1rem;
   color: #fff;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Satoshi', sans-serif;
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
