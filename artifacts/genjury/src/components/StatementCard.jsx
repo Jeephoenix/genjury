@@ -18,20 +18,20 @@ export default function StatementCard({
   const votePercent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0
 
   const borderColor = () => {
-    if (revealed && isLie) return '#ff6b35'
+    if (revealed && isLie) return '#c05b30'
     if (revealed)          return selected ? 'rgba(127,255,110,0.3)' : 'rgba(255,255,255,0.07)'
     if (selected)          return '#a259ff'
     return 'rgba(255,255,255,0.07)'
   }
 
   const bgColor = () => {
-    if (revealed && isLie) return 'rgba(255,107,53,0.07)'
+    if (revealed && isLie) return 'rgba(192,91,48,0.06)'
     if (selected)          return 'rgba(162,89,255,0.07)'
     return 'rgba(12,12,20,0.9)'
   }
 
   const boxShadow = () => {
-    if (revealed && isLie) return '0 0 30px rgba(255,107,53,0.18), 0 0 0 1px rgba(255,107,53,0.25)'
+    if (revealed && isLie) return '0 0 22px rgba(192,91,48,0.14), 0 0 0 1px rgba(192,91,48,0.20)'
     if (selected)          return '0 0 28px rgba(162,89,255,0.2), 0 0 0 1px rgba(162,89,255,0.35)'
     return 'none'
   }
@@ -56,7 +56,7 @@ export default function StatementCard({
           className="absolute inset-y-0 left-0 opacity-[0.07] transition-all duration-700"
           style={{
             width:      `${votePercent}%`,
-            background: isLie ? '#ff6b35' : '#7fff6e',
+            background: isLie ? '#c05b30' : '#7fff6e',
           }}
         />
       )}
@@ -72,13 +72,13 @@ export default function StatementCard({
           className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center font-display font-bold text-sm transition-all duration-200"
           style={{
             background: revealed && isLie
-              ? '#ff6b35'
+              ? '#c05b30'
               : selected
               ? '#a259ff'
               : 'rgba(255,255,255,0.07)',
             color: (revealed && isLie) || selected ? '#fff' : 'rgba(255,255,255,0.45)',
             boxShadow: revealed && isLie
-              ? '0 0 14px rgba(255,107,53,0.4)'
+              ? '0 0 10px rgba(192,91,48,0.28)'
               : selected
               ? '0 0 14px rgba(162,89,255,0.4)'
               : 'none',
