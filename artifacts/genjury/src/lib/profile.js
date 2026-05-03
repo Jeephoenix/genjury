@@ -1,13 +1,12 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Player profile — name + avatar persisted to localStorage.
+// Player profile — name + avatar.
 //
-// This is the single source of truth for the user's display identity across
-// the app: chat, joining rooms, the Profile page, etc. It is *separate* from
-// the wallet address, which remains the on-chain identity.
+// When a wallet is connected, the canonical profile comes from the server
+// (permanent, unique username linked to wallet address). localStorage is used
+// as a fast cache and as the identity for non-connected users.
 //
-// The profile is auto-seeded on first read with a friendly default so a user
-// who never opens the Profile page still gets a usable identity for chat /
-// joining a room with one click.
+// The profile is the single source of truth for display identity across the
+// app: chat, joining rooms, the Profile page, etc.
 // ──────────────────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'genjury_profile_v1'
@@ -24,9 +23,10 @@ function randomColor() {
 function defaultProfile() {
   const n = Math.floor(Math.random() * 9000) + 1000
   return {
-    name: `Player ${n}`,
-    avatarUrl: '',          // optional data URL or remote URL
-    color: randomColor(),
+    name:        `Player ${n}`,
+    avatarUrl:   '',
+    color:       randomColor(),
+    claimed:     false,   // true once a permanent identity is registered
   }
 }
 
@@ -44,9 +44,10 @@ function read() {
     if (raw) {
       const parsed = JSON.parse(raw)
       _cache = {
-        name: String(parsed.name || '').slice(0, 24) || defaultProfile().name,
-        avatarUrl: String(parsed.avatarUrl || '').slice(0, 200000),
-        color: String(parsed.color || '') || randomColor(),
+        name:      String(parsed.name || '').slice(0, 24) || defaultProfile().name,
+        avatarUrl: String(parsed.avatarUrl || '').slice(0, 400000),
+        color:     String(parsed.color || '') || randomColor(),
+        claimed:   !!parsed.claimed,
       }
       return _cache
     }
@@ -78,6 +79,22 @@ export function setProfile(patch) {
     color: typeof patch.color === 'string' && patch.color
       ? patch.color
       : cur.color,
+    claimed: patch.claimed !== undefined ? !!patch.claimed : cur.claimed,
+  }
+  _cache = next
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  notify()
+  return next
+}
+
+// Called after a successful server-side identity claim.
+export function applyServerProfile(serverProfile) {
+  const cur = read()
+  const next = {
+    name:      serverProfile.username || cur.name,
+    avatarUrl: serverProfile.avatarUrl || cur.avatarUrl,
+    color:     serverProfile.color    || cur.color,
+    claimed:   true,
   }
   _cache = next
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
@@ -90,8 +107,7 @@ export function subscribeProfile(fn) {
   return () => _listeners.delete(fn)
 }
 
-// Convenience for chat/contract: a stable display name. Falls back to a short
-// version of the wallet address if the profile name is somehow empty.
+// Convenience for chat/contract: a stable display name.
 export function displayName(address) {
   const p = read()
   if (p.name) return p.name
