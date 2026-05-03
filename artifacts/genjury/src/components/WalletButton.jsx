@@ -27,7 +27,7 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
   const options = getNetworkOptions()
 
   return (
-    <div className="absolute top-full right-0 mt-1.5 z-[200]" style={{ minWidth: '220px' }}>
+    <div className="absolute top-full mt-1.5 z-[200]" style={{ right: 0, width: '190px' }}>
       <div
         className="rounded-xl border border-white/[0.1] overflow-hidden"
         style={{
@@ -37,12 +37,12 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
         }}
       >
         {/* Header */}
-        <div className="px-3.5 pt-3 pb-2 border-b border-white/[0.06]">
-          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/35">Select Network</p>
+        <div className="px-3 pt-2.5 pb-2 border-b border-white/[0.06]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/35">Network</p>
         </div>
 
         {/* Options */}
-        <div className="p-1.5 space-y-0.5">
+        <div className="p-1 space-y-0.5">
           {options.map((opt) => {
             const active = opt.key === currentNetwork
             const meta   = getMeta(opt.key)
@@ -51,7 +51,7 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
               <button
                 key={opt.key}
                 onClick={() => { onSwitch(opt.key); onClose() }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 text-left group"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-100 text-left group"
                 style={{
                   background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
                 }}
@@ -92,9 +92,9 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
         </div>
 
         {/* Footer hint */}
-        <div className="px-3.5 py-2.5 border-t border-white/[0.06]">
+        <div className="px-3 py-2 border-t border-white/[0.06]">
           <p className="text-[10px] text-white/25 font-mono leading-relaxed">
-            Contract deployed on GenLayer Studio
+            Deployed on GenLayer Studio
           </p>
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function WalletButton({ compact = false }) {
     return (
       <div className="inline-flex items-center gap-2">
         {/* Network pill */}
-        <div className="relative" ref={wrapRef}>
+        <div className="relative" ref={wrapRef} style={{ overflow: "visible" }}>
           <button
             onClick={() => setDropOpen((v) => !v)}
             aria-label="Switch network"
