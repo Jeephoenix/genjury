@@ -134,7 +134,7 @@ export default function MistrialPage() {
     const code = normalizeRoomCode(joinCodeInput)
     if (!isValidRoomCode(code)) return
     if (!connected) { setOpenWallet(true); return }
-    joinRoom(code)
+    joinRoom(code, profile.name)
   }
 
   const validJoinCode = isValidRoomCode(normalizeRoomCode(joinCodeInput))

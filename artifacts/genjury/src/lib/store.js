@@ -603,12 +603,27 @@ const useGameStore = create((set, get) => ({
       // locked. Only players who already have a seat can re-enter.
       const roomPhase = parsed?.phase || 'lobby'
       const playersMap = parsed?.players || {}
-      const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
+      // Normalize all keys to lowercase — contract may return mixed-case
+      // addresses, but `me` is always lowercased via norm().
+      const alreadyIn = Object.keys(playersMap).some((k) => norm(k) === me)
 
       if (roomPhase !== 'lobby' && !alreadyIn) {
         set({ loading: false })
         pushToast('error', 'This case is already in session. Only players who joined during the lobby can enter.')
         return
+      }
+
+      // ── Capacity check ────────────────────────────────────────────────────
+      // Reject early when the lobby is full so the user gets instant feedback
+      // instead of an on-chain rejection with a confusing error message.
+      if (roomPhase === 'lobby' && !alreadyIn) {
+        const currentCount = Number(parsed?.playerCount ?? Object.keys(playersMap).length)
+        const cap          = Number(parsed?.maxPlayers ?? 8)
+        if (currentCount >= cap) {
+          set({ loading: false })
+          pushToast('error', `This case is full (${currentCount}/${cap} jurors seated).`)
+          return
+        }
       }
 
       const fee = safeBigInt(parsed?.entryFee)
@@ -660,7 +675,7 @@ const useGameStore = create((set, get) => ({
         if (parsed) {
           const roomPhase = parsed.phase || 'lobby'
           const playersMap = parsed.players || {}
-          const alreadyIn = !!(playersMap[me] || playersMap[myAddress()])
+          const alreadyIn = Object.keys(playersMap).some((k) => norm(k) === me)
 
           if (roomPhase !== 'lobby' && !alreadyIn) {
             pushToast('error', 'This case is already in session. Only players who joined during the lobby can enter.')
