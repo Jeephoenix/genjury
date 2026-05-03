@@ -1,14 +1,15 @@
 // API client for the persistent player profile registry.
-// The registry is stored server-side, keyed by wallet address.
+// The registry is stored server-side in Neon Postgres, keyed by wallet address.
 // Username claims are one-time and permanent.
 //
-// Graceful degradation: if the API server is unreachable (e.g. frontend
-// deployed without the backend), the check is skipped optimistically and
-// claims fall back to localStorage-only storage so the UI still works.
+// Error philosophy: claims must succeed server-side or fail loudly.
+// We never silently fall back to localStorage-only for claims — that would
+// give users a false sense of permanence. The server returns 503 when
+// DATABASE_URL is not configured, and we surface that clearly.
 
 const BASE = '/api/profile'
 
-let _cache = {}        // address -> profile | null | 'loading'
+let _cache = {}        // address -> profile | null
 const _listeners = new Set()
 
 function notify() {
@@ -45,8 +46,9 @@ export async function fetchServerProfile(address) {
 
 // Check availability of a username.
 // Returns { available: true/false, error?: string }.
-// If the server is unreachable or the endpoint doesn't exist, returns
-// { available: true } so the UI doesn't block the user.
+// If the server is unreachable (network error), optimistically allows the
+// user to proceed — the claim step will catch real conflicts.
+// 4xx/5xx responses from a reachable server are always respected.
 export async function checkUsername(username) {
   const trimmed = (username || '').trim()
   if (trimmed.length < 5) {
@@ -60,12 +62,22 @@ export async function checkUsername(username) {
   try {
     resp = await fetch(`${BASE}/check?username=${encodeURIComponent(trimmed)}`)
   } catch {
-    // Network error — server not deployed or unreachable; allow optimistically
+    // Genuine network error (offline, DNS failure) — allow optimistically
     return { available: true }
   }
 
-  // Endpoint missing (API server not deployed yet) — skip check
-  if (!resp.ok) return { available: true }
+  // 503 = DB not configured; 5xx = server error
+  if (resp.status === 503 || resp.status >= 500) {
+    let data = {}
+    try { data = await resp.json() } catch {}
+    return {
+      available: false,
+      error: data.error || 'Identity registry unavailable — try again shortly.',
+    }
+  }
+
+  // Non-2xx (e.g. 404) from a deployed but misconfigured server
+  if (!resp.ok) return { available: false, error: 'Could not verify availability.' }
 
   try {
     return await resp.json()
@@ -75,43 +87,62 @@ export async function checkUsername(username) {
 }
 
 // Claim a permanent identity. Returns { ok, username } or throws.
-// If the server is unreachable, falls back to localStorage-only so the
-// user can still play. Real API errors (e.g. "Username already taken")
-// are always surfaced to the caller.
+// Never silently falls back to localStorage — the claim MUST be persisted
+// server-side or the user gets a real error explaining why.
 export async function claimIdentity(address, username, avatarUrl = '', color = '#a259ff') {
-  const key = address.toLowerCase()
+  const key     = address.toLowerCase()
   const trimmed = username.trim()
 
   let resp
   try {
     resp = await fetch(`${BASE}/claim`, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address: key, username: trimmed, avatarUrl, color }),
+      body:    JSON.stringify({ address: key, username: trimmed, avatarUrl, color }),
     })
   } catch {
-    // Server unreachable — save identity locally only
-    _cache[key] = { address: key, username: trimmed, avatarUrl, color }
-    notify()
-    return { ok: true, username: trimmed, local: true }
+    // Network error — user is offline or server is completely down
+    throw new Error('Could not reach the identity server. Check your connection and try again.')
   }
 
-  // Server responded — parse result
-  let data
-  try { data = await resp.json() } catch { data = {} }
+  let data = {}
+  try { data = await resp.json() } catch {}
 
-  // 5xx = server-side failure (DB unavailable, missing package, etc.)
-  // Treat the same as a network error: save locally so the user isn't blocked.
-  if (resp.status >= 500) {
-    _cache[key] = { address: key, username: trimmed, avatarUrl, color }
-    notify()
-    return { ok: true, username: trimmed, local: true }
+  // 503 = DATABASE_URL not configured on the server
+  if (resp.status === 503) {
+    throw new Error(
+      data.error ||
+      'Identity registry is not set up. A Neon Postgres database needs to be connected to the Vercel project.'
+    )
   }
 
-  // 4xx = real API error (username taken, already claimed) — surface to user
-  if (!resp.ok) throw new Error(data.error || 'Claim failed.')
+  // 409 = conflict (username taken OR wallet already claimed)
+  if (resp.status === 409) {
+    // If the wallet already claimed, load the existing profile
+    if (data.username) {
+      _cache[key] = { address: key, username: data.username, avatarUrl, color }
+      notify()
+    }
+    throw new Error(data.error || 'Username already taken.')
+  }
 
-  _cache[key] = { address: key, username: data.username ?? trimmed, avatarUrl, color }
+  // Other 4xx = validation / bad request
+  if (resp.status >= 400 && resp.status < 500) {
+    throw new Error(data.error || 'Invalid claim request.')
+  }
+
+  // 5xx = server/DB error (transient)
+  if (!resp.ok) {
+    throw new Error(data.error || 'Server error — please try again in a moment.')
+  }
+
+  // Success — update cache and notify subscribers
+  _cache[key] = {
+    address:   key,
+    username:  data.username ?? trimmed,
+    avatarUrl: avatarUrl,
+    color:     color,
+  }
   notify()
   return data
 }
@@ -123,19 +154,16 @@ export async function updateAvatar(address, avatarUrl) {
   let resp
   try {
     resp = await fetch(`${BASE}/avatar`, {
-      method: 'PATCH',
+      method:  'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address: key, avatarUrl }),
+      body:    JSON.stringify({ address: key, avatarUrl }),
     })
   } catch {
-    // Server unreachable — update cache only
-    if (_cache[key]) _cache[key] = { ..._cache[key], avatarUrl }
-    notify()
-    return { ok: true, local: true }
+    throw new Error('Could not reach the server. Check your connection and try again.')
   }
 
-  let data
-  try { data = await resp.json() } catch { data = {} }
+  let data = {}
+  try { data = await resp.json() } catch {}
   if (!resp.ok) throw new Error(data.error || 'Update failed.')
 
   if (_cache[key]) _cache[key] = { ..._cache[key], avatarUrl }
