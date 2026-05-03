@@ -11,7 +11,7 @@
   --signal: #ff6b35;
   --ice: #38d9f5;
   --gold: #f5c842;
-  --crimson: #e8002d;
+  --crimson: #a0324b;
 }
 
 * {
@@ -57,8 +57,8 @@ body::before {
 /* ── Grid background ── */
 .bg-grid {
   background-image: 
-    linear-gradient(rgba(232,0,45,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232,0,45,0.02) 1px, transparent 1px);
+    linear-gradient(rgba(160,50,75,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(160,50,75,0.015) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
@@ -83,13 +83,13 @@ body::before {
 .glow-signal  { box-shadow: 0 0 10px rgba(255,107,53,0.45), 0 0 35px rgba(255,107,53,0.18); }
 .glow-ice     { box-shadow: 0 0 10px rgba(56,217,245,0.45), 0 0 35px rgba(56,217,245,0.18); }
 .glow-gold    { box-shadow: 0 0 10px rgba(245,200,66,0.45), 0 0 35px rgba(245,200,66,0.18); }
-.glow-crimson { box-shadow: 0 0 10px rgba(232,0,45,0.5),   0 0 35px rgba(232,0,45,0.2); }
+.glow-crimson { box-shadow: 0 0 8px rgba(160,50,75,0.35),  0 0 24px rgba(160,50,75,0.14); }
 
 /* ── Text glow ── */
 .text-glow-neon    { text-shadow: 0 0 12px rgba(127,255,110,0.7), 0 0 30px rgba(127,255,110,0.3); }
 .text-glow-plasma  { text-shadow: 0 0 12px rgba(162,89,255,0.7), 0 0 30px rgba(162,89,255,0.3); }
 .text-glow-gold    { text-shadow: 0 0 12px rgba(245,200,66,0.7), 0 0 30px rgba(245,200,66,0.3); }
-.text-glow-crimson { text-shadow: 0 0 14px rgba(232,0,45,0.8),   0 0 32px rgba(232,0,45,0.35); }
+.text-glow-crimson { text-shadow: 0 0 10px rgba(160,50,75,0.55),  0 0 24px rgba(160,50,75,0.22); }
 .text-glow-ice    { text-shadow: 0 0 12px rgba(56,217,245,0.7), 0 0 30px rgba(56,217,245,0.3); }
 .text-glow-signal { text-shadow: 0 0 12px rgba(255,107,53,0.7), 0 0 30px rgba(255,107,53,0.3); }
 
@@ -106,7 +106,7 @@ body::before {
 
 /* ── Shimmer / gradient text ── */
 .shimmer-text {
-  background: linear-gradient(90deg, #e8002d 0%, #a259ff 30%, #38d9f5 55%, #a259ff 75%, #e8002d 100%);
+  background: linear-gradient(90deg, #a0324b 0%, #a259ff 30%, #38d9f5 55%, #a259ff 75%, #a0324b 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -122,14 +122,14 @@ body::before {
 }
 
 .gradient-text-neon {
-  background: linear-gradient(135deg, #e8002d 0%, #a259ff 60%, #38d9f5 100%);
+  background: linear-gradient(135deg, #a0324b 0%, #a259ff 60%, #38d9f5 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-crimson {
-  background: linear-gradient(135deg, #e8002d 0%, #a259ff 100%);
+  background: linear-gradient(135deg, #a0324b 0%, #a259ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -282,11 +282,11 @@ body::before {
 .btn-crimson {
   background: var(--crimson);
   color: #fff;
-  box-shadow: 0 4px 20px rgba(232,0,45,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+  box-shadow: 0 4px 16px rgba(160,50,75,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
   font-weight: 700;
 }
 .btn-crimson:hover {
-  box-shadow: 0 4px 35px rgba(232,0,45,0.55), 0 0 0 1px rgba(232,0,45,0.4);
+  box-shadow: 0 4px 28px rgba(160,50,75,0.38), 0 0 0 1px rgba(160,50,75,0.30);
   transform: translateY(-1px);
 }
 
