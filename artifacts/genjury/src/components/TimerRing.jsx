@@ -7,7 +7,7 @@ export default function TimerRing({ seconds, max, size = 48 }) {
   const offset = circumference * (1 - progress)
 
   const color = useMemo(() => {
-    if (progress > 0.5) return '#7fff6e'
+    if (progress > 0.5) return '#3db87a'
     if (progress > 0.25) return '#f5c842'
     return '#c05b30'
   }, [progress])
