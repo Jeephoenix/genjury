@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Trophy, Crown, Medal, Award, Flame, RefreshCw, TrendingUp } from 'lucide-react'
 import {
   readContractView,
   myAddress,
   isWalletConnected,
   hasContractAddress,
+  subscribeWallet,
 } from '../lib/genlayer'
 import {
   listJoinedRooms,
@@ -12,7 +13,8 @@ import {
 } from '../lib/joinedRooms'
 import Avatar from '../components/Avatar'
 
-function aggregate(roomStates, address) {
+// Fallback: aggregate stats from per-room state snapshots.
+function aggregateFromRooms(roomStates, address) {
   const me  = (address || '').toLowerCase()
   const acc = new Map()
   for (const s of roomStates) {
@@ -23,7 +25,7 @@ function aggregate(roomStates, address) {
       const a   = String(k).toLowerCase()
       const cur = acc.get(a) || {
         addr:  a,
-        name:  rec?.name || `${a.slice(0, 6)}…${a.slice(-4)}`,
+        name:  rec?.name || `${a.slice(0, 6)}\u2026${a.slice(-4)}`,
         color: rec?.color || '#a259ff',
         xp:    0,
         wins:  0,
@@ -50,15 +52,46 @@ export default function LeaderboardPage() {
   const [rooms, setRooms] = useState(() => listJoinedRooms())
   useEffect(() => subscribeJoinedRooms(() => setRooms(listJoinedRooms())), [])
 
-  const [loading,    setLoading]    = useState(false)
-  const [roomStates, setRoomStates] = useState([])
-  const [tick,       setTick]       = useState(0)
+  const [loading,   setLoading]   = useState(false)
+  const [players,   setPlayers]   = useState([])
+  const [roomCount, setRoomCount] = useState(0) // -1 = global mode
+  const [tick,      setTick]      = useState(0)
+  const [, force]                  = useState(0)
   const address = myAddress()
 
+  useEffect(() => subscribeWallet(() => force(n => n + 1)), [])
+
   const refresh = async () => {
-    if (!hasContractAddress()) { setRoomStates([]); return }
-    if (!rooms.length) { setRoomStates([]); return }
+    if (!hasContractAddress()) { setPlayers([]); setRoomCount(0); return }
     setLoading(true)
+    try {
+      // Primary: contract's global leaderboard (cross-room, authoritative)
+      const raw    = await readContractView('get_global_leaderboard', [50])
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const me = (address || '').toLowerCase()
+        const list = parsed.map((p, i) => ({
+          addr:    String(p.address || '').toLowerCase(),
+          name:    p.name || `${String(p.address || '').slice(0, 6)}\u2026`,
+          color:   p.color || '#a259ff',
+          xp:      Number(p.xp || 0),
+          wins:    Number(p.wins || 0),
+          games:   0,
+          rank:    i + 1,
+          winRate: 0,
+          isMe:    String(p.address || '').toLowerCase() === me,
+        }))
+        setPlayers(list)
+        setRoomCount(-1)
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Global endpoint not available — fall through to per-room scan
+    }
+
+    // Fallback: scan per-room states from joined rooms
+    if (!rooms.length) { setPlayers([]); setRoomCount(0); setLoading(false); return }
     try {
       const states = await Promise.all(
         rooms.map(async (r) => {
@@ -69,17 +102,21 @@ export default function LeaderboardPage() {
           } catch { return null }
         })
       )
-      setRoomStates(states.filter(Boolean))
-    } finally {
-      setLoading(false)
+      const valid = states.filter(Boolean)
+      setPlayers(aggregateFromRooms(valid, address))
+      setRoomCount(valid.length)
+    } catch {
+      setPlayers([])
+      setRoomCount(0)
     }
+    setLoading(false)
   }
 
-  useEffect(() => { refresh() /* eslint-disable-next-line */ }, [rooms, tick])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh() }, [rooms, tick, address])
 
-  const players = useMemo(() => aggregate(roomStates, address), [roomStates, address])
-  const top3    = players.slice(0, 3)
-  const rest    = players.slice(3)
+  const top3 = players.slice(0, 3)
+  const rest = players.slice(3)
 
   const rankMeta = {
     1: { Icon: Crown,  cls: 'bg-gold/12 border-gold/30 text-gold',    size: 'text-gold' },
@@ -110,7 +147,7 @@ export default function LeaderboardPage() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.07] text-white/60 hover:text-white text-xs font-mono uppercase tracking-wider disabled:opacity-50 transition-all flex-shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} strokeWidth={2.25} />
-          {loading ? 'Refreshing…' : 'Refresh'}
+          {loading ? 'Refreshing\u2026' : 'Refresh'}
         </button>
       </div>
 
@@ -135,7 +172,6 @@ export default function LeaderboardPage() {
                         : 'border-signal/20'
                     } ${p.isMe ? 'ring-1 ring-plasma/40' : ''}`}
                   >
-                    {/* Corner glow */}
                     <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-30 pointer-events-none ${
                       p.rank === 1 ? 'bg-gold/30' : p.rank === 2 ? 'bg-white/10' : 'bg-signal/20'
                     }`} />
@@ -161,9 +197,9 @@ export default function LeaderboardPage() {
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
-                      <Stat label="XP"       value={p.xp} />
-                      <Stat label="Wins"     value={p.wins} />
-                      <Stat label="Win %"    value={`${p.winRate}%`} highlight={p.rank === 1} />
+                      <Stat label="XP"    value={p.xp}             />
+                      <Stat label="Wins"  value={p.wins}           />
+                      <Stat label="Win %" value={`${p.wins > 0 ? p.wins : 0}\u00d7`} highlight={p.rank === 1} />
                     </div>
                   </div>
                 )
@@ -174,13 +210,12 @@ export default function LeaderboardPage() {
           {/* Rest — table */}
           {rest.length > 0 && (
             <div className="glass rounded-2xl border border-white/[0.08] overflow-hidden">
-              {/* Column headers */}
               <div className="grid grid-cols-12 gap-2 px-5 py-3.5 text-[10px] font-mono uppercase tracking-widest text-white/30 border-b border-white/[0.07] bg-white/[0.02]">
                 <div className="col-span-1">#</div>
                 <div className="col-span-6">Player</div>
                 <div className="col-span-2 text-right">XP</div>
-                <div className="col-span-1 text-right">Wins</div>
-                <div className="col-span-2 text-right">Win %</div>
+                <div className="col-span-2 text-right">Wins</div>
+                <div className="col-span-1 text-right">Lvl</div>
               </div>
 
               <div className="divide-y divide-white/[0.05]">
@@ -203,14 +238,12 @@ export default function LeaderboardPage() {
                             <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">YOU</span>
                           )}
                         </div>
-                        <div className="text-white/25 text-[10px] font-mono truncate">{p.addr.slice(0, 14)}…</div>
+                        <div className="text-white/25 text-[10px] font-mono truncate">{p.addr.slice(0, 14)}\u2026</div>
                       </div>
                     </div>
                     <div className="col-span-2 text-right text-white/80 font-mono text-sm">{p.xp}</div>
-                    <div className="col-span-1 text-right text-white/80 font-mono text-sm">{p.wins}</div>
-                    <div className="col-span-2 text-right font-mono text-sm">
-                      <span className={p.winRate >= 50 ? 'text-neon' : 'text-white/50'}>{p.winRate}%</span>
-                    </div>
+                    <div className="col-span-2 text-right text-white/80 font-mono text-sm">{p.wins}</div>
+                    <div className="col-span-1 text-right font-mono text-sm text-plasma/70">{p.level ?? 1}</div>
                   </div>
                 ))}
               </div>
@@ -222,7 +255,9 @@ export default function LeaderboardPage() {
       {/* Footnote */}
       <div className="mt-6 flex items-center gap-2 text-xs text-white/30 font-mono">
         <Flame className="w-3.5 h-3.5 text-signal/60" />
-        Aggregated from {roomStates.length} room{roomStates.length === 1 ? '' : 's'}. Join more rooms to grow the board.
+        {roomCount === -1
+          ? 'Global on-chain leaderboard — all rooms, all time.'
+          : `Aggregated from ${roomCount} room${roomCount === 1 ? '' : 's'}. Join more rooms to grow the board.`}
       </div>
     </div>
   )
@@ -236,18 +271,18 @@ function EmptyState({ loading, hasRooms, connected }) {
       </div>
       <div className="text-white/80 font-display font-bold text-xl mb-2">
         {loading
-          ? 'Reading on-chain scores…'
+          ? 'Reading on-chain scores\u2026'
           : !hasRooms
           ? 'The board is empty'
           : 'No players found yet'}
       </div>
       <div className="text-white/40 text-sm max-w-md mx-auto leading-relaxed">
         {loading
-          ? 'Fetching scoreboards from every room you have joined.'
+          ? 'Fetching scoreboards from the chain.'
           : !hasRooms
           ? 'The leaderboard fills as rooms complete. Join your first case to appear here.'
           : connected
-          ? "Once players finish games in the rooms you've joined, they'll rank here."
+          ? "Once players finish games, they'll rank here."
           : 'Connect your wallet to see your rank highlighted among other jurors.'}
       </div>
     </div>

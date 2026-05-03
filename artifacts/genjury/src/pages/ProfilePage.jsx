@@ -43,51 +43,80 @@ export default function ProfilePage() {
 
   const [stats,   setStats]   = useState({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
 
-  // Aggregate stats from locally-stored finished rooms (instant, no RPC).
-    // Supplement with live active-room data only if rooms exist.
-    useEffect(() => {
-      let cancelled = false
-      if (!address) {
-        setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
-        return
+  // Fetch stats: primary = contract global_xp record (authoritative, cross-room).
+  // Fallback = aggregate from locally-stored rooms + per-room scans.
+  useEffect(() => {
+    let cancelled = false
+    if (!address) {
+      setStats({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
+      return
+    }
+
+    // Seed instantly from local storage so the UI is never blank.
+    const localGames = finishedRooms.length
+    const localWins  = finishedRooms.filter((r) => r.myRank === 1).length
+    const localXP    = finishedRooms.reduce((s, r) => s + (r.myXP || 0), 0)
+    setStats({ loading: hasContractAddress(), games: localGames, wins: localWins, xp: localXP, level: 1 })
+
+    if (!hasContractAddress()) return
+
+    ;(async () => {
+      const me = address.toLowerCase()
+
+      // Primary: pull from the global leaderboard (cumulative, authoritative)
+      try {
+        const raw    = await readContractView('get_global_leaderboard', [200])
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (Array.isArray(parsed)) {
+          const myEntry = parsed.find(
+            (p) => String(p.address || '').toLowerCase() === me
+          )
+          if (myEntry) {
+            if (cancelled) return
+            setStats({
+              loading: false,
+              games:   Math.max(localGames, Number(myEntry.wins || 0)),
+              wins:    Number(myEntry.wins  || 0),
+              xp:      Number(myEntry.xp    || 0),
+              level:   Number(myEntry.level || 1),
+            })
+            return
+          }
+        }
+      } catch {
+        // Global endpoint not available — fall through to per-room scan
       }
 
-      // Seed instantly from stored finished-room metadata (no RPC needed).
-      const games = finishedRooms.length
-      let   wins  = finishedRooms.filter((r) => r.myRank === 1).length
-      let   xp    = finishedRooms.reduce((s, r) => s + (r.myXP || 0), 0)
-      let   level = 1
-      setStats({ loading: rooms.length > 0, games, wins, xp, level })
-
-      // Scan active (in-progress) rooms on-chain for any additional live XP
-      // and wins that may not yet have been persisted to localStorage.
-      if (!hasContractAddress() || rooms.length === 0) return
-      ;(async () => {
-        const me = address.toLowerCase()
-        await Promise.all(rooms.map(async (r) => {
-          try {
-            const raw    = await readContractView('get_room_state', [r.code])
-            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
-            if (!parsed?.roomCode) return
-            const rec = (parsed?.players || {})[me] || (parsed?.players || {})[address] || null
-            if (rec) {
-              xp    += Number(rec.xp || 0)
-              level  = Math.max(level, Number(rec.level || 1))
-            }
-            // Count wins from rooms that concluded while we were away —
-            // winnerAddress is the contract's authoritative source of truth.
-            const winnerAddr = (parsed.winnerAddress || '').toLowerCase()
-            const phase      = parsed.phase || ''
-            if (winnerAddr && winnerAddr === me && phase === 'scoreboard') {
-              wins++
-            }
-          } catch {}
-        }))
-        if (cancelled) return
-        setStats({ loading: false, games, wins, xp, level })
-      })()
-      return () => { cancelled = true }
-    }, [address, rooms, finishedRooms])
+      // Fallback: scan per-room states
+      if (!rooms.length) {
+        if (!cancelled) setStats({ loading: false, games: localGames, wins: localWins, xp: localXP, level: 1 })
+        return
+      }
+      let wins  = localWins
+      let xp    = localXP
+      let level = 1
+      const seenCodes = new Set(finishedRooms.map((r) => r.code))
+      await Promise.all(rooms.map(async (r) => {
+        try {
+          const raw    = await readContractView('get_room_state', [r.code])
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+          if (!parsed?.roomCode) return
+          const rec = (parsed?.players || {})[me] || (parsed?.players || {})[address] || null
+          if (rec && !seenCodes.has(r.code)) {
+            xp    += Number(rec.xp || 0)
+            level  = Math.max(level, Number(rec.level || 1))
+          }
+          const winnerAddr = (parsed.winnerAddress || '').toLowerCase()
+          if (winnerAddr === me && parsed.phase === 'scoreboard' && !seenCodes.has(r.code)) {
+            wins++
+          }
+        } catch {}
+      }))
+      if (cancelled) return
+      setStats({ loading: false, games: Math.max(localGames, wins), wins, xp, level })
+    })()
+    return () => { cancelled = true }
+  }, [address, rooms, finishedRooms])
 
   const winRate = stats.games > 0 ? Math.round((stats.wins / stats.games) * 100) : 0
 
