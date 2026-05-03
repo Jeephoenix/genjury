@@ -117,7 +117,7 @@ const TopNav = memo(function TopNav() {
                   <span className="font-mono tracking-widest text-[11px]">{roomCode}</span>
                 </span>
                 {activeTab === 'lobby' && (
-                  <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-neon/40 via-neon to-neon/40 shadow-[0_0_8px_#7fff6e]" />
+                  <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-neon/40 via-neon to-neon/40 shadow-[0_0_6px_#3db87a]" />
                 )}
               </button>
             )}
@@ -172,7 +172,7 @@ const TopNav = memo(function TopNav() {
               </div>
               <span className="font-mono tracking-wider">{roomCode}</span>
               {activeTab === 'lobby' && (
-                <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-neon to-transparent shadow-[0_0_8px_#7fff6e]" />
+                <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-neon to-transparent shadow-[0_0_6px_#3db87a]" />
               )}
             </button>
           )}
