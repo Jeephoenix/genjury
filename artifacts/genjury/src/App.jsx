@@ -1,8 +1,9 @@
 import React, { useEffect, Suspense, lazy } from 'react'
 import useGameStore, { PHASES } from './lib/store'
 import { isValidRoomCode, normalizeRoomCode, autoReconnect, myAddress, subscribeWallet } from './lib/genlayer'
-import { applyServerProfile } from './lib/profile'
+import { applyServerProfile, applyEnsName } from './lib/profile'
 import { fetchServerProfile } from './lib/profileApi'
+import { lookupEnsName } from './lib/ens'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
 import TopNav from './components/TopNav'
@@ -54,15 +55,21 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { autoReconnect() }, [])
 
-  // Globally sync the claimed username whenever wallet connects or switches.
-  // This ensures profile.name is the server-registered identity everywhere —
-  // in chat bubbles, the game lobby, leaderboard, and the wallet button.
+  // Globally sync the claimed username and ENS name whenever wallet connects
+  // or switches. This ensures profile.name is the server-registered identity
+  // everywhere — in chat bubbles, the game lobby, leaderboard, and the wallet
+  // button. ENS lookup runs in parallel and patches the profile if found.
   useEffect(() => {
     async function syncProfile(addr) {
       if (!addr) return
       try {
-        const p = await fetchServerProfile(addr)
-        if (p) applyServerProfile(p)
+        // Run server profile fetch and ENS lookup concurrently
+        const [serverProfile, ensName] = await Promise.all([
+          fetchServerProfile(addr),
+          lookupEnsName(addr),
+        ])
+        if (serverProfile) applyServerProfile(serverProfile)
+        if (ensName !== undefined) applyEnsName(ensName)
       } catch {}
     }
     const unsub = subscribeWallet(() => syncProfile(myAddress()))

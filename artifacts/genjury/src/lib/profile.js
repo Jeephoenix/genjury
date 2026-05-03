@@ -1,12 +1,11 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Player profile — name + avatar.
+// Player profile — name + avatar + ENS.
 //
 // When a wallet is connected, the canonical profile comes from the server
 // (permanent, unique username linked to wallet address). localStorage is used
 // as a fast cache and as the identity for non-connected users.
 //
-// The profile is the single source of truth for display identity across the
-// app: chat, joining rooms, the Profile page, etc.
+// Priority for display names: server username > ENS name > truncated address.
 // ──────────────────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'genjury_profile_v1'
@@ -27,6 +26,7 @@ function defaultProfile() {
     avatarUrl:   '',
     color:       randomColor(),
     claimed:     false,   // true once a permanent identity is registered
+    ensName:     null,    // ENS name (mainnet reverse lookup), if any
   }
 }
 
@@ -48,6 +48,7 @@ function read() {
         avatarUrl: String(parsed.avatarUrl || '').slice(0, 400000),
         color:     String(parsed.color || '') || randomColor(),
         claimed:   !!parsed.claimed,
+        ensName:   parsed.ensName ? String(parsed.ensName) : null,
       }
       return _cache
     }
@@ -80,6 +81,7 @@ export function setProfile(patch) {
       ? patch.color
       : cur.color,
     claimed: patch.claimed !== undefined ? !!patch.claimed : cur.claimed,
+    ensName: patch.ensName !== undefined ? (patch.ensName || null) : cur.ensName,
   }
   _cache = next
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
@@ -95,7 +97,19 @@ export function applyServerProfile(serverProfile) {
     avatarUrl: serverProfile.avatarUrl || cur.avatarUrl,
     color:     serverProfile.color    || cur.color,
     claimed:   true,
+    ensName:   cur.ensName,  // preserve locally cached ENS name
   }
+  _cache = next
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  notify()
+  return next
+}
+
+// Called after ENS reverse lookup resolves.
+export function applyEnsName(ensName) {
+  const cur = read()
+  if (cur.ensName === ensName) return cur  // no change
+  const next = { ...cur, ensName: ensName || null }
   _cache = next
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
   notify()

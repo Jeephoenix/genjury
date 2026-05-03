@@ -3,14 +3,14 @@ import {
   UserRound, Wallet, ShieldCheck, Activity, Trophy, Flame,
   Sparkles, Lock, Image as ImageIcon, Trash2,
   ArrowRight, Check, Fingerprint, AlertCircle, Loader2,
-  BadgeCheck, Shield, Zap, RefreshCw,
+  BadgeCheck, Shield, Zap, RefreshCw, AtSign,
 } from 'lucide-react'
 import {
   myAddress, isWalletConnected, subscribeWallet,
   readContractView, hasContractAddress,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
-import { getProfile, setProfile, subscribeProfile, applyServerProfile } from '../lib/profile'
+import { getProfile, setProfile, subscribeProfile, applyServerProfile, applyEnsName } from '../lib/profile'
 import {
   listJoinedRooms, subscribeJoinedRooms,
   listFinishedRooms, dismissFinishedRoom,
@@ -19,6 +19,7 @@ import {
   fetchServerProfile, checkUsername, claimIdentity,
   updateAvatar, getCachedServerProfile, subscribeProfileApi,
 } from '../lib/profileApi'
+import { lookupEnsName, getCachedEnsName, subscribeEns } from '../lib/ens'
 import Avatar from '../components/Avatar'
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
@@ -45,6 +46,7 @@ export default function ProfilePage() {
   useEffect(() => subscribeWallet(()     => force((n) => n + 1)), [])
   useEffect(() => subscribeProfile(()    => force((n) => n + 1)), [])
   useEffect(() => subscribeProfileApi(() => force((n) => n + 1)), [])
+  useEffect(() => subscribeEns(()        => force((n) => n + 1)), [])
 
   const [rooms,         setRooms]         = useState(() => listJoinedRooms())
   const [finishedRooms, setFinishedRooms] = useState(() => listFinishedRooms())
@@ -57,12 +59,16 @@ export default function ProfilePage() {
   const address    = myAddress()
   const profile    = getProfile()
   const serverProf = getCachedServerProfile(address)
+  const ensName    = getCachedEnsName(address)
 
-  // Fetch server profile when address changes
+  // Fetch server profile + ENS name when address changes
   useEffect(() => {
     if (!address) return
     fetchServerProfile(address).then((p) => {
       if (p) applyServerProfile(p)
+    })
+    lookupEnsName(address).then((name) => {
+      if (name !== undefined) applyEnsName(name)
     })
   }, [address])
 
@@ -141,9 +147,16 @@ export default function ProfilePage() {
           <UserRound className="w-3.5 h-3.5 text-plasma" />
           Player identity
         </div>
-        <h1 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight">
-          {isClaimed ? profile.name : 'Your Profile'}
-        </h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight">
+            {isClaimed ? (serverProf?.username || profile.name) : 'Your Profile'}
+          </h1>
+          {ensName && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-ice/10 border border-ice/25 text-ice text-xs font-mono tracking-wide">
+              <AtSign className="w-3 h-3" strokeWidth={2.5} />{ensName}
+            </span>
+          )}
+        </div>
         <p className="text-white/40 mt-1 text-sm">
           {connected
             ? isClaimed
@@ -175,8 +188,8 @@ export default function ProfilePage() {
       {/* Identity section — claim or display */}
       {connected && (
         isClaimed
-          ? <ClaimedIdentity profile={profile} serverProf={serverProf} address={address} addToast={addToast} />
-          : <ClaimIdentityPanel address={address} profile={profile} addToast={addToast} onClaimed={() => force((n) => n + 1)} />
+          ? <ClaimedIdentity profile={profile} serverProf={serverProf} address={address} ensName={ensName} addToast={addToast} />
+          : <ClaimIdentityPanel address={address} profile={profile} ensName={ensName} addToast={addToast} onClaimed={() => force((n) => n + 1)} />
       )}
 
       {/* On-chain reputation */}
@@ -283,7 +296,7 @@ export default function ProfilePage() {
 }
 
 // ─── Claim identity panel ─────────────────────────────────────────────────────
-function ClaimIdentityPanel({ address, profile, addToast, onClaimed }) {
+function ClaimIdentityPanel({ address, profile, ensName, addToast, onClaimed }) {
   const [username,   setUsername]   = useState('')
   const [avatarUrl,  setAvatarUrl]  = useState(profile.avatarUrl || '')
   const [checking,   setChecking]   = useState(false)
@@ -362,6 +375,24 @@ function ClaimIdentityPanel({ address, profile, addToast, onClaimed }) {
           </p>
         </div>
       </div>
+
+      {/* ENS name suggestion */}
+      {ensName && (
+        <div className="mb-5 rounded-xl border border-ice/20 bg-ice/[0.06] px-4 py-3 flex items-center gap-3">
+          <AtSign className="w-4 h-4 text-ice flex-shrink-0" strokeWidth={2.25} />
+          <div className="flex-1 min-w-0">
+            <p className="text-ice text-xs font-semibold">ENS name detected: <span className="font-mono">{ensName}</span></p>
+            <p className="text-ice/55 text-[11px] mt-0.5">Use it as your player name, or type a different one below.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUsername(ensName.replace(/\.eth$/i, ''))}
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-ice/10 border border-ice/25 text-ice text-xs font-semibold hover:bg-ice/20 transition-all"
+          >
+            Use it
+          </button>
+        </div>
+      )}
 
       {/* Trust signals */}
       <div className="grid grid-cols-3 gap-2 mb-6">
@@ -500,7 +531,7 @@ function ClaimIdentityPanel({ address, profile, addToast, onClaimed }) {
 }
 
 // ─── Claimed identity display ─────────────────────────────────────────────────
-function ClaimedIdentity({ profile, serverProf, address, addToast }) {
+function ClaimedIdentity({ profile, serverProf, address, ensName, addToast }) {
   const [avatarUrl,   setAvatarUrl]   = useState(profile.avatarUrl || '')
   const [saving,      setSaving]      = useState(false)
   const [avatarDirty, setAvatarDirty] = useState(false)
@@ -569,6 +600,11 @@ function ClaimedIdentity({ profile, serverProf, address, addToast }) {
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neon/10 border border-neon/25 text-neon text-[10px] font-mono tracking-wider">
               <Lock className="w-2.5 h-2.5" strokeWidth={2.5} /> CLAIMED
             </span>
+            {ensName && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ice/10 border border-ice/25 text-ice text-[10px] font-mono tracking-wide">
+                <AtSign className="w-2.5 h-2.5" strokeWidth={2.5} />{ensName}
+              </span>
+            )}
           </div>
           <p className="text-white/35 text-xs font-mono">{short(address)}</p>
           <p className="text-white/25 text-[11px] mt-1">

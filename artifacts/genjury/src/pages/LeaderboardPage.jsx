@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Trophy, Crown, Medal, Award, Flame, RefreshCw, TrendingUp } from 'lucide-react'
+import { Trophy, Crown, Medal, Award, Flame, RefreshCw, TrendingUp, AtSign } from 'lucide-react'
 import {
   readContractView,
   myAddress,
@@ -13,6 +13,7 @@ import {
 } from '../lib/joinedRooms'
 import Avatar from '../components/Avatar'
 import { resolveUsernames } from '../lib/profileApi'
+import { batchLookupEns } from '../lib/ens'
 
 // Fallback: aggregate stats from per-room state snapshots.
 function aggregateFromRooms(roomStates, address) {
@@ -59,6 +60,7 @@ export default function LeaderboardPage() {
   const [tick,      setTick]      = useState(0)
   const [, force]                  = useState(0)
   const [nameMap,   setNameMap]   = useState({})
+  const [ensMap,    setEnsMap]    = useState({})
   const address = myAddress()
 
   useEffect(() => subscribeWallet(() => force(n => n + 1)), [])
@@ -117,11 +119,16 @@ export default function LeaderboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refresh() }, [rooms, tick, address])
 
-  // Resolve server-registered usernames for all players on the board
+  // Resolve server-registered usernames + ENS names for all players on the board
   useEffect(() => {
     if (!players.length) return
-    resolveUsernames(players.map(p => p.addr)).then(map => {
+    const addrs = players.map(p => p.addr)
+    resolveUsernames(addrs).then(map => {
       if (Object.keys(map).length) setNameMap(prev => ({ ...prev, ...map }))
+    }).catch(() => {})
+    batchLookupEns(addrs).then(map => {
+      const filtered = Object.fromEntries(Object.entries(map).filter(([, v]) => v))
+      if (Object.keys(filtered).length) setEnsMap(prev => ({ ...prev, ...filtered }))
     }).catch(() => {})
   }, [players])
 
@@ -197,13 +204,18 @@ export default function LeaderboardPage() {
                       <div className="min-w-0 flex-1">
                         <div className="text-white/35 text-[10px] font-mono mb-0.5">RANK #{p.rank}</div>
                         <div className="text-white font-display font-bold text-base truncate flex items-center gap-1.5">
-                          {nameMap[p.addr] || p.name}
+                          {nameMap[p.addr] || ensMap[p.addr] || p.name}
                           {p.isMe && (
                             <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest flex-shrink-0">YOU</span>
                           )}
+                          {ensMap[p.addr] && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-ice/10 border border-ice/25 text-ice text-[9px] font-mono flex-shrink-0">
+                              <AtSign className="w-2 h-2" strokeWidth={2.5} />{ensMap[p.addr]}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <Avatar name={nameMap[p.addr] || p.name} color={p.color} size={36} />
+                      <Avatar name={nameMap[p.addr] || ensMap[p.addr] || p.name} color={p.color} size={36} />
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
@@ -240,12 +252,15 @@ export default function LeaderboardPage() {
                   >
                     <div className="col-span-1 text-white/35 font-mono text-sm">{p.rank}</div>
                     <div className="col-span-6 min-w-0 flex items-center gap-2.5">
-                      <Avatar name={nameMap[p.addr] || p.name} color={p.color} size={28} />
+                      <Avatar name={nameMap[p.addr] || ensMap[p.addr] || p.name} color={p.color} size={28} />
                       <div className="min-w-0">
                         <div className="text-white text-sm truncate flex items-center gap-1.5">
-                          {nameMap[p.addr] || p.name}
+                          {nameMap[p.addr] || ensMap[p.addr] || p.name}
                           {p.isMe && (
                             <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">YOU</span>
+                          )}
+                          {ensMap[p.addr] && !nameMap[p.addr] && (
+                            <AtSign className="w-3 h-3 text-ice/60 flex-shrink-0" strokeWidth={2} />
                           )}
                         </div>
                         <div className="text-white/25 text-[10px] font-mono truncate">{p.addr.slice(0, 14)}\u2026</div>

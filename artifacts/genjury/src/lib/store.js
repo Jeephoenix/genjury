@@ -27,12 +27,14 @@ import {
 } from './genlayer'
 import { getProfile } from './profile'
 import { resolveUsernames } from './profileApi'
+import { batchLookupEns } from './ens'
 import { rememberJoinedRoom, forgetJoinedRoom, markRoomFinished } from './joinedRooms'
 import { registerMember, clearRoom } from './chatApi'
 
-// Debounced: resolve server-registered usernames for all players in the current
-// room and patch store.players so every component that reads from the store
-// (game phases, lobby, scoreboard, reveal, etc.) shows the canonical username.
+// Debounced: resolve server-registered usernames (and ENS names as fallback)
+// for all players in the current room and patch store.players so every component
+// that reads from the store (game phases, lobby, scoreboard, reveal, etc.) shows
+// the canonical identity. Priority: server username > ENS name > truncated address.
 let _resolveTimer = null
 function scheduleUsernameResolution() {
   if (_resolveTimer) return
@@ -43,11 +45,17 @@ function scheduleUsernameResolution() {
     const addresses = players.map((p) => p.id).filter(Boolean)
     if (!addresses.length) return
     try {
-      const nameMap = await resolveUsernames(addresses)
-      if (!Object.keys(nameMap).length) return
+      const [nameMap, ensMap] = await Promise.all([
+        resolveUsernames(addresses),
+        batchLookupEns(addresses),
+      ])
+      const hasAny = Object.keys(nameMap).length || Object.keys(ensMap).length
+      if (!hasAny) return
       useGameStore.setState((s) => ({
         players: s.players.map((p) => {
-          const resolved = nameMap[p.id]
+          const serverName = nameMap[p.id]
+          const ensName    = ensMap[p.id]
+          const resolved   = serverName || ensName
           return resolved ? { ...p, name: resolved } : p
         }),
       }))

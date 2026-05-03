@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { X, Fingerprint, Lock, User, Loader2 } from 'lucide-react'
+import { X, Fingerprint, Lock, User, Loader2, AtSign } from 'lucide-react'
 import useGameStore from '../lib/store'
 import { myAddress } from '../lib/genlayer'
 import { fetchServerProfile } from '../lib/profileApi'
+import { lookupEnsName } from '../lib/ens'
 import Avatar from './Avatar'
 
 function shortAddr(a) {
@@ -15,25 +16,32 @@ export default function PlayerProfileCard() {
   const close  = useGameStore((s) => s.closeProfileCard)
 
   const [serverProfile, setServerProfile] = useState(null)
+  const [ensName,       setEnsName]       = useState(null)
   const [loading,       setLoading]       = useState(false)
   const [exiting,       setExiting]       = useState(false)
 
   const me = (myAddress() || '').toLowerCase()
 
-  // Fetch server profile whenever a new target opens
+  // Fetch server profile + ENS name whenever a new target opens
   useEffect(() => {
     if (!target) {
       setServerProfile(null)
+      setEnsName(null)
       setLoading(false)
       setExiting(false)
       return
     }
     setExiting(false)
     setServerProfile(null)
+    setEnsName(null)
     if (!target.address) return
     setLoading(true)
-    fetchServerProfile(target.address).then((p) => {
-      setServerProfile(p)
+    Promise.all([
+      fetchServerProfile(target.address),
+      lookupEnsName(target.address),
+    ]).then(([profile, ens]) => {
+      setServerProfile(profile)
+      setEnsName(ens || null)
       setLoading(false)
     })
   }, [target?.address])
@@ -136,6 +144,15 @@ export default function PlayerProfileCard() {
                         strokeWidth={1.75}
                       />
                     )}
+                  </div>
+                )}
+
+                {/* ENS badge */}
+                {!loading && ensName && (
+                  <div className="flex justify-center mb-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ice/10 border border-ice/25 text-ice text-[10px] font-mono tracking-wide">
+                      <AtSign className="w-2.5 h-2.5" strokeWidth={2.5} />{ensName}
+                    </span>
                   </div>
                 )}
 
