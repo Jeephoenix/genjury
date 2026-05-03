@@ -19,6 +19,7 @@ export default function ChatPanel() {
   const [text, setText]     = useState('')
   const [unread, setUnread]  = useState(0)
     const [apiOk,  setApiOk]   = useState(true)
+  const [hoveredId, setHoveredId] = useState(null)
   const [, force]           = useState(0)
   const scrollRef           = useRef(null)
   const inputRef            = useRef(null)

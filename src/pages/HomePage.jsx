@@ -353,10 +353,6 @@ export default function HomePage() {
           {/* Live stats */}
           {houseStats && (
             <div className="flex flex-wrap items-center justify-center gap-5 mt-5">
-              <div className="flex items-center gap-1.5 text-white/35 text-xs font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
-                <span className="text-white/65">{Number(houseStats.totalGamesPlayed || 0)}</span>&nbsp;games played
-              </div>
               {houseStats.openRoomsCount > 0 && (
                 <div className="flex items-center gap-1.5 text-white/35 text-xs font-mono">
                   <Activity className="w-3 h-3 text-signal" />
