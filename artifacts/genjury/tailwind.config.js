@@ -14,7 +14,7 @@ export default {
         void: '#050508',
         panel: '#0c0c14',
         edge: '#12121e',
-        neon: '#7fff6e',
+        neon: '#3db87a',
         plasma: '#a259ff',
         signal: '#c05b30',
         ice: '#38d9f5',
@@ -48,8 +48,8 @@ export default {
       },
       keyframes: {
         pulseNeon: {
-          '0%, 100%': { boxShadow: '0 0 6px #7fff6e, 0 0 20px #7fff6e33' },
-          '50%':      { boxShadow: '0 0 18px #7fff6e, 0 0 50px #7fff6e55' },
+          '0%, 100%': { boxShadow: '0 0 5px #3db87a, 0 0 14px #3db87a28' },
+          '50%':      { boxShadow: '0 0 12px #3db87a, 0 0 32px #3db87a44' },
         },
         slideUp: {
           from: { opacity: 0, transform: 'translateY(22px)' },
