@@ -1,9 +1,12 @@
 {
   "outputDirectory": "dist/public",
-  "buildCommand": "cd ../.. && pnpm --filter @workspace/genjury run build",
-  "installCommand": "cd ../.. && pnpm install",
+  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @workspace/genjury run build",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false",
   "framework": null,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "buildSettings": {
+    "buildCacheCacheControl": "public, max-age=3600"
+  }
 }

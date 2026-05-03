@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState, useEffect } from 'react'
 
 /**
  * Prevent common re-render issues by memoizing expensive computations
@@ -6,8 +6,8 @@ import { useMemo, useCallback } from 'react'
  */
 
 /**
- * useMemoizedSelector - stable reference to a store selector
- * Prevents unnecessary re-renders when store value doesn't change
+ * useMemoizedValue - stable reference to a value
+ * Prevents unnecessary re-renders when value doesn't change
  */
 export function useMemoizedValue(value, deps = []) {
   return useMemo(() => value, deps)
@@ -26,9 +26,9 @@ export function useMemoizedCallback(fn, deps = []) {
  * Useful for search inputs, resize handlers, etc.
  */
 export function useThrottledValue(value, delay = 300) {
-  const [throttled, setThrottled] = React.useState(value)
+  const [throttled, setThrottled] = useState(value)
 
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setThrottled(value), delay)
     return () => clearTimeout(timer)
   }, [value, delay])
