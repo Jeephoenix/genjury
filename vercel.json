@@ -20,6 +20,9 @@
     },
     "api/chat-cleanup.js": {
       "maxDuration": 10
+    },
+    "api/faucet.js": {
+      "maxDuration": 15
     }
   }
 }
