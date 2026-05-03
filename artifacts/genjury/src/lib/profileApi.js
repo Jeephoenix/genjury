@@ -190,10 +190,10 @@ export async function resolveUsernames(addresses) {
     const data = await resp.json()
 
     // Collect ENS names returned by the batch endpoint to seed the ENS cache
-    const ensMap: Record<string, string> = {}
+    const ensMap = {}
 
     for (const [addr, prof] of Object.entries(data || {})) {
-      const p = prof as any
+      const p = prof
       if (p?.username) {
         result[addr] = p.username
         _cache[addr] = p
