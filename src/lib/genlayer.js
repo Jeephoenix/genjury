@@ -797,13 +797,16 @@ export function parseGen(str) {
   return BigInt(whole) * (10n ** GEN_DECIMALS) + BigInt(fracPadded || '0')
 }
 
-// Returns the best available block-explorer base URL for the current network.
-// Priority: NETWORK_INFO entry → chain.blockExplorers.default.url → null
+// Returns the explorer base URL for the current network.
+// Only uses the curated NETWORK_INFO entries — never falls back to
+// chain.blockExplorers, because studionet's built-in explorer URL
+// (genlayer-explorer.vercel.app) is a paused/unreliable deployment.
+// bradbury → https://explorer-bradbury.genlayer.com
+// asimov   → https://explorer-asimov.genlayer.com
+// studionet / localnet → null (copy-to-clipboard shown instead)
 export function getExplorerBaseUrl() {
   const info = getNetworkInfo()
   if (info?.explorer) return info.explorer.replace(/\/$/, '')
-  const chainExplorer = getChain()?.blockExplorers?.default?.url
-  if (chainExplorer) return chainExplorer.replace(/\/$/, '')
   return null
 }
 
