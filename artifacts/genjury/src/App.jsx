@@ -1,7 +1,7 @@
 import React, { useEffect, Suspense, lazy } from 'react'
 import useGameStore, { PHASES } from './lib/store'
 import { isValidRoomCode, normalizeRoomCode, autoReconnect, myAddress, subscribeWallet } from './lib/genlayer'
-import { applyServerProfile, applyEnsName } from './lib/profile'
+import { initProfileForAddress, clearProfileCache, applyServerProfile, applyEnsName } from './lib/profile'
 import { fetchServerProfile } from './lib/profileApi'
 import { lookupEnsName } from './lib/ens'
 import ToastContainer from './components/ToastContainer'
@@ -18,21 +18,19 @@ import IdentityGateModal from './components/IdentityGateModal'
 import PlayerProfileCard from './components/PlayerProfileCard'
 
 // Lazy load pages for better code splitting
-const HomePage = lazy(() => import('./pages/HomePage'))
-const MistrialPage = lazy(() => import('./pages/MistrialPage'))
-const LobbyPage = lazy(() => import('./pages/LobbyPage'))
-const WritingPhase = lazy(() => import('./pages/WritingPhase'))
-const VotingPhase = lazy(() => import('./pages/VotingPhase'))
+const HomePage       = lazy(() => import('./pages/HomePage'))
+const MistrialPage   = lazy(() => import('./pages/MistrialPage'))
+const LobbyPage      = lazy(() => import('./pages/LobbyPage'))
+const WritingPhase   = lazy(() => import('./pages/WritingPhase'))
+const VotingPhase    = lazy(() => import('./pages/VotingPhase'))
 const AIJudgingPhase = lazy(() => import('./pages/AIJudgingPhase'))
 const ObjectionPhase = lazy(() => import('./pages/ObjectionPhase'))
-const RevealPhase = lazy(() => import('./pages/RevealPhase'))
+const RevealPhase    = lazy(() => import('./pages/RevealPhase'))
 const ScoreboardPage = lazy(() => import('./pages/ScoreboardPage'))
-const GamesPage = lazy(() => import('./pages/GamesPage'))
+const GamesPage      = lazy(() => import('./pages/GamesPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage'))
-
-// Loading placeholder for Suspense
-const LoadingPage = lazy(() => import('./pages/LoadingPage'))
+const ProfilePage    = lazy(() => import('./pages/ProfilePage'))
+const LoadingPage    = lazy(() => import('./pages/LoadingPage'))
 
 function PageLoader() {
   return <LoadingPage />
@@ -51,19 +49,27 @@ export default function App() {
   }, [tickTimer])
 
   // Silently reconnect on page load if the user previously approved this site.
-  // Uses eth_accounts (no popup) — only restores if already authorised.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { autoReconnect() }, [])
 
-  // Globally sync the claimed username and ENS name whenever wallet connects
-  // or switches. This ensures profile.name is the server-registered identity
-  // everywhere — in chat bubbles, the game lobby, leaderboard, and the wallet
-  // button. ENS lookup runs in parallel and patches the profile if found.
+  // Whenever the wallet connects, switches, or disconnects:
+  // - Load the wallet-specific localStorage profile (isolated per address)
+  // - Fetch the server-registered identity
+  // - Run ENS reverse lookup in parallel
+  // When disconnected, clear the in-memory cache so no stale name bleeds through.
   useEffect(() => {
     async function syncProfile(addr) {
-      if (!addr) return
+      if (!addr) {
+        // Wallet disconnected — wipe in-memory profile so nothing leaks
+        clearProfileCache()
+        return
+      }
+
+      // Load (or create) the per-address profile slot before any async work
+      // so that the UI immediately reflects the correct wallet's cached state
+      initProfileForAddress(addr)
+
       try {
-        // Run server profile fetch and ENS lookup concurrently
         const [serverProfile, ensName] = await Promise.all([
           fetchServerProfile(addr),
           lookupEnsName(addr),
@@ -72,13 +78,13 @@ export default function App() {
         if (ensName !== undefined) applyEnsName(ensName)
       } catch {}
     }
+
     const unsub = subscribeWallet(() => syncProfile(myAddress()))
-    syncProfile(myAddress())  // also run immediately on mount
+    syncProfile(myAddress())   // run immediately on mount
     return unsub
   }, [])
 
-  // Deep-link: ?join=CODE → auto-navigate to Mistrial tab so the
-  // JoinInviteSheet fires even if the user lands on a different tab.
+  // Deep-link: ?join=CODE → auto-navigate to Mistrial tab
   useEffect(() => {
     if (typeof window === 'undefined') return
     const raw  = new URLSearchParams(window.location.search).get('join') || ''
@@ -86,12 +92,11 @@ export default function App() {
     if (isValidRoomCode(code)) setActiveTab('mistrial')
   }, [setActiveTab])
 
-  const inGame    = roomCode && phase !== PHASES.LOBBY
+  const inGame     = roomCode && phase !== PHASES.LOBBY
   const showTopNav = !inGame
 
   return (
     <ErrorBoundary>
-      {/* Skip-to-content for screen reader / keyboard users */}
       <a href="#main-content" className="skip-link">Skip to content</a>
 
       <div className="min-h-screen bg-void bg-grid relative flex flex-col">
@@ -112,16 +117,16 @@ export default function App() {
           <Suspense fallback={<PageLoader />}>
             {inGame ? (
               <>
-                {phase === PHASES.WRITING && <WritingPhase />}
-                {phase === PHASES.VOTING && <VotingPhase />}
-                {phase === PHASES.AI_JUDGING && <AIJudgingPhase />}
+                {phase === PHASES.WRITING        && <WritingPhase />}
+                {phase === PHASES.VOTING         && <VotingPhase />}
+                {phase === PHASES.AI_JUDGING     && <AIJudgingPhase />}
                 {(phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE) && <ObjectionPhase />}
-                {phase === PHASES.REVEAL && <RevealPhase />}
-                {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
+                {phase === PHASES.REVEAL         && <RevealPhase />}
+                {phase === PHASES.SCOREBOARD     && <ScoreboardPage />}
               </>
             ) : (
               <>
-                {activeTab === 'lobby' && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
+                {activeTab === 'lobby'       && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
                 {activeTab === 'home'        && <HomePage />}
                 {activeTab === 'mistrial'    && <MistrialPage />}
                 {activeTab === 'games'       && <GamesPage />}

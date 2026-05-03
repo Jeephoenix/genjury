@@ -72,7 +72,10 @@ export default function ProfilePage() {
     })
   }, [address])
 
-  const isClaimed = profile.claimed || !!serverProf
+  // isClaimed: server response is the single source of truth.
+  // localStorage.claimed is also accepted for instant UX on reconnect, but
+  // only for the current wallet (profile.js is now wallet-address-specific).
+  const isClaimed = !!serverProf || profile.claimed
 
   const [stats, setStats] = useState({ loading: false, games: 0, wins: 0, xp: 0, level: 1 })
 
@@ -149,7 +152,11 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight">
-            {isClaimed ? (serverProf?.username || profile.name) : 'Your Profile'}
+            {!connected
+              ? 'Your Profile'
+              : isClaimed
+                ? (serverProf?.username || profile.name || 'Your Profile')
+                : 'Your Profile'}
           </h1>
           {ensName && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-ice/10 border border-ice/25 text-ice text-xs font-mono tracking-wide">

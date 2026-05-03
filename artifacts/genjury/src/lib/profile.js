@@ -1,14 +1,14 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Player profile — name + avatar + ENS.
+// Player profile — per-wallet localStorage store.
 //
-// When a wallet is connected, the canonical profile comes from the server
-// (permanent, unique username linked to wallet address). localStorage is used
-// as a fast cache and as the identity for non-connected users.
+// IMPORTANT: Each wallet address gets its own isolated localStorage key so
+// that switching wallets never bleeds one user's identity into another.
 //
 // Priority for display names: server username > ENS name > truncated address.
+// A random name is never assigned — callers fall back to address truncation.
 // ──────────────────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'genjury_profile_v1'
+const STORAGE_PREFIX = 'genjury_profile_v2_'  // v2 = per-address; v1 was shared
 
 const DEFAULT_COLORS = [
   '#a259ff', '#7fff6e', '#ff8a00', '#3eddff',
@@ -19,60 +19,96 @@ function randomColor() {
   return DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)]
 }
 
-function defaultProfile() {
-  const n = Math.floor(Math.random() * 9000) + 1000
+function blankProfile() {
   return {
-    name:        `Player ${n}`,
-    avatarUrl:   '',
-    color:       randomColor(),
-    claimed:     false,   // true once a permanent identity is registered
-    ensName:     null,    // ENS name (mainnet reverse lookup), if any
+    name:      '',        // intentionally empty — display falls back to address
+    avatarUrl: '',
+    color:     randomColor(),
+    claimed:   false,
+    ensName:   null,
   }
 }
 
-let _cache = null
-const _listeners = new Set()
+// ── State ─────────────────────────────────────────────────────────────────────
 
-function read() {
-  if (_cache) return _cache
-  if (typeof window === 'undefined') {
-    _cache = defaultProfile()
-    return _cache
-  }
+let _currentAddress = null   // lowercase wallet address, or null when disconnected
+let _cache          = null   // the loaded profile for _currentAddress
+const _listeners    = new Set()
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function storageKey(address) {
+  return `${STORAGE_PREFIX}${address.toLowerCase()}`
+}
+
+function loadFromStorage(address) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      _cache = {
-        name:      String(parsed.name || '').slice(0, 24) || defaultProfile().name,
-        avatarUrl: String(parsed.avatarUrl || '').slice(0, 400000),
-        color:     String(parsed.color || '') || randomColor(),
-        claimed:   !!parsed.claimed,
-        ensName:   parsed.ensName ? String(parsed.ensName) : null,
-      }
-      return _cache
+    const raw = localStorage.getItem(storageKey(address))
+    if (!raw) return null
+    const p = JSON.parse(raw)
+    return {
+      name:      String(p.name      || '').slice(0, 24),
+      avatarUrl: String(p.avatarUrl || '').slice(0, 400000),
+      color:     String(p.color     || '') || randomColor(),
+      claimed:   !!p.claimed,
+      ensName:   p.ensName ? String(p.ensName) : null,
     }
+  } catch {
+    return null
+  }
+}
+
+function saveToStorage(address, profile) {
+  try {
+    localStorage.setItem(storageKey(address), JSON.stringify(profile))
   } catch {}
-  _cache = defaultProfile()
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache)) } catch {}
-  return _cache
 }
 
 function notify() {
-  for (const fn of _listeners) {
-    try { fn(_cache) } catch {}
-  }
+  for (const fn of _listeners) { try { fn(_cache) } catch {} }
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Call this whenever a wallet connects or switches.
+ * Loads (or creates) the per-address profile and notifies subscribers.
+ */
+export function initProfileForAddress(address) {
+  if (!address) { clearProfileCache(); return }
+  const addr = address.toLowerCase()
+  if (_currentAddress === addr && _cache !== null) return  // already loaded
+  _currentAddress = addr
+  _cache = loadFromStorage(addr) || blankProfile()
+  if (!loadFromStorage(addr)) saveToStorage(addr, _cache)
+  notify()
+}
+
+/**
+ * Call this when the wallet disconnects.
+ * Clears in-memory cache so getProfile() returns a blank guest state.
+ */
+export function clearProfileCache() {
+  _currentAddress = null
+  _cache = null
+  notify()
+}
+
+/**
+ * Returns the profile for the currently connected wallet.
+ * Returns a blank profile when no wallet is connected — never bleeds
+ * a previous wallet's data into the disconnected state.
+ */
 export function getProfile() {
-  return read()
+  return _cache ?? blankProfile()
 }
 
 export function setProfile(patch) {
-  const cur = read()
+  if (!_currentAddress) return blankProfile()
+  const cur = _cache ?? blankProfile()
   const next = {
     name: typeof patch.name === 'string'
-      ? patch.name.slice(0, 24).trim() || cur.name
+      ? patch.name.slice(0, 24).trim()
       : cur.name,
     avatarUrl: typeof patch.avatarUrl === 'string'
       ? patch.avatarUrl
@@ -84,34 +120,41 @@ export function setProfile(patch) {
     ensName: patch.ensName !== undefined ? (patch.ensName || null) : cur.ensName,
   }
   _cache = next
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  saveToStorage(_currentAddress, next)
   notify()
   return next
 }
 
-// Called after a successful server-side identity claim.
+/**
+ * Called after a successful server-side identity claim or server profile fetch.
+ * Writes the verified identity into the current wallet's profile slot.
+ */
 export function applyServerProfile(serverProfile) {
-  const cur = read()
+  if (!_currentAddress) return blankProfile()
+  const cur = _cache ?? blankProfile()
   const next = {
     name:      serverProfile.username || cur.name,
     avatarUrl: serverProfile.avatarUrl || cur.avatarUrl,
     color:     serverProfile.color    || cur.color,
     claimed:   true,
-    ensName:   cur.ensName,  // preserve locally cached ENS name
+    ensName:   cur.ensName,
   }
   _cache = next
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  saveToStorage(_currentAddress, next)
   notify()
   return next
 }
 
-// Called after ENS reverse lookup resolves.
+/**
+ * Called after ENS reverse lookup resolves.
+ */
 export function applyEnsName(ensName) {
-  const cur = read()
-  if (cur.ensName === ensName) return cur  // no change
+  if (!_currentAddress) return blankProfile()
+  const cur = _cache ?? blankProfile()
+  if (cur.ensName === ensName) return cur
   const next = { ...cur, ensName: ensName || null }
   _cache = next
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  saveToStorage(_currentAddress, next)
   notify()
   return next
 }
@@ -121,10 +164,15 @@ export function subscribeProfile(fn) {
   return () => _listeners.delete(fn)
 }
 
-// Convenience for chat/contract: a stable display name.
+/**
+ * Returns the best available display name for the given address.
+ * Priority: server username → ENS (from profile) → truncated address.
+ * Never returns a random word like "Genhero".
+ */
 export function displayName(address) {
-  const p = read()
-  if (p.name) return p.name
-  if (address) return `${address.slice(0, 6)}…${address.slice(-4)}`
+  const p = _cache
+  if (p?.name)  return p.name
+  if (p?.ensName) return p.ensName
+  if (address)  return `${address.slice(0, 6)}…${address.slice(-4)}`
   return 'Player'
 }
