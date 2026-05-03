@@ -17,7 +17,8 @@ import {
 import { getProfile, subscribeProfile } from '../lib/profile'
 import { rememberJoinedRoom } from '../lib/joinedRooms'
 
-const PRESET_FEES          = ['0', '0.01', '0.1', '1']
+const PRESET_FEES          = ['1', '2', '5', '10']
+const MIN_ENTRY_FEE_GEN    = 1n
 const HOUSE_CUT_BPS_DEFAULT = 500
 
 export default function MistrialPage() {
@@ -100,6 +101,7 @@ export default function MistrialPage() {
   const entryFeeWei = useMemo(() => {
     try { return parseGen(entryFee) } catch { return null }
   }, [entryFee])
+  const entryFeeBelowMinimum = entryFeeWei !== null && entryFeeWei < MIN_ENTRY_FEE_GEN
 
   const handleCreate = () => {
     if (loading) return
@@ -350,9 +352,13 @@ export default function MistrialPage() {
             />
 
             <button
-              className="btn btn-crimson w-full py-3.5 text-base inline-flex items-center justify-center gap-2"
+              className={`btn w-full py-3.5 text-base inline-flex items-center justify-center gap-2 ${
+                entryFeeBelowMinimum
+                  ? 'bg-signal/15 text-signal border border-signal/35 hover:bg-signal/20'
+                  : 'btn-crimson'
+              }`}
               onClick={handleCreate}
-              disabled={loading || entryFeeWei === null || !profile.name || !contractConfigured}
+              disabled={loading || entryFeeWei === null || entryFeeBelowMinimum || !profile.name || !contractConfigured}
             >
               {loading ? (
                 <>
@@ -364,8 +370,10 @@ export default function MistrialPage() {
                 </>
               ) : !connected ? (
                 <><Wallet className="w-4 h-4" strokeWidth={2.25} /> Connect wallet to file case</>
-              ) : entryFeeWei && entryFeeWei > 0n ? (
+              ) : entryFeeWei && entryFeeWei >= MIN_ENTRY_FEE_GEN ? (
                 <><Zap className="w-4 h-4" strokeWidth={2.5} /> File case · stake {formatGen(entryFeeWei, 6)} {symbol}</>
+              ) : entryFeeBelowMinimum ? (
+                <><Zap className="w-4 h-4" strokeWidth={2.5} /> Minimum stake is 1 {symbol}</>
               ) : (
                 <><Zap className="w-4 h-4" strokeWidth={2.5} /> File case</>
               )}
