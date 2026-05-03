@@ -14,6 +14,7 @@ export default function ChatPanel() {
   const messages = useGameStore(s => s.chatMessages)
   const pushChat           = useGameStore(s => s.pushChat)
     const patchChatReaction  = useGameStore(s => s.patchChatReaction)
+  const openProfileCard    = useGameStore(s => s.openProfileCard)
 
   const [open, setOpen]     = useState(false)
   const [text, setText]     = useState('')
@@ -267,18 +268,30 @@ export default function ChatPanel() {
                         onTouchEnd={cancelLongPress}
                         onTouchMove={cancelLongPress}
                       >
-                        <Avatar
-                          name={m.authorName}
-                          src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
-                          color={m.color}
-                          size={28}
-                        />
+                        <button
+                          type="button"
+                          className="flex-shrink-0 rounded-full hover:opacity-80 active:scale-95 transition-all"
+                          onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
+                          aria-label={`View ${m.authorName}'s profile`}
+                        >
+                          <Avatar
+                            name={m.authorName}
+                            src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
+                            color={m.color}
+                            size={28}
+                          />
+                        </button>
                         <div className={`flex-1 min-w-0 ${m.authorId === meId ? 'items-end' : 'items-start'} flex flex-col`}>
                           {m.authorId !== meId && (
                             <div className="flex items-baseline gap-1.5 mb-0.5">
-                              <span className="text-xs font-semibold" style={{ color: m.color || '#a259ff' }}>
+                              <button
+                                type="button"
+                                className="text-xs font-semibold hover:opacity-70 transition-opacity cursor-pointer"
+                                style={{ color: m.color || '#a259ff' }}
+                                onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
+                              >
                                 {m.authorName || 'Player'}
-                              </span>
+                              </button>
                               {m.kind === 'objection' && (
                                 <span className="text-[10px] uppercase tracking-wider text-neon font-bold">objection</span>
                               )}

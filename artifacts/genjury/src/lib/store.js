@@ -432,6 +432,10 @@ const useGameStore = create((set, get) => ({
   openIdentityGate:   (pending) => set({ identityGatePending: pending }),
   closeIdentityGate:  () => set({ identityGatePending: null }),
 
+  profileCardTarget: null,
+  openProfileCard: (target) => set({ profileCardTarget: target }),
+  closeProfileCard: () => set({ profileCardTarget: null }),
+
   addToast: (message, type = 'info') => pushToast(type, message),
 
   tickTimer: () => {

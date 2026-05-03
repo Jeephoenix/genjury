@@ -33,7 +33,8 @@ export default function ScoreboardPage() {
   const claimPrize          = useGameStore((s) => s.claimPrize)
   const claimHouseFees      = useGameStore((s) => s.claimHouseFees)
 
-  const roomCode = useGameStore((s) => s.roomCode)
+  const roomCode        = useGameStore((s) => s.roomCode)
+  const openProfileCard = useGameStore((s) => s.openProfileCard)
 
   const symbol  = getChainNativeSymbol()
   const sorted  = [...players].sort((a, b) => b.xp - a.xp)
@@ -182,7 +183,7 @@ export default function ScoreboardPage() {
           {sorted.map((p, i) => (
             <div
               key={p.id}
-              className={`relative rounded-2xl flex items-center gap-4 p-4 overflow-hidden transition-all duration-300 ${p.id === myId ? 'ring-1' : ''}`}
+              className={`relative rounded-2xl flex items-center gap-4 p-4 overflow-hidden transition-all duration-300 cursor-pointer hover:brightness-110 ${p.id === myId ? 'ring-1' : ''}`}
               style={{
                 background:   i === 0
                   ? `linear-gradient(135deg, ${p.color}15, rgba(12,12,20,0.9))`
@@ -191,6 +192,7 @@ export default function ScoreboardPage() {
                 '--tw-ring-color': p.color,
                 animationDelay: `${i * 0.07}s`,
               }}
+              onClick={() => openProfileCard({ address: p.id, name: p.name, color: p.color, avatar: p.avatar, xp: p.xp, level: p.level })}
             >
               {i === 0 && (
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent"

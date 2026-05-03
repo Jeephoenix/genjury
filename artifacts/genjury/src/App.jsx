@@ -12,6 +12,7 @@ import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
 import OnboardingModal from './components/OnboardingModal'
 import IdentityGateModal from './components/IdentityGateModal'
+import PlayerProfileCard from './components/PlayerProfileCard'
 
 // Lazy load pages for better code splitting
 const HomePage = lazy(() => import('./pages/HomePage'))
@@ -113,6 +114,7 @@ export default function App() {
         <ChatPanel />
         <OnboardingModal />
         <IdentityGateModal />
+        <PlayerProfileCard />
       </div>
     </ErrorBoundary>
   )
