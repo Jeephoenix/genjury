@@ -70,9 +70,9 @@ const ACCENT = {
   neon: {
     border: 'border-neon/40',   text: 'text-neon',   bg: 'bg-neon/10',
     chip: 'bg-neon/15 text-neon border-neon/30',
-    glow: 'shadow-[0_0_50px_rgba(127,255,110,0.1)]',
+    glow: 'shadow-[0_0_50px_rgba(61,184,122,0.07)]',
     topBar: 'from-neon/60',
-    hoverGlow: 'hover:shadow-[0_0_60px_rgba(127,255,110,0.18)]',
+    hoverGlow: 'hover:shadow-[0_0_60px_rgba(61,184,122,0.12)]',
     notify: 'border-neon/30 bg-neon/10 text-neon hover:bg-neon/18 hover:border-neon/50',
     notifyActive: 'border-neon/50 bg-neon/20 text-neon',
   },
@@ -135,7 +135,7 @@ export default function GamesPage() {
         </div>
         <div className="flex items-center gap-4 text-xs text-white/40 font-mono flex-shrink-0">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-neon shadow-[0_0_6px_#7fff6e]" /> Live
+            <span className="w-2 h-2 rounded-full bg-neon shadow-[0_0_5px_#3db87a]" /> Live
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Hourglass className="w-3 h-3 text-white/25" /> Coming soon
