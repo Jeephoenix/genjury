@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Scale, X, Send, ChevronRight, Reply } from 'lucide-react'
+import { MessageSquare, Scale, X, Send, ChevronRight, ChevronDown, Reply } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import { fetchSince, postChat, toggleReaction } from '../lib/chatApi'
 import { getProfile, subscribeProfile, displayName } from '../lib/profile'
@@ -17,6 +17,7 @@ export default function ChatPanel() {
   const openProfileCard   = useGameStore(s => s.openProfileCard)
 
   const [open, setOpen]             = useState(false)
+  const [minimized, setMinimized]   = useState(false)
   const [text, setText]             = useState('')
   const [unread, setUnread]         = useState(0)
   const [apiOk, setApiOk]           = useState(true)
@@ -24,18 +25,25 @@ export default function ChatPanel() {
   const [hoveredId, setHoveredId]   = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [, force]                   = useState(0)
-  const scrollRef      = useRef(null)
-  const inputRef       = useRef(null)
-  const longPressTimer = useRef(null)
-  const swipeStart     = useRef(null)
+  const scrollRef        = useRef(null)
+  const inputRef         = useRef(null)
+  const longPressTimer   = useRef(null)
+  const swipeStart       = useRef(null)      // horizontal swipe (reply)
+  const headerDrag       = useRef(null)      // vertical swipe (minimize)
 
   const activePhase   = phase === PHASES.WRITING || phase === PHASES.VOTING
   const objectionMode = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
   const chatLocked    = phase === PHASES.LOBBY || phase === PHASES.SCOREBOARD || !phase
 
+  // Auto-collapse during timed active phases
   useEffect(() => {
     if (activePhase) setOpen(false)
   }, [activePhase])
+
+  // Reset minimized when panel closes entirely
+  useEffect(() => {
+    if (!open) setMinimized(false)
+  }, [open])
 
   useEffect(() => subscribeProfile(() => force((n) => n + 1)), [])
 
@@ -73,7 +81,8 @@ export default function ChatPanel() {
             reactions:  m.reactions || {},
             replyTo:    m.reply_to || null,
           })
-          if (!open && m.author_id !== meId) setUnread(u => u + 1)
+          // Count as unread if panel is closed OR minimized
+          if ((!open || minimized) && m.author_id !== meId) setUnread(u => u + 1)
         }
       } catch {
         if (!cancelled) {
@@ -87,20 +96,32 @@ export default function ChatPanel() {
     const id = setInterval(tick, intervalMs)
     return () => { cancelled = true; clearInterval(id) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode, objectionMode, open, pushChat, meId])
+  }, [roomCode, objectionMode, open, minimized, pushChat, meId])
 
-  // ── Scroll to bottom + clear unread on open ────────────────────────
+  // ── Scroll to bottom + clear unread when fully open ───────────────
   useEffect(() => {
-    if (open) {
+    if (open && !minimized) {
       setUnread(0)
       setTimeout(() => inputRef.current?.focus(), 120)
     }
-    if (open && scrollRef.current) {
+    if (open && !minimized && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages, open])
+  }, [messages, open, minimized])
 
   if (!roomCode) return null
+
+  // ── Toggle button click logic ──────────────────────────────────────
+  function handleToggle() {
+    if (!open) {
+      setOpen(true)
+      setMinimized(false)
+    } else if (minimized) {
+      setMinimized(false)   // expand pill back to full panel
+    } else {
+      setOpen(false)        // close entirely
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -165,12 +186,12 @@ export default function ChatPanel() {
   }
   function cancelLongPress() { clearTimeout(longPressTimer.current) }
 
-  // ── Swipe-right to reply (Telegram style) ─────────────────────────
-  function onTouchStart(e, msg) {
+  // ── Horizontal swipe-right on messages → reply ─────────────────────
+  function onMsgTouchStart(e, msg) {
     swipeStart.current = { x: e.touches[0].clientX, id: msg.id, msg }
     startLongPress(msg)
   }
-  function onTouchMove(e) {
+  function onMsgTouchMove(e) {
     cancelLongPress()
     if (!swipeStart.current) return
     const dx = e.touches[0].clientX - swipeStart.current.x
@@ -179,38 +200,71 @@ export default function ChatPanel() {
       swipeStart.current = null
     }
   }
-  function onTouchEnd() {
+  function onMsgTouchEnd() {
     cancelLongPress()
     swipeStart.current = null
+  }
+
+  // ── Vertical swipe-down on header → minimize ───────────────────────
+  function onHeaderTouchStart(e) {
+    headerDrag.current = { y: e.touches[0].clientY }
+  }
+  function onHeaderTouchMove(e) {
+    if (!headerDrag.current) return
+    const dy = e.touches[0].clientY - headerDrag.current.y
+    if (dy > 55) {
+      setMinimized(true)
+      headerDrag.current = null
+    }
+  }
+  function onHeaderTouchEnd() {
+    headerDrag.current = null
   }
 
   const panelTitle = objectionMode
     ? <><Scale className="w-4 h-4 text-neon" strokeWidth={2.25} />Objections</>
     : <><MessageSquare className="w-4 h-4 text-plasma" strokeWidth={2.25} />Table Talk</>
 
+  // Label + icon for the floating pill/toggle button
+  const pillLabel    = open && !minimized ? 'Close' : 'Chat'
+  const pillIcon     = open && !minimized
+    ? <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+    : <MessageSquare className="w-4 h-4" strokeWidth={2.25} />
+  const showUnread   = (!open || minimized) && unread > 0
+
   return (
     <>
-      {/* ── Floating toggle button ── */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="fixed bottom-[4.5rem] md:bottom-6 right-4 z-[55] px-4 py-2.5 rounded-full glass border border-plasma/35 text-plasma hover:bg-plasma/20 hover:border-plasma/55 transition-all duration-200 inline-flex items-center gap-2 shadow-lg backdrop-blur-xl"
+      {/* ── Floating pill / toggle button ─────────────────────────────── */}
+      <motion.button
+        onClick={handleToggle}
+        layout
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="fixed bottom-[4.5rem] md:bottom-6 right-4 z-[55] px-4 py-2.5 rounded-full glass border border-plasma/35 text-plasma hover:bg-plasma/20 hover:border-plasma/55 transition-colors duration-200 inline-flex items-center gap-2 shadow-lg backdrop-blur-xl"
         aria-label="Toggle chat"
       >
-        {open
-          ? <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
-          : <MessageSquare className="w-4 h-4" strokeWidth={2.25} />
-        }
-        <span className="text-sm font-semibold">{open ? 'Close' : 'Chat'}</span>
-        {!open && unread > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-neon text-void text-xs font-bold">
-            {unread > 9 ? '9+' : unread}
-          </span>
-        )}
-      </button>
+        {pillIcon}
+        <span className="text-sm font-semibold">{pillLabel}</span>
+        <AnimatePresence>
+          {showUnread && (
+            <motion.span
+              key="badge"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: 'spring', damping: 16, stiffness: 400 }}
+              className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-neon text-void text-xs font-bold"
+            >
+              {unread > 9 ? '9+' : unread}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </motion.button>
 
+      {/* ── Full chat panel (only when open and not minimized) ─────────── */}
       <AnimatePresence>
-        {open && (
+        {open && !minimized && (
           <>
+            {/* Backdrop — mobile only */}
             <motion.div
               key="chat-backdrop"
               initial={{ opacity: 0 }}
@@ -239,18 +293,39 @@ export default function ChatPanel() {
               {/* Top accent line */}
               <div className="h-px bg-gradient-to-r from-transparent via-plasma/50 to-transparent flex-shrink-0" />
 
-              {/* Panel header */}
-              <div className="flex items-center justify-between px-4 py-3 pt-[84px] sm:pt-3 border-b border-white/[0.07] flex-shrink-0">
+              {/* ── Panel header — swipe down to minimize ── */}
+              <div
+                className="flex items-center justify-between px-4 py-3 pt-[84px] sm:pt-3 border-b border-white/[0.07] flex-shrink-0 select-none"
+                onTouchStart={onHeaderTouchStart}
+                onTouchMove={onHeaderTouchMove}
+                onTouchEnd={onHeaderTouchEnd}
+              >
                 <div className="flex items-center gap-2 text-sm font-semibold text-white/80 uppercase tracking-wider">
                   {panelTitle}
                 </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
-                  aria-label="Close chat"
-                >
-                  <X className="w-4 h-4" strokeWidth={2.25} />
-                </button>
+
+                {/* Swipe hint pill — visible on mobile */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-[88px] sm:top-1.5 w-8 h-1 rounded-full bg-white/[0.12] sm:hidden" />
+
+                <div className="flex items-center gap-1">
+                  {/* Minimize button (desktop fallback) */}
+                  <button
+                    onClick={() => setMinimized(true)}
+                    className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white/30 hover:text-white/70 hover:bg-white/10 transition-all flex items-center justify-center"
+                    aria-label="Minimize chat"
+                    title="Minimize"
+                  >
+                    <ChevronDown className="w-4 h-4" strokeWidth={2.25} />
+                  </button>
+                  {/* Close button */}
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
+                    aria-label="Close chat"
+                  >
+                    <X className="w-4 h-4" strokeWidth={2.25} />
+                  </button>
+                </div>
               </div>
 
               {/* ── Message list ── */}
@@ -282,9 +357,9 @@ export default function ChatPanel() {
                       className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
                       onMouseEnter={() => setHoveredId(m.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      onTouchStart={e => onTouchStart(e, m)}
-                      onTouchMove={onTouchMove}
-                      onTouchEnd={onTouchEnd}
+                      onTouchStart={e => onMsgTouchStart(e, m)}
+                      onTouchMove={onMsgTouchMove}
+                      onTouchEnd={onMsgTouchEnd}
                     >
                       {/* Avatar */}
                       <button
@@ -323,14 +398,12 @@ export default function ChatPanel() {
                           </div>
                         )}
 
-                        {/* Bubble + reaction picker */}
+                        {/* Bubble + floating action bar */}
                         <div className="relative">
-                          {/* Floating action bar (hover / long-press) */}
                           {hoveredId === m.id && (
                             <div
                               className={`absolute -top-10 z-10 flex items-center gap-0.5 px-1 py-1 rounded-xl bg-void/95 border border-white/10 shadow-xl backdrop-blur-xl ${isMe ? 'right-0' : 'left-0'}`}
                             >
-                              {/* Reply button */}
                               <button
                                 onClick={() => triggerReply(m)}
                                 className="w-7 h-7 rounded-lg text-sm flex items-center justify-center text-white/60 hover:text-plasma hover:bg-plasma/15 transition-all"
@@ -339,7 +412,6 @@ export default function ChatPanel() {
                                 <Reply className="w-3.5 h-3.5" strokeWidth={2.25} />
                               </button>
                               <div className="w-px h-4 bg-white/10 mx-0.5" />
-                              {/* Reaction emojis */}
                               {REACTION_EMOJIS.map(e => (
                                 <button
                                   key={e}
@@ -365,7 +437,6 @@ export default function ChatPanel() {
                                 : 'bg-white/[0.07] border border-white/[0.08] text-white/90 rounded-bl-sm'
                             }`}
                           >
-                            {/* Reply-to quote block */}
                             {m.replyTo && (
                               <div
                                 className={`flex gap-2 mb-2 pb-2 border-b ${
