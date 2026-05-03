@@ -19,8 +19,6 @@ import {
     fundAccount,
     getChosenProvider,
     switchToCorrectChain,
-    getNetworkOptions,
-    setRuntimeNetworkName,
   } from '../lib/genlayer'
   import useGameStore from '../lib/store'
 
@@ -59,7 +57,6 @@ import {
     const net         = getNetworkInfo()
     const networkName = getNetworkName()
     const symbol      = getChainNativeSymbol()
-    const networkOptions = getNetworkOptions()
     const isDevNet    = networkName === 'studionet' || networkName === 'localnet'
     const addToast    = useGameStore((s) => s.addToast)
     const resetGame   = useGameStore((s) => s.resetGame)
@@ -148,13 +145,6 @@ import {
         addToast('Switch cancelled — try switching manually in your wallet.', 'error')
       }
       setSwitching(false)
-    }
-
-    const handleNetworkChange = (next) => {
-      if (!next || next === networkName) return
-      setRuntimeNetworkName(next)
-      checkChain()
-      refreshBalance()
     }
 
     const handleFund = async () => {
@@ -254,26 +244,6 @@ import {
                           <span className="badge bg-neon/10 border border-neon/25 text-neon text-[10px]">LIVE</span>
                         )}
                       </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {networkOptions.map((option) => {
-                        const active = option.key === networkName
-                        return (
-                          <button
-                            key={option.key}
-                            onClick={() => handleNetworkChange(option.key)}
-                            className={`px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-widest border transition-all ${
-                              active
-                                ? 'bg-plasma/15 border-plasma/35 text-plasma'
-                                : 'bg-white/[0.03] border-white/[0.08] text-white/40 hover:text-white/70 hover:bg-white/[0.05]'
-                            }`}
-                            aria-pressed={active}
-                          >
-                            {option.label}
-                          </button>
-                        )
-                      })}
                     </div>
 
                     {/* Switch network card */}
