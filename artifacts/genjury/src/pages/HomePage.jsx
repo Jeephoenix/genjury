@@ -434,7 +434,7 @@ export default function HomePage() {
         </div>
 
         <div className={`relative rounded-2xl border ${FA.border} bg-panel overflow-hidden card-lift`}
-          style={{ boxShadow: '0 0 60px rgba(232,0,45,0.07)' }}>
+          style={{ boxShadow: '0 0 60px rgba(160,50,75,0.05)' }}>
           {/* Top accent */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/50 to-transparent" />
           {/* Corner glow */}
