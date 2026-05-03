@@ -4,7 +4,6 @@ const router: IRouter = Router();
 
 const USE_DB = !!process.env.DATABASE_URL;
 
-// Lazy DB import — only if DATABASE_URL is available
 let dbModule: any = null;
 async function getDb() {
   if (!USE_DB) return null;
@@ -14,9 +13,13 @@ async function getDb() {
   return dbModule;
 }
 
-// In-memory fallback
 const _mem = new Map<string, any[]>();
 const _memReactions = new Map<string, Record<string, string[]>>();
+
+function parseReplyTo(raw: any) {
+  if (!raw) return null;
+  try { return typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return null; }
+}
 
 function memGet(room: string, since: number) {
   return (_mem.get(room) || [])
@@ -37,6 +40,7 @@ function memPost(roomCode: string, msg: any) {
       text: String(msg.text || "").slice(0, 280),
       kind: msg.kind === "objection" ? "objection" : "taunt",
       ts: Number(msg.ts) || Date.now(),
+      reply_to: msg.replyTo ? JSON.stringify(msg.replyTo) : null,
     });
     if (msgs.length > 500) msgs.splice(0, msgs.length - 500);
     _mem.set(roomCode, msgs);
@@ -72,7 +76,11 @@ router.get("/chat", async (req, res) => {
           if (!rxMap[rx.msgId][rx.emoji]) rxMap[rx.msgId][rx.emoji] = [];
           rxMap[rx.msgId][rx.emoji].push(rx.userId);
         }
-        messages = rows.map((r: any) => ({ ...r, reactions: rxMap[r.id] || {} }));
+        messages = rows.map((r: any) => ({
+          ...r,
+          reactions: rxMap[r.id] || {},
+          reply_to: parseReplyTo(r.replyTo),
+        }));
       }
       return res.json({ messages });
     } catch (e) {
@@ -102,6 +110,7 @@ router.post("/chat", async (req, res) => {
         text: String(msg.text).slice(0, 280),
         kind: msg.kind === "objection" ? "objection" : "taunt",
         ts: Number(msg.ts) || Date.now(),
+        replyTo: msg.replyTo ? JSON.stringify(msg.replyTo) : null,
       }).onConflictDoNothing();
       return res.json({ ok: true });
     } catch (e) {
