@@ -9,6 +9,7 @@ import {
   setRuntimeNetworkName,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
+import { getProfile, subscribeProfile } from '../lib/profile'
 
 const short = (a) => (a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '')
 
@@ -81,6 +82,8 @@ export default function WalletButton({ compact = false }) {
   const wrapRef             = useRef(null)
 
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
+  const [profile, setProfileState] = useState(() => getProfile())
+  useEffect(() => subscribeProfile(() => setProfileState(getProfile())), [])
 
   useEffect(() => {
     if (!dropOpen) return
@@ -109,7 +112,9 @@ export default function WalletButton({ compact = false }) {
           }`}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_5px_#7fff6e] flex-shrink-0" />
-          <span className="font-mono tracking-tight text-white/85">{short(address)}</span>
+          <span className="font-mono tracking-tight text-white/85">
+            {profile.claimed ? profile.name : short(address)}
+          </span>
           {!compact && <ChevronDown className="w-3 h-3 text-white/35 group-hover:text-white/55 transition-colors" strokeWidth={2.5} />}
         </button>
 
