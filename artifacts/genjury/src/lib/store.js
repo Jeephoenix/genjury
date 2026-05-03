@@ -26,8 +26,34 @@ import {
   getChainNativeSymbol,
 } from './genlayer'
 import { getProfile } from './profile'
+import { resolveUsernames } from './profileApi'
 import { rememberJoinedRoom, forgetJoinedRoom, markRoomFinished } from './joinedRooms'
 import { registerMember, clearRoom } from './chatApi'
+
+// Debounced: resolve server-registered usernames for all players in the current
+// room and patch store.players so every component that reads from the store
+// (game phases, lobby, scoreboard, reveal, etc.) shows the canonical username.
+let _resolveTimer = null
+function scheduleUsernameResolution() {
+  if (_resolveTimer) return
+  _resolveTimer = setTimeout(async () => {
+    _resolveTimer = null
+    const players = useGameStore.getState().players
+    if (!players || !players.length) return
+    const addresses = players.map((p) => p.id).filter(Boolean)
+    if (!addresses.length) return
+    try {
+      const nameMap = await resolveUsernames(addresses)
+      if (!Object.keys(nameMap).length) return
+      useGameStore.setState((s) => ({
+        players: s.players.map((p) => {
+          const resolved = nameMap[p.id]
+          return resolved ? { ...p, name: resolved } : p
+        }),
+      }))
+    } catch {}
+  }, 600)
+}
 
 export const PHASES = {
   LOBBY:          'lobby',
@@ -310,6 +336,9 @@ function applyContractState(get, s) {
   }
 
   useGameStore.setState(next)
+  // Overlay server-registered usernames so every component shows the
+  // canonical unique name instead of whatever was stored in the contract.
+  scheduleUsernameResolution()
 }
 
 function pushToast(type, message) {
