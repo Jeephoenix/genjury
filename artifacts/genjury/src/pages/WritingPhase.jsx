@@ -20,8 +20,8 @@ function countColor(len) {
 }
 
 function barColor(len) {
-  if (len < MIN_LEN)    return 'rgba(255,107,53,0.7)'
-  if (len >= DANGER_LEN) return 'rgba(255,107,53,0.85)'
+  if (len < MIN_LEN)    return 'rgba(192,91,48,0.70)'
+  if (len >= DANGER_LEN) return 'rgba(192,91,48,0.85)'
   if (len >= WARN_LEN)   return 'rgba(245,200,66,0.75)'
   return 'rgba(127,255,110,0.6)'
 }
@@ -165,8 +165,8 @@ function CompletionTracker({ statements, lieIndex }) {
       {/* Lie dot */}
       <motion.div
         animate={{
-          background: hasLie ? 'rgba(255,107,53,0.85)' : 'rgba(255,255,255,0.12)',
-          boxShadow:  hasLie ? '0 0 6px rgba(255,107,53,0.6)' : 'none',
+          background: hasLie ? 'rgba(192,91,48,0.85)' : 'rgba(255,255,255,0.12)',
+          boxShadow:  hasLie ? '0 0 6px rgba(192,91,48,0.50)' : 'none',
           scale: hasLie ? 1.1 : 1,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 20 }}
@@ -382,7 +382,7 @@ export default function WritingPhase() {
                           : 'bg-white/[0.07] text-white/40 hover:bg-white/12 hover:text-white/70'
                       }`}
                       style={{
-                        boxShadow: isLie ? '0 0 20px rgba(255,107,53,0.45)' : undefined,
+                        boxShadow: isLie ? '0 0 14px rgba(192,91,48,0.32)' : undefined,
                       }}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{  scale: 0.92 }}
@@ -405,15 +405,15 @@ export default function WritingPhase() {
                       aria-describedby={`char-count-${i}`}
                       style={{
                         borderColor: isLie
-                          ? 'rgba(255,107,53,0.5)'
+                          ? 'rgba(192,91,48,0.40)'
                           : ready
                           ? 'rgba(127,255,110,0.18)'
                           : undefined,
                         background: isLie
-                          ? 'rgba(255,107,53,0.05)'
+                          ? 'rgba(192,91,48,0.05)'
                           : undefined,
                         boxShadow: isLie
-                          ? '0 0 0 3px rgba(255,107,53,0.08)'
+                          ? '0 0 0 3px rgba(192,91,48,0.07)'
                           : ready
                           ? '0 0 0 2px rgba(127,255,110,0.05)'
                           : undefined,
