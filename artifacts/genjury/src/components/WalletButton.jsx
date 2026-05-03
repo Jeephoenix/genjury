@@ -14,7 +14,7 @@ import { getProfile, subscribeProfile } from '../lib/profile'
 const short = (a) => (a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '')
 
 const NETWORK_META = {
-  studionet: { color: '#7fff6e', badge: 'Studio'  },
+  studionet: { color: '#3db87a', badge: 'Studio'  },
   bradbury:  { color: '#a259ff', badge: 'Bradbury' },
   asimov:    { color: '#a259ff', badge: 'Asimov'   },
 }
@@ -57,7 +57,7 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
                   {opt.label}
                 </span>
                 {opt.key === 'studionet' && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(127,255,110,0.1)', color: '#7fff6e', border: '1px solid rgba(127,255,110,0.18)' }}>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(61,184,122,0.08)', color: '#3db87a', border: '1px solid rgba(61,184,122,0.15)' }}>
                     LIVE
                   </span>
                 )}
