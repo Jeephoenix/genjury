@@ -229,7 +229,7 @@ const ALL_GAMES = [
 const ACCENT = {
   neon:   { border: 'border-neon/30',   text: 'text-neon',   bg: 'bg-neon/10',   glow: 'hover:shadow-[0_0_40px_rgba(127,255,110,0.14)]',   dot: 'bg-neon' },
   plasma: { border: 'border-plasma/30', text: 'text-plasma', bg: 'bg-plasma/10', glow: 'hover:shadow-[0_0_40px_rgba(162,89,255,0.14)]',   dot: 'bg-plasma' },
-  signal: { border: 'border-signal/30', text: 'text-signal', bg: 'bg-signal/10', glow: 'hover:shadow-[0_0_40px_rgba(255,107,53,0.14)]',   dot: 'bg-signal' },
+  signal: { border: 'border-signal/30', text: 'text-signal', bg: 'bg-signal/10', glow: 'hover:shadow-[0_0_40px_rgba(192,91,48,0.10)]',   dot: 'bg-signal' },
   gold:   { border: 'border-gold/30',   text: 'text-gold',   bg: 'bg-gold/10',   glow: 'hover:shadow-[0_0_40px_rgba(245,200,66,0.14)]',   dot: 'bg-gold' },
 }
 
