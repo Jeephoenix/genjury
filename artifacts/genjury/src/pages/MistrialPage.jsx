@@ -27,7 +27,7 @@ export default function MistrialPage() {
   const [joinCodeInput,   setJoinCodeInput]   = useState('')
   const [invitedCode,     setInvitedCode]     = useState(null)
 
-  const [entryFee,    setEntryFee]    = useState('0.01')
+  const [entryFee,    setEntryFee]    = useState('1')
   const [maxRounds,   setMaxRounds]   = useState(3)
   const [maxPlayers,  setMaxPlayers]  = useState(8)
   const [feeError,    setFeeError]    = useState(null)
@@ -354,7 +354,7 @@ export default function MistrialPage() {
             <button
               className={`btn w-full py-3.5 text-base inline-flex items-center justify-center gap-2 ${
                 entryFeeBelowMinimum
-                  ? 'bg-signal/15 text-signal border border-signal/35 hover:bg-signal/20'
+                  ? 'bg-white/[0.04] text-crimson/40 border border-crimson/20 cursor-not-allowed opacity-60'
                   : 'btn-crimson'
               }`}
               onClick={handleCreate}
