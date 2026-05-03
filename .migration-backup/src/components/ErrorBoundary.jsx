@@ -29,9 +29,14 @@ export default class ErrorBoundary extends React.Component {
           <p className="text-white/60 text-sm">
             The game hit an unexpected error. Reloading usually fixes it.
           </p>
-          <pre className="text-left rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-[11px] text-white/40 font-mono break-all whitespace-pre-wrap max-h-32 overflow-y-auto">
-            {String(this.state.error?.message || this.state.error)}
-          </pre>
+          <details className="text-left">
+            <summary className="cursor-pointer text-white/30 text-[11px] font-mono hover:text-white/50 transition-colors select-none py-1">
+              Show error details
+            </summary>
+            <pre className="mt-2 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-[11px] text-white/40 font-mono break-all whitespace-pre-wrap max-h-32 overflow-y-auto">
+              {String(this.state.error?.message || this.state.error)}
+            </pre>
+          </details>
           <button
             onClick={() => window.location.reload()}
             className="btn btn-plasma w-full py-2.5 text-sm"

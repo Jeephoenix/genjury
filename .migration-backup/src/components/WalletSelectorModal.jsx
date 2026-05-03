@@ -150,22 +150,38 @@ import React, { useEffect, useState, useCallback } from 'react'
       }
     }, [refresh])
 
-    const handleSelect = async (providerIndex) => {
-      setError('')
-      setConnecting(providerIndex)
-      try {
-        const addr = await connectWithProvider(providerIndex)
-        onConnect(addr)
-      } catch (e) {
-        const msg = e?.message || 'Could not connect wallet'
-        setError(
-          /rejected|denied|cancel/i.test(msg)
-            ? 'Request cancelled — please approve in your wallet.'
-            : msg
-        )
-        setConnecting(null)
+    // Map raw JS/RPC exceptions to user-friendly messages
+      const friendlyConnectError = (e) => {
+        const msg  = e?.message || ''
+        const code = e?.code
+        if (code === 4001 || /rejected|denied|cancel/i.test(msg))
+          return 'Request cancelled — please approve the connection in your wallet.'
+        if (/only a getter|Cannot set property ethereum|read.only/i.test(msg))
+          return 'A wallet extension conflict was detected. Disable other wallet extensions and refresh the page.'
+        if (/no web3|no wallet|not found|not installed|no injected/i.test(msg))
+          return 'No wallet detected. Make sure your extension is enabled, then refresh the page.'
+        if (/wrong network|unrecognized chain|chain.*mismatch/i.test(msg))
+          return 'Wrong network — switch your wallet to the correct network and try again.'
+        if (/timeout|timed out/i.test(msg))
+          return 'Connection timed out. Please try again.'
+        if (/insufficient funds/i.test(msg))
+          return 'Insufficient funds to complete this action.'
+        if (/network|rpc|econnrefused|fetch failed/i.test(msg))
+          return 'Network error — check your connection and try again.'
+        return 'Could not connect wallet. Please try again.'
       }
-    }
+
+      const handleSelect = async (providerIndex) => {
+        setError('')
+        setConnecting(providerIndex)
+        try {
+          const addr = await connectWithProvider(providerIndex)
+          onConnect(addr)
+        } catch (e) {
+          setError(friendlyConnectError(e))
+          setConnecting(null)
+        }
+      }
 
     return (
       <div
