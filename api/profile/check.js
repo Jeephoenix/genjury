@@ -1,8 +1,8 @@
 // api/profile/check.js — GET /api/profile/check?username=
 // Returns { available: true/false, error?: string }
-// Checks uniqueness against DB (Neon) or in-memory map.
-
-const _mem = new Map() // username_lower -> address (fallback when no DB)
+//
+// Requires DATABASE_URL. Without it returns 503 so the client blocks
+// the claim button rather than showing a false "available" result.
 
 const USE_DB = !!process.env.DATABASE_URL
 let sql     = null
@@ -52,18 +52,22 @@ module.exports = async function handler(req, res) {
   const val = validateUsername(req.query.username)
   if (!val.ok) return res.status(200).json({ available: false, error: val.error })
 
+  if (!USE_DB) {
+    return res.status(503).json({
+      available: false,
+      error: 'Identity registry not configured — DATABASE_URL is missing.',
+    })
+  }
+
   const lower = val.value.toLowerCase()
 
   try {
-    if (USE_DB) {
-      const db = await getSQL()
-      await ensureSchema()
-      const rows = await db`SELECT 1 FROM player_profiles WHERE username_lower = ${lower} LIMIT 1`
-      return res.status(200).json({ available: rows.length === 0 })
-    }
-    return res.status(200).json({ available: !_mem.has(lower) })
+    const db = await getSQL()
+    await ensureSchema()
+    const rows = await db`SELECT 1 FROM player_profiles WHERE username_lower = ${lower} LIMIT 1`
+    return res.status(200).json({ available: rows.length === 0 })
   } catch (e) {
     console.error('[profile/check]', e)
-    return res.status(500).json({ error: 'server error' })
+    return res.status(500).json({ available: false, error: 'Server error — try again shortly.' })
   }
 }
