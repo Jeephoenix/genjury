@@ -44,6 +44,7 @@ export default {
         'glow-rotate':  'glowRotate 6s linear infinite',
         'icon-bounce':  'iconBounce 2.5s ease-in-out infinite',
         'hero-glow':    'heroGlow 8s ease-in-out infinite',
+        'pulse-crimson': 'pulseCrimson 2.5s ease-in-out infinite',
       },
       keyframes: {
         pulseNeon: {
@@ -123,6 +124,10 @@ export default {
         heroGlow: {
           '0%, 100%': { opacity: 0.04, transform: 'scale(1)' },
           '50%':      { opacity: 0.09, transform: 'scale(1.1)' },
+        },
+        pulseCrimson: {
+          '0%, 100%': { boxShadow: '0 0 8px #e8002d55, 0 0 20px #e8002d22' },
+          '50%':      { boxShadow: '0 0 22px #e8002d99, 0 0 48px #e8002d44' },
         },
       },
     },
