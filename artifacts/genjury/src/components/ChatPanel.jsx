@@ -53,7 +53,7 @@ export default function ChatPanel() {
 
     async function tick() {
       try {
-        const fresh = await fetchSince(roomCode, since)
+        const fresh = await fetchSince(roomCode, since, meId)
         if (cancelled) return
         failCount = 0
         if (!apiOkRef.current) { apiOkRef.current = true; setApiOk(true) }
