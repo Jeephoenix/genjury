@@ -18,23 +18,27 @@ import IdentityGateModal from './components/IdentityGateModal'
 import PlayerProfileCard from './components/PlayerProfileCard'
 
 // Lazy load pages for better code splitting
-const HomePage       = lazy(() => import('./pages/HomePage'))
-const MistrialPage   = lazy(() => import('./pages/MistrialPage'))
-const LobbyPage      = lazy(() => import('./pages/LobbyPage'))
-const WritingPhase   = lazy(() => import('./pages/WritingPhase'))
-const VotingPhase    = lazy(() => import('./pages/VotingPhase'))
-const AIJudgingPhase = lazy(() => import('./pages/AIJudgingPhase'))
-const ObjectionPhase = lazy(() => import('./pages/ObjectionPhase'))
-const RevealPhase    = lazy(() => import('./pages/RevealPhase'))
-const ScoreboardPage = lazy(() => import('./pages/ScoreboardPage'))
-const GamesPage      = lazy(() => import('./pages/GamesPage'))
+const HomePage        = lazy(() => import('./pages/HomePage'))
+const MistrialPage    = lazy(() => import('./pages/MistrialPage'))
+const LobbyPage       = lazy(() => import('./pages/LobbyPage'))
+const WritingPhase    = lazy(() => import('./pages/WritingPhase'))
+const VotingPhase     = lazy(() => import('./pages/VotingPhase'))
+const AIJudgingPhase  = lazy(() => import('./pages/AIJudgingPhase'))
+const ObjectionPhase  = lazy(() => import('./pages/ObjectionPhase'))
+const RevealPhase     = lazy(() => import('./pages/RevealPhase'))
+const ScoreboardPage  = lazy(() => import('./pages/ScoreboardPage'))
+const GamesPage       = lazy(() => import('./pages/GamesPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
-const ProfilePage    = lazy(() => import('./pages/ProfilePage'))
-const LoadingPage    = lazy(() => import('./pages/LoadingPage'))
+const ProfilePage     = lazy(() => import('./pages/ProfilePage'))
+const LoadingPage     = lazy(() => import('./pages/LoadingPage'))
 
 function PageLoader() {
   return <LoadingPage />
 }
+
+// Tracks the wallet address from the previous syncProfile call so we can
+// distinguish between reconnect (same address) and switch (different address).
+let _prevAddress = null
 
 export default function App() {
   const phase        = useGameStore(s => s.phase)
@@ -52,27 +56,55 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { autoReconnect() }, [])
 
-  // Whenever the wallet connects, switches, or disconnects:
-  // - Load the wallet-specific localStorage profile (isolated per address)
-  // - Fetch the server-registered identity
-  // - Run ENS reverse lookup in parallel
-  // When disconnected, clear the in-memory cache so no stale name bleeds through.
+  // Wallet lifecycle handler — runs on every connect, switch, or disconnect.
+  //
+  // Disconnect (addr = null):
+  //   • Clear the in-memory profile so no stale name from the previous wallet
+  //     ever bleeds through.
+  //   • Call resetGame() to stop polling, wipe room state, and navigate home.
+  //     A disconnected user can't be in any room.
+  //
+  // Wallet switch (different address while one was already connected):
+  //   • Reset game state immediately — the new wallet has no seat in the
+  //     previous room and the poll would fetch state for the wrong address.
+  //   • Then load the new wallet's profile and server identity.
+  //
+  // Same wallet reconnect (page reload with autoReconnect, or re-approval):
+  //   • Skip the game reset so an in-progress game isn't wiped.
+  //   • Just refresh the profile and ENS name.
   useEffect(() => {
     async function syncProfile(addr) {
-      if (!addr) {
-        // Wallet disconnected — wipe in-memory profile so nothing leaks
+      const normalised = addr ? addr.toLowerCase() : null
+      const isSwitch   = normalised !== _prevAddress && _prevAddress !== null
+      const prevAddr   = _prevAddress
+      _prevAddress     = normalised
+
+      if (!normalised) {
+        // ── Disconnected ────────────────────────────────────────────────────
         clearProfileCache()
+        useGameStore.getState().resetGame()
         return
       }
 
-      // Load (or create) the per-address profile slot before any async work
-      // so that the UI immediately reflects the correct wallet's cached state
-      initProfileForAddress(addr)
+      if (isSwitch) {
+        // ── Wallet switched to a different address ──────────────────────────
+        // Reset first so the new wallet doesn't inherit the previous wallet's
+        // room, phase, players, or any in-flight transactions.
+        useGameStore.getState().resetGame()
+        // Immediately set the new myId so store consumers have the right value
+        // before the async profile fetch completes.
+        useGameStore.setState({ myId: normalised })
+      }
 
+      // Load (or create) the per-address profile slot immediately so the UI
+      // shows the correct cached identity without waiting for the server.
+      initProfileForAddress(normalised)
+
+      // Fetch server identity and ENS name concurrently
       try {
         const [serverProfile, ensName] = await Promise.all([
-          fetchServerProfile(addr),
-          lookupEnsName(addr),
+          fetchServerProfile(normalised),
+          lookupEnsName(normalised),
         ])
         if (serverProfile) applyServerProfile(serverProfile)
         if (ensName !== undefined) applyEnsName(ensName)
@@ -80,7 +112,7 @@ export default function App() {
     }
 
     const unsub = subscribeWallet(() => syncProfile(myAddress()))
-    syncProfile(myAddress())   // run immediately on mount
+    syncProfile(myAddress())   // run immediately on mount for autoReconnect
     return unsub
   }, [])
 
