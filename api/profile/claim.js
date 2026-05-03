@@ -71,28 +71,40 @@ module.exports = async function handler(req, res) {
 
   try {
     if (USE_DB) {
-      const db = await getSQL()
-      await ensureSchema()
-
-      // Check address already claimed
-      const existing = await db`SELECT username FROM player_profiles WHERE address = ${addr} LIMIT 1`
-      if (existing.length) {
-        return res.status(409).json({ error: 'This wallet already has a claimed identity.', username: existing[0].username })
-      }
-
+      // Wrap DB block so any failure (missing module, connection error, etc.)
+      // falls through to the in-memory path rather than returning a 500.
       try {
+        const db = await getSQL()
+        await ensureSchema()
+
+        // Check if this wallet already has a claimed identity
+        const existing = await db`SELECT username FROM player_profiles WHERE address = ${addr} LIMIT 1`
+        if (existing.length) {
+          return res.status(409).json({ error: 'This wallet already has a claimed identity.', username: existing[0].username })
+        }
+
+        // Check if username is taken before insert (better error message)
+        const taken = await db`SELECT 1 FROM player_profiles WHERE username_lower = ${lower} LIMIT 1`
+        if (taken.length) {
+          return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
+        }
+
         await db`
           INSERT INTO player_profiles (address, username, username_lower, avatar_url, color)
           VALUES (${addr}, ${uname}, ${lower}, ${av}, ${col})
         `
-      } catch (e) {
-        // Unique constraint violation on username_lower
-        if (e?.message?.toLowerCase().includes('unique') || e?.code === '23505') {
+        return res.status(200).json({ ok: true, username: uname })
+      } catch (dbErr) {
+        // Only re-throw conflict errors (4xx semantics) — everything else falls
+        // through to in-memory so a misconfigured DB never blocks the user.
+        const msg = String(dbErr?.message || '').toLowerCase()
+        const isConflict = msg.includes('unique') || dbErr?.code === '23505' || msg.includes('already')
+        if (isConflict) {
           return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
         }
-        throw e
+        console.error('[profile/claim] DB error, using in-memory fallback:', dbErr?.message || dbErr)
+        // Fall through to in-memory below
       }
-      return res.status(200).json({ ok: true, username: uname })
     }
 
     // In-memory fallback

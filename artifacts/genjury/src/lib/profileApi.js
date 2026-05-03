@@ -96,9 +96,19 @@ export async function claimIdentity(address, username, avatarUrl = '', color = '
     return { ok: true, username: trimmed, local: true }
   }
 
-  // Server responded — parse and respect the result
+  // Server responded — parse result
   let data
   try { data = await resp.json() } catch { data = {} }
+
+  // 5xx = server-side failure (DB unavailable, missing package, etc.)
+  // Treat the same as a network error: save locally so the user isn't blocked.
+  if (resp.status >= 500) {
+    _cache[key] = { address: key, username: trimmed, avatarUrl, color }
+    notify()
+    return { ok: true, username: trimmed, local: true }
+  }
+
+  // 4xx = real API error (username taken, already claimed) — surface to user
   if (!resp.ok) throw new Error(data.error || 'Claim failed.')
 
   _cache[key] = { address: key, username: data.username ?? trimmed, avatarUrl, color }
