@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, memo } from 'react'
 import { Home, Gamepad2, Trophy, UserRound, Gavel } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import WalletButton from './WalletButton'
@@ -10,7 +10,50 @@ const TABS = [
   { id: 'profile',     label: 'Profile',     icon: UserRound },
 ]
 
-export default function TopNav() {
+const NavTab = memo(function NavTab({ id, label, icon: Icon, active, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(id)}
+      className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plasma/50 ${
+        active
+          ? 'text-white bg-white/[0.07]'
+          : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]'
+      }`}
+      aria-current={active ? 'page' : undefined}
+    >
+      <Icon className={`w-4 h-4 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
+      <span>{label}</span>
+      {active && (
+        <>
+          <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-crimson/50 via-crimson to-crimson/50 shadow-[0_0_8px_#e8002d]" />
+          <span className="absolute inset-0 rounded-xl bg-crimson/[0.03]" />
+        </>
+      )}
+    </button>
+  )
+})
+
+const MobileNavTab = memo(function MobileNavTab({ id, label, icon: Icon, active, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(id)}
+      className={`relative flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-plasma/40 ${
+        active ? 'text-white' : 'text-white/40 hover:text-white/70'
+      }`}
+      aria-current={active ? 'page' : undefined}
+    >
+      <div className={`p-1.5 rounded-lg transition-all duration-200 ${active ? 'bg-white/[0.07]' : ''}`}>
+        <Icon className={`w-5 h-5 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
+      </div>
+      <span className="tracking-wide">{label}</span>
+      {active && (
+        <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-crimson to-transparent shadow-[0_0_8px_#e8002d]" />
+      )}
+    </button>
+  )
+})
+
+const TopNav = memo(function TopNav() {
   const activeTab    = useGameStore((s) => s.activeTab)
   const setActiveTab = useGameStore((s) => s.setActiveTab)
   const roomCode     = useGameStore((s) => s.roomCode)
@@ -46,30 +89,16 @@ export default function TopNav() {
 
           {/* Desktop tabs */}
           <nav className="hidden md:flex items-center gap-0.5 ml-3" aria-label="Primary">
-            {TABS.map(({ id, label, icon: Icon }) => {
-              const active = activeTab === id
-              return (
-                <button
-                  key={id}
-                  onClick={() => select(id)}
-                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plasma/50 ${
-                    active
-                      ? 'text-white bg-white/[0.07]'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]'
-                  }`}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <Icon className={`w-4 h-4 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
-                  <span>{label}</span>
-                  {active && (
-                    <>
-                      <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-crimson/50 via-crimson to-crimson/50 shadow-[0_0_8px_#e8002d]" />
-                      <span className="absolute inset-0 rounded-xl bg-crimson/[0.03]" />
-                    </>
-                  )}
-                </button>
-              )
-            })}
+            {TABS.map(({ id, label, icon }) => (
+              <NavTab
+                key={id}
+                id={id}
+                label={label}
+                icon={icon}
+                active={activeTab === id}
+                onSelect={select}
+              />
+            ))}
 
             {/* In-Room pill */}
             {inLobby && (
@@ -116,27 +145,16 @@ export default function TopNav() {
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-plasma/30 to-transparent" />
 
         <div className={`mx-auto max-w-7xl grid ${inLobby ? 'grid-cols-5' : 'grid-cols-4'}`}>
-          {TABS.map(({ id, label, icon: Icon }) => {
-            const active = activeTab === id
-            return (
-              <button
-                key={id}
-                onClick={() => select(id)}
-                className={`relative flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-plasma/40 ${
-                  active ? 'text-white' : 'text-white/40 hover:text-white/70'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <div className={`p-1.5 rounded-lg transition-all duration-200 ${active ? 'bg-white/[0.07]' : ''}`}>
-                  <Icon className={`w-5 h-5 transition-colors ${active ? 'text-crimson' : ''}`} strokeWidth={2.25} />
-                </div>
-                <span className="tracking-wide">{label}</span>
-                {active && (
-                  <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-crimson to-transparent shadow-[0_0_8px_#e8002d]" />
-                )}
-              </button>
-            )
-          })}
+          {TABS.map(({ id, label, icon }) => (
+            <MobileNavTab
+              key={id}
+              id={id}
+              label={label}
+              icon={icon}
+              active={activeTab === id}
+              onSelect={select}
+            />
+          ))}
 
           {/* In-Room tab */}
           {inLobby && (
@@ -162,4 +180,6 @@ export default function TopNav() {
       </nav>
     </>
   )
-}
+})
+
+export default TopNav

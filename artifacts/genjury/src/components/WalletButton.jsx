@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, memo } from 'react'
 import { Wallet, ChevronDown, Check } from 'lucide-react'
 import {
   myAddress,
@@ -24,7 +24,7 @@ function getNetworkColor(name) {
   return NETWORK_COLORS[name] ?? '#ff6b35'
 }
 
-function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
+const NetworkDropdown = memo(function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
   const options = getNetworkOptions()
 
   return (
@@ -67,9 +67,9 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
       </div>
     </div>
   )
-}
+})
 
-export default function WalletButton({ compact = false }) {
+const WalletButton = memo(function WalletButton({ compact = false }) {
   const setOpen  = useGameStore((s) => s.setWalletPanelOpen)
   const [, force]       = useState(0)
   const [dropOpen, setDropOpen] = useState(false)
@@ -148,4 +148,6 @@ export default function WalletButton({ compact = false }) {
       {!compact && <span>Connect</span>}
     </button>
   )
-}
+})
+
+export default WalletButton
