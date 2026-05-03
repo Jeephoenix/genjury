@@ -41,6 +41,10 @@ export default function ScoreboardPage() {
   const winner  = sorted[0]
   const me      = players.find((p) => p.id === myId)
   const myRank  = sorted.findIndex((p) => p.id === myId) + 1
+  const winnerPlayer = players.find((p) => p.id === winnerAddress) || winner
+  const winnerDisplayName = winnerPlayer?.name || short(winnerAddress)
+  const housePlayer = players.find((p) => p.id === houseAddress)
+  const houseDisplayName = housePlayer?.name || short(houseAddress)
 
   const iAmWinner         = !!winnerAddress && winnerAddress === myId
   const iAmHouse          = !!houseAddress && houseAddress === myId
@@ -115,10 +119,10 @@ export default function ScoreboardPage() {
               </div>
               <div className="text-white/35 text-xs mb-3">
                 {hasUnclaimedPrize
-                  ? <>Awarded to <span className="font-mono text-white/60">{short(winnerAddress)}</span> — awaiting claim.</>
+                  ? <>Awarded to <span className="text-white/60 font-semibold">{winnerDisplayName}</span> — awaiting claim.</>
                   : winnerWinningsWei === 0n && winner
                   ? 'Free-play room — no prize to distribute.'
-                  : <>Claimed by <span className="font-mono text-white/60">{short(winnerAddress)}</span>.</>}
+                  : <>Claimed by <span className="text-white/60 font-semibold">{winnerDisplayName}</span>.</>}
               </div>
               {hasUnclaimedPrize && (
                 <button
@@ -150,7 +154,7 @@ export default function ScoreboardPage() {
                   </span>
                 </div>
                 <div className="text-white/35 text-xs mb-3">
-                  House: <span className="font-mono text-white/55">{short(houseAddress)}</span>
+                  House: <span className="text-white/55 font-semibold">{houseDisplayName}</span>
                   {iAmHouse && <span className="ml-2 badge bg-plasma/15 text-plasma border border-plasma/25 text-[9px]">YOU</span>}
                 </div>
                 {hasUnclaimedFees && (
