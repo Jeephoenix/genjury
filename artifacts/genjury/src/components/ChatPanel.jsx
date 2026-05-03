@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Scale, X, Send, ChevronRight } from 'lucide-react'
+import { MessageSquare, Scale, X, Send, ChevronRight, Reply } from 'lucide-react'
 import useGameStore, { PHASES } from '../lib/store'
 import { fetchSince, postChat, toggleReaction } from '../lib/chatApi'
 import { getProfile, subscribeProfile, displayName } from '../lib/profile'
@@ -16,16 +16,18 @@ export default function ChatPanel() {
   const patchChatReaction = useGameStore(s => s.patchChatReaction)
   const openProfileCard   = useGameStore(s => s.openProfileCard)
 
-  const [open, setOpen]           = useState(false)
-  const [text, setText]           = useState('')
-  const [unread, setUnread]       = useState(0)
-  const [apiOk, setApiOk]         = useState(true)
-  const apiOkRef                  = React.useRef(true)
-  const [hoveredId, setHoveredId] = useState(null)
-  const [, force]                 = useState(0)
+  const [open, setOpen]             = useState(false)
+  const [text, setText]             = useState('')
+  const [unread, setUnread]         = useState(0)
+  const [apiOk, setApiOk]           = useState(true)
+  const apiOkRef                    = React.useRef(true)
+  const [hoveredId, setHoveredId]   = useState(null)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [, force]                   = useState(0)
   const scrollRef      = useRef(null)
   const inputRef       = useRef(null)
   const longPressTimer = useRef(null)
+  const swipeStart     = useRef(null)
 
   const activePhase   = phase === PHASES.WRITING || phase === PHASES.VOTING
   const objectionMode = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
@@ -68,6 +70,7 @@ export default function ChatPanel() {
             kind:       m.kind,
             ts:         Number(m.ts),
             reactions:  m.reactions || {},
+            replyTo:    m.reply_to || null,
           })
           if (!open && m.author_id !== meId) setUnread(u => u + 1)
         }
@@ -102,7 +105,9 @@ export default function ChatPanel() {
     e.preventDefault()
     const t = text.trim()
     if (!t) return
+    const currentReply = replyingTo
     setText('')
+    setReplyingTo(null)
     try {
       const player = {
         id:     meId,
@@ -113,10 +118,12 @@ export default function ChatPanel() {
       const optimistic = await postChat(
         roomCode, player, t,
         objectionMode ? 'objection' : 'taunt',
+        currentReply,
       )
       pushChat(optimistic)
     } catch {
       setText(t)
+      setReplyingTo(currentReply)
     }
   }
 
@@ -145,10 +152,35 @@ export default function ChatPanel() {
     }
   }
 
-  function startLongPress(msgId) {
-    longPressTimer.current = setTimeout(() => setHoveredId(msgId), 400)
+  function triggerReply(msg) {
+    setReplyingTo({ id: msg.id, authorName: msg.authorName, text: msg.text, color: msg.color })
+    setHoveredId(null)
+    setTimeout(() => inputRef.current?.focus(), 80)
+  }
+
+  function startLongPress(msg) {
+    longPressTimer.current = setTimeout(() => setHoveredId(msg.id), 400)
   }
   function cancelLongPress() { clearTimeout(longPressTimer.current) }
+
+  // ── Swipe-right to reply (Telegram style) ─────────────────────────
+  function onTouchStart(e, msg) {
+    swipeStart.current = { x: e.touches[0].clientX, id: msg.id, msg }
+    startLongPress(msg)
+  }
+  function onTouchMove(e) {
+    cancelLongPress()
+    if (!swipeStart.current) return
+    const dx = e.touches[0].clientX - swipeStart.current.x
+    if (dx > 60) {
+      triggerReply(swipeStart.current.msg)
+      swipeStart.current = null
+    }
+  }
+  function onTouchEnd() {
+    cancelLongPress()
+    swipeStart.current = null
+  }
 
   const panelTitle = objectionMode
     ? <><Scale className="w-4 h-4 text-neon" strokeWidth={2.25} />Objections</>
@@ -237,6 +269,7 @@ export default function ChatPanel() {
                     <span className="text-xs text-white/20">Be the first to say something.</span>
                   </div>
                 )}
+
                 {messages.map(m => {
                   const isMe      = m.authorId === meId
                   const rxEntries = Object.entries(m.reactions || {}).filter(([, u]) => u.length > 0)
@@ -247,9 +280,9 @@ export default function ChatPanel() {
                       className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
                       onMouseEnter={() => setHoveredId(m.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      onTouchStart={() => startLongPress(m.id)}
-                      onTouchEnd={cancelLongPress}
-                      onTouchMove={cancelLongPress}
+                      onTouchStart={e => onTouchStart(e, m)}
+                      onTouchMove={onTouchMove}
+                      onTouchEnd={onTouchEnd}
                     >
                       {/* Avatar */}
                       <button
@@ -266,7 +299,7 @@ export default function ChatPanel() {
                         />
                       </button>
 
-                      {/* Message content — max 75% of panel width */}
+                      {/* Message content */}
                       <div className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
 
                         {/* Author name + badge (others only) */}
@@ -288,13 +321,23 @@ export default function ChatPanel() {
                           </div>
                         )}
 
-                        {/* Bubble row — relative for the reaction picker */}
+                        {/* Bubble + reaction picker */}
                         <div className="relative">
-                          {/* Floating reaction picker */}
+                          {/* Floating action bar (hover / long-press) */}
                           {hoveredId === m.id && (
                             <div
-                              className={`absolute -top-9 z-10 flex gap-0.5 px-1 py-1 rounded-xl bg-void/95 border border-white/10 shadow-xl backdrop-blur-xl ${isMe ? 'right-0' : 'left-0'}`}
+                              className={`absolute -top-10 z-10 flex items-center gap-0.5 px-1 py-1 rounded-xl bg-void/95 border border-white/10 shadow-xl backdrop-blur-xl ${isMe ? 'right-0' : 'left-0'}`}
                             >
+                              {/* Reply button */}
+                              <button
+                                onClick={() => triggerReply(m)}
+                                className="w-7 h-7 rounded-lg text-sm flex items-center justify-center text-white/60 hover:text-plasma hover:bg-plasma/15 transition-all"
+                                aria-label="Reply"
+                              >
+                                <Reply className="w-3.5 h-3.5" strokeWidth={2.25} />
+                              </button>
+                              <div className="w-px h-4 bg-white/10 mx-0.5" />
+                              {/* Reaction emojis */}
                               {REACTION_EMOJIS.map(e => (
                                 <button
                                   key={e}
@@ -312,14 +355,38 @@ export default function ChatPanel() {
                             </div>
                           )}
 
-                          {/* Bubble — no max-w here; parent's max-w-[75%] constrains it */}
+                          {/* Bubble */}
                           <div
-                            className={`px-3.5 py-2 text-sm leading-relaxed break-words rounded-2xl ${
+                            className={`px-3.5 py-2 text-sm leading-relaxed break-words rounded-2xl overflow-hidden ${
                               isMe
                                 ? 'bg-plasma/20 border border-plasma/25 text-white rounded-br-sm'
                                 : 'bg-white/[0.07] border border-white/[0.08] text-white/90 rounded-bl-sm'
                             }`}
                           >
+                            {/* Reply-to quote block */}
+                            {m.replyTo && (
+                              <div
+                                className={`flex gap-2 mb-2 pb-2 border-b ${
+                                  isMe ? 'border-plasma/20' : 'border-white/[0.08]'
+                                }`}
+                              >
+                                <div
+                                  className="w-0.5 rounded-full flex-shrink-0 self-stretch"
+                                  style={{ backgroundColor: m.replyTo.color || '#a259ff' }}
+                                />
+                                <div className="min-w-0">
+                                  <p
+                                    className="text-[11px] font-semibold leading-none mb-0.5"
+                                    style={{ color: m.replyTo.color || '#a259ff' }}
+                                  >
+                                    {m.replyTo.authorName}
+                                  </p>
+                                  <p className="text-[12px] text-white/45 truncate leading-snug">
+                                    {m.replyTo.text}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                             {m.text}
                           </div>
                         </div>
@@ -347,6 +414,36 @@ export default function ChatPanel() {
                   )
                 })}
               </div>
+
+              {/* ── Reply preview strip ── */}
+              <AnimatePresence>
+                {replyingTo && (
+                  <motion.div
+                    key="reply-strip"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-3 px-3 py-2 border-t border-white/[0.07] bg-white/[0.03] flex-shrink-0"
+                  >
+                    <Reply className="w-4 h-4 text-plasma flex-shrink-0" strokeWidth={2.25} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold leading-none mb-0.5" style={{ color: replyingTo.color || '#a259ff' }}>
+                        {replyingTo.authorName}
+                      </p>
+                      <p className="text-xs text-white/40 truncate leading-snug">{replyingTo.text}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="w-6 h-6 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                      aria-label="Cancel reply"
+                    >
+                      <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* ── Input bar ── */}
               <form
