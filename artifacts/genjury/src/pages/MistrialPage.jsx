@@ -168,7 +168,7 @@ export default function MistrialPage() {
         </div>
 
         <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-white/35 mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_6px_#7fff6e]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_5px_#3db87a]" />
           A Genjury game · LIVE
         </div>
 
@@ -336,7 +336,7 @@ export default function MistrialPage() {
                       onClick={() => setMaxRounds(n)}
                       className={`rounded-xl py-2.5 text-sm font-mono transition-all ${
                         maxRounds === n
-                          ? 'bg-neon/15 text-neon border border-neon/35 shadow-[0_0_12px_rgba(127,255,110,0.1)]'
+                          ? 'bg-neon/15 text-neon border border-neon/35 shadow-[0_0_10px_rgba(61,184,122,0.08)]'
                           : 'bg-white/[0.04] text-white/45 border border-white/[0.08] hover:text-white hover:bg-white/[0.08]'
                       }`}
                     >
@@ -357,7 +357,7 @@ export default function MistrialPage() {
                       onClick={() => setMaxPlayers(n)}
                       className={`rounded-xl py-2.5 text-sm font-mono transition-all ${
                         maxPlayers === n
-                          ? 'bg-neon/15 text-neon border border-neon/35 shadow-[0_0_12px_rgba(127,255,110,0.1)]'
+                          ? 'bg-neon/15 text-neon border border-neon/35 shadow-[0_0_10px_rgba(61,184,122,0.08)]'
                           : 'bg-white/[0.04] text-white/45 border border-white/[0.08] hover:text-white hover:bg-white/[0.08]'
                       }`}
                     >
