@@ -404,11 +404,7 @@ const NETWORK_INFO = {
     explorer: 'https://explorer-asimov.genlayer.com',
     faucet:   'https://testnet-faucet.genlayer.foundation',
   },
-  localnet: {
-    label:    'Localnet',
-    explorer: null,
-    faucet:   null,
-  },
+  // localnet removed — contract is deployed on GenLayer Studio only.
 }
 
 // ── Runtime network override ──────────────────────────────────────────────────
@@ -430,7 +426,12 @@ export function getNetworkName() {
   // 1. Runtime localStorage override (set by setRuntimeNetworkName)
   try {
     const stored = localStorage.getItem(STORAGE_NETWORK_KEY)
-    if (stored && NETWORK_INFO[stored]) return stored
+    // Migrate legacy 'localnet' entries — contract is on studionet only.
+    if (stored === 'localnet') {
+      localStorage.removeItem(STORAGE_NETWORK_KEY)
+    } else if (stored && NETWORK_INFO[stored]) {
+      return stored
+    }
   } catch {}
   // 2. Build-time env var (Vercel / .env)
   return normalizeNetworkKey(import.meta.env.VITE_GENLAYER_NETWORK)
@@ -458,9 +459,8 @@ export function getNetworkInfo() {
 
 export function getChain() {
   const key = getNetworkName()
-  if (key === 'localnet')  return localnet
-  if (key === 'asimov')    return testnetAsimov
-  if (key === 'bradbury')  return testnetBradbury
+  if (key === 'asimov')   return testnetAsimov
+  if (key === 'bradbury') return testnetBradbury
   return studionet
 }
 

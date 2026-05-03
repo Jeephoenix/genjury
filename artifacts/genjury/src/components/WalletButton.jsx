@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Wallet, ChevronDown, Check } from 'lucide-react'
+import { Wallet, ChevronDown, Check, AlertTriangle } from 'lucide-react'
 import {
   myAddress,
   isWalletConnected,
@@ -13,56 +13,89 @@ import useGameStore from '../lib/store'
 
 const short = (a) => (a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '')
 
-const NETWORK_COLORS = {
-  studionet: '#7fff6e',
-  bradbury: '#a259ff',
-  asimov: '#a259ff',
-  localnet: '#f5c842',
+const NETWORK_META = {
+  studionet: { color: '#7fff6e', badge: 'Studio',   dot: '#7fff6e' },
+  bradbury:  { color: '#a259ff', badge: 'Bradbury', dot: '#a259ff' },
+  asimov:    { color: '#a259ff', badge: 'Asimov',   dot: '#a259ff' },
 }
 
-function getNetworkColor(name) {
-  return NETWORK_COLORS[name] ?? '#ff6b35'
+function getMeta(key) {
+  return NETWORK_META[key] ?? { color: '#ff6b35', badge: key, dot: '#ff6b35' }
 }
 
 function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
   const options = getNetworkOptions()
 
   return (
-    <div className="absolute top-full right-0 mt-2 z-[100]">
+    <div className="absolute top-full right-0 mt-1.5 z-[200]" style={{ minWidth: '220px' }}>
       <div
-        className="rounded-xl border border-white/[0.15] overflow-hidden min-w-[200px]"
-        style={{ background: 'rgba(20,20,32,0.95)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+        className="rounded-xl border border-white/[0.1] overflow-hidden"
+        style={{
+          background: 'rgba(13,13,20,0.97)',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
+        }}
       >
-        <div className="px-4 pt-3 pb-2">
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">Switch Networks</p>
+        {/* Header */}
+        <div className="px-3.5 pt-3 pb-2 border-b border-white/[0.06]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/35">Select Network</p>
         </div>
-        <div className="px-2 pb-2 space-y-1">
+
+        {/* Options */}
+        <div className="p-1.5 space-y-0.5">
           {options.map((opt) => {
             const active = opt.key === currentNetwork
-            const dotColor = getNetworkColor(opt.key)
+            const meta   = getMeta(opt.key)
+            const isRecommended = opt.key === 'studionet'
             return (
               <button
                 key={opt.key}
                 onClick={() => { onSwitch(opt.key); onClose() }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 text-left group"
-                style={active
-                  ? { background: 'rgba(255,255,255,0.08)' }
-                  : { background: 'transparent' }
-                }
-                onMouseEnter={e => !active && (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                onMouseLeave={e => !active && (e.currentTarget.style.background = 'transparent')}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 text-left group"
+                style={{
+                  background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
               >
+                {/* Dot */}
                 <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ background: dotColor }}
+                  className="w-2 h-2 rounded-full flex-shrink-0 transition-all"
+                  style={{
+                    background: meta.dot,
+                    boxShadow: active ? `0 0 6px ${meta.dot}` : 'none',
+                  }}
                 />
-                <span className={`flex-1 text-sm font-medium ${active ? 'text-white' : 'text-white/60 group-hover:text-white/80'} transition-colors`}>
-                  {opt.label}
+
+                {/* Label + badge */}
+                <span className="flex-1 flex items-center gap-2 min-w-0">
+                  <span className={`text-sm font-medium leading-none truncate transition-colors ${active ? 'text-white' : 'text-white/55 group-hover:text-white/80'}`}>
+                    {opt.label}
+                  </span>
+                  {isRecommended && (
+                    <span
+                      className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+                      style={{ background: 'rgba(127,255,110,0.12)', color: '#7fff6e', border: '1px solid rgba(127,255,110,0.2)' }}
+                    >
+                      Live
+                    </span>
+                  )}
                 </span>
-                {active && <Check className="w-3.5 h-3.5 flex-shrink-0 text-white/50" strokeWidth={2.5} />}
+
+                {/* Active checkmark */}
+                {active && (
+                  <Check className="w-3.5 h-3.5 flex-shrink-0 text-white/40" strokeWidth={2.5} />
+                )}
               </button>
             )
           })}
+        </div>
+
+        {/* Footer hint */}
+        <div className="px-3.5 py-2.5 border-t border-white/[0.06]">
+          <p className="text-[10px] text-white/25 font-mono leading-relaxed">
+            Contract deployed on GenLayer Studio
+          </p>
         </div>
       </div>
     </div>
@@ -70,10 +103,10 @@ function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
 }
 
 export default function WalletButton({ compact = false }) {
-  const setOpen  = useGameStore((s) => s.setWalletPanelOpen)
+  const setOpen         = useGameStore((s) => s.setWalletPanelOpen)
   const [, force]       = useState(0)
   const [dropOpen, setDropOpen] = useState(false)
-  const wrapRef = useRef(null)
+  const wrapRef         = useRef(null)
 
   useEffect(() => subscribeWallet(() => force((n) => n + 1)), [])
 
@@ -86,9 +119,11 @@ export default function WalletButton({ compact = false }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [dropOpen])
 
-  const connected     = isWalletConnected()
-  const address       = myAddress()
+  const connected      = isWalletConnected()
+  const address        = myAddress()
   const currentNetwork = getNetworkName()
+  const meta           = getMeta(currentNetwork)
+  const isStudio       = currentNetwork === 'studionet'
 
   const handleSwitch = (key) => {
     setRuntimeNetworkName(key)
@@ -98,16 +133,36 @@ export default function WalletButton({ compact = false }) {
   if (connected) {
     return (
       <div className="inline-flex items-center gap-2">
-        {/* Network button — grey box with logo and dropdown */}
+        {/* Network pill */}
         <div className="relative" ref={wrapRef}>
           <button
             onClick={() => setDropOpen((v) => !v)}
             aria-label="Switch network"
             aria-expanded={dropOpen}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.15] bg-white/[0.07] hover:bg-white/10 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            style={{
+              background: dropOpen ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.05)',
+              borderColor: dropOpen ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)' }}
+            onMouseLeave={e => { if (!dropOpen) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' } }}
           >
-            <img src="/logo.png" alt="" className="w-5 h-5 object-contain" />
-            <ChevronDown className="w-4 h-4 text-white/60 flex-shrink-0" strokeWidth={2.25} />
+            {/* Status dot */}
+            <span
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              style={{ background: meta.dot, boxShadow: isStudio ? `0 0 5px ${meta.dot}80` : 'none' }}
+            />
+            {/* Network short name — hidden on very compact */}
+            {!compact && (
+              <span className="text-xs font-mono text-white/65 leading-none tracking-tight">
+                {meta.badge}
+              </span>
+            )}
+            <ChevronDown
+              className="w-3 h-3 text-white/40 flex-shrink-0 transition-transform duration-200"
+              style={{ transform: dropOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              strokeWidth={2.5}
+            />
           </button>
 
           {dropOpen && (
