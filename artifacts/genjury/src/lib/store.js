@@ -425,8 +425,12 @@ const useGameStore = create((set, get) => ({
 
   activeTab:        'home',
   walletPanelOpen:  false,
+  identityGatePending: null,
+
   setActiveTab:       (tab)  => set({ activeTab: tab }),
   setWalletPanelOpen: (open) => set({ walletPanelOpen: !!open }),
+  openIdentityGate:   (pending) => set({ identityGatePending: pending }),
+  closeIdentityGate:  () => set({ identityGatePending: null }),
 
   addToast: (message, type = 'info') => pushToast(type, message),
 
@@ -507,6 +511,11 @@ const useGameStore = create((set, get) => ({
       pushToast('error', 'Connect your wallet to create a room')
       return
     }
+    // Gate: wallet must have a claimed identity before creating a room
+    if (!getProfile().claimed) {
+      set({ identityGatePending: { action: 'create', args: [rawName, opts] } })
+      return
+    }
     const name = (rawName || getProfile().name || '').trim()
     if (!name) {
       pushToast('error', 'Set a player name in your profile first')
@@ -583,6 +592,11 @@ const useGameStore = create((set, get) => ({
     const me = norm(myAddress())
     if (!me) {
       pushToast('error', 'Connect your wallet to join a room')
+      return
+    }
+    // Gate: wallet must have a claimed identity before joining a room
+    if (!getProfile().claimed) {
+      set({ identityGatePending: { action: 'join', args: [rawCode, rawName] } })
       return
     }
     const name = (rawName || getProfile().name || '').trim()

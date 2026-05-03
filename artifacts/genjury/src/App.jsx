@@ -11,6 +11,7 @@ import NetworkBanner from './components/NetworkBanner'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
 import OnboardingModal from './components/OnboardingModal'
+import IdentityGateModal from './components/IdentityGateModal'
 
 // Lazy load pages for better code splitting
 const HomePage = lazy(() => import('./pages/HomePage'))
@@ -111,6 +112,7 @@ export default function App() {
         <TxStatusBanner />
         <ChatPanel />
         <OnboardingModal />
+        <IdentityGateModal />
       </div>
     </ErrorBoundary>
   )
