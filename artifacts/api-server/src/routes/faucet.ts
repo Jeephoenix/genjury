@@ -26,7 +26,16 @@ router.post("/faucet", async (req, res) => {
     return res.status(400).json({ error: "Invalid or missing address" });
   }
 
-  const amount = body?.amount || MAX_AMOUNT_HEX;
+  const rawAmount = body?.amount;
+  let amount = MAX_AMOUNT_HEX;
+  if (rawAmount !== undefined) {
+    if (!/^0x[0-9a-fA-F]{1,64}$/.test(String(rawAmount))) {
+      return res.status(400).json({ error: "Invalid amount format" });
+    }
+    const parsed = BigInt(rawAmount);
+    const max = BigInt(MAX_AMOUNT_HEX);
+    amount = parsed > max ? MAX_AMOUNT_HEX : rawAmount;
+  }
 
   try {
     const upstream = await fetch(rpc, {

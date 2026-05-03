@@ -23,6 +23,7 @@ export default function ChatPanel() {
   const [, force]           = useState(0)
   const scrollRef           = useRef(null)
   const inputRef            = useRef(null)
+  const longPressTimer      = useRef(null)
 
   const activePhase    = phase === PHASES.WRITING || phase === PHASES.VOTING
   const objectionMode  = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
