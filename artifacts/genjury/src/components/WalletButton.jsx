@@ -162,7 +162,7 @@ export default function WalletButton({ compact = false }) {
   return (
     <button
       onClick={() => setOpen(true)}
-      className={`group inline-flex items-center gap-1.5 rounded-xl border border-crimson/40 bg-crimson/10 text-crimson font-semibold uppercase tracking-wider transition-all duration-200 hover:bg-crimson/18 hover:border-crimson/60 hover:shadow-[0_0_20px_rgba(232,0,45,0.25)] active:scale-95 ${
+      className={`group inline-flex items-center gap-1.5 rounded-xl border border-crimson/40 bg-crimson/10 text-crimson font-semibold uppercase tracking-wider transition-all duration-200 hover:bg-crimson/18 hover:border-crimson/60 hover:shadow-[0_0_16px_rgba(160,50,75,0.20)] active:scale-95 ${
         compact ? 'px-2.5 py-1.5 text-[11px]' : 'px-3 py-1.5 text-[11px]'
       }`}
     >
