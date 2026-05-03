@@ -1,8 +1,9 @@
 // api/profile/claim.js — POST /api/profile/claim
 // Body: { address, username, avatarUrl?, color? }
-// Returns { ok: true, username } or 400/409 with { error }
-
-const _mem = new Map() // address -> profile (fallback when no DB)
+// Returns { ok: true, username } or 400/409/503 with { error }
+//
+// Requires DATABASE_URL (Neon Postgres). Without it the endpoint returns 503
+// so the client never shows a false "permanent" success to the user.
 
 const USE_DB = !!process.env.DATABASE_URL
 let sql     = null
@@ -55,6 +56,13 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).end()
 
+  // Hard requirement — never fake a permanent identity without a real DB.
+  if (!USE_DB) {
+    return res.status(503).json({
+      error: 'Identity registry is not configured. The DATABASE_URL environment variable is missing — add a Neon Postgres database to your Vercel project settings.',
+    })
+  }
+
   const { address, username, avatarUrl = '', color = '#a259ff' } = parseBody(req)
 
   if (!address || typeof address !== 'string')
@@ -70,56 +78,38 @@ module.exports = async function handler(req, res) {
   const col   = String(color    || '#a259ff').slice(0, 32)
 
   try {
-    if (USE_DB) {
-      // Wrap DB block so any failure (missing module, connection error, etc.)
-      // falls through to the in-memory path rather than returning a 500.
-      try {
-        const db = await getSQL()
-        await ensureSchema()
+    const db = await getSQL()
+    await ensureSchema()
 
-        // Check if this wallet already has a claimed identity
-        const existing = await db`SELECT username FROM player_profiles WHERE address = ${addr} LIMIT 1`
-        if (existing.length) {
-          return res.status(409).json({ error: 'This wallet already has a claimed identity.', username: existing[0].username })
-        }
-
-        // Check if username is taken before insert (better error message)
-        const taken = await db`SELECT 1 FROM player_profiles WHERE username_lower = ${lower} LIMIT 1`
-        if (taken.length) {
-          return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
-        }
-
-        await db`
-          INSERT INTO player_profiles (address, username, username_lower, avatar_url, color)
-          VALUES (${addr}, ${uname}, ${lower}, ${av}, ${col})
-        `
-        return res.status(200).json({ ok: true, username: uname })
-      } catch (dbErr) {
-        // Only re-throw conflict errors (4xx semantics) — everything else falls
-        // through to in-memory so a misconfigured DB never blocks the user.
-        const msg = String(dbErr?.message || '').toLowerCase()
-        const isConflict = msg.includes('unique') || dbErr?.code === '23505' || msg.includes('already')
-        if (isConflict) {
-          return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
-        }
-        console.error('[profile/claim] DB error, using in-memory fallback:', dbErr?.message || dbErr)
-        // Fall through to in-memory below
-      }
+    // Check if this wallet already has a claimed identity
+    const existing = await db`SELECT username FROM player_profiles WHERE address = ${addr} LIMIT 1`
+    if (existing.length) {
+      return res.status(409).json({
+        error: 'This wallet already has a claimed identity.',
+        username: existing[0].username,
+      })
     }
 
-    // In-memory fallback
-    if (_mem.has(addr)) {
-      return res.status(409).json({ error: 'This wallet already has a claimed identity.', username: _mem.get(addr).username })
+    // Check if username is taken
+    const taken = await db`SELECT 1 FROM player_profiles WHERE username_lower = ${lower} LIMIT 1`
+    if (taken.length) {
+      return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
     }
-    for (const [, p] of _mem) {
-      if (p.username_lower === lower) {
-        return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
-      }
-    }
-    _mem.set(addr, { address: addr, username: uname, username_lower: lower, avatar_url: av, color: col })
+
+    await db`
+      INSERT INTO player_profiles (address, username, username_lower, avatar_url, color)
+      VALUES (${addr}, ${uname}, ${lower}, ${av}, ${col})
+    `
     return res.status(200).json({ ok: true, username: uname })
+
   } catch (e) {
-    console.error('[profile/claim]', e)
-    return res.status(500).json({ error: 'server error', detail: String(e?.message || e) })
+    const msg  = String(e?.message || '').toLowerCase()
+    const code = e?.code
+    const isConflict = msg.includes('unique') || code === '23505' || msg.includes('already')
+    if (isConflict) {
+      return res.status(409).json({ error: 'Username already taken. Choose a different name.' })
+    }
+    console.error('[profile/claim] DB error:', e?.message || e)
+    return res.status(500).json({ error: 'Database error — please try again shortly.' })
   }
 }
