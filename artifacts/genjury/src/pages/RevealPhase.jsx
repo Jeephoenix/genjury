@@ -55,7 +55,7 @@ export default function RevealPhase() {
           className={`relative glass rounded-2xl border overflow-hidden text-center p-7 mb-6 ${
             aiWasFooled ? 'border-signal/30' : 'border-neon/30'
           }`}
-          style={{ background: aiWasFooled ? 'rgba(255,107,53,0.06)' : 'rgba(127,255,110,0.06)' }}
+          style={{ background: aiWasFooled ? 'rgba(192,91,48,0.05)' : 'rgba(127,255,110,0.06)' }}
         >
           <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent ${aiWasFooled ? 'via-signal/50' : 'via-neon/50'} to-transparent`} />
 
@@ -201,7 +201,7 @@ export default function RevealPhase() {
             className={`glass rounded-2xl border text-center p-5 mb-5 ${
               iWasRight ? 'border-neon/30' : 'border-signal/30'
             }`}
-            style={{ background: iWasRight ? 'rgba(127,255,110,0.05)' : 'rgba(255,107,53,0.05)' }}
+            style={{ background: iWasRight ? 'rgba(127,255,110,0.05)' : 'rgba(192,91,48,0.05)' }}
           >
             <p className={`font-display font-bold text-lg inline-flex items-center gap-2 justify-center ${
               iWasRight ? 'text-neon' : 'text-signal'
