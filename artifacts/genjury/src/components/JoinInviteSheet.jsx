@@ -122,7 +122,7 @@ import React, { useEffect, useRef, useState } from 'react'
         >
           <div className="max-w-lg mx-auto px-3 pb-3">
             <div className="glass rounded-2xl border border-neon/20 shadow-2xl overflow-hidden"
-              style={{ boxShadow: '0 -4px 60px rgba(127,255,110,0.08), 0 24px 80px rgba(0,0,0,0.6)' }}
+              style={{ boxShadow: '0 -4px 60px rgba(61,184,122,0.06), 0 24px 80px rgba(0,0,0,0.6)' }}
             >
               {/* Top gradient accent */}
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neon/50 to-transparent" />
@@ -269,7 +269,7 @@ import React, { useEffect, useRef, useState } from 'react'
                     onClick={handleJoin}
                     disabled={loading || !name.trim()}
                     className="btn w-full py-3.5 text-sm font-bold bg-neon/15 text-neon border border-neon/40 hover:bg-neon/25 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-                    style={{ boxShadow: '0 0 24px rgba(127,255,110,0.12)' }}
+                    style={{ boxShadow: '0 0 18px rgba(61,184,122,0.09)' }}
                   >
                     <Zap className="w-4 h-4" strokeWidth={2.5} />
                     {loading
