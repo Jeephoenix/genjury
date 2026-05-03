@@ -1,0 +1,9 @@
+{
+  "outputDirectory": "dist/public",
+  "buildCommand": "cd ../.. && pnpm --filter @workspace/genjury run build",
+  "installCommand": "cd ../.. && pnpm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
