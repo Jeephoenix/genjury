@@ -31,6 +31,7 @@ export default function ChatPanel() {
 
   const activePhase   = phase === PHASES.WRITING || phase === PHASES.VOTING
   const objectionMode = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
+  const chatLocked    = phase === PHASES.LOBBY || phase === PHASES.SCOREBOARD || !phase
 
   useEffect(() => {
     if (activePhase) setOpen(false)
@@ -103,6 +104,7 @@ export default function ChatPanel() {
 
   async function submit(e) {
     e.preventDefault()
+    if (chatLocked) return
     const t = text.trim()
     if (!t) return
     const currentReply = replyingTo
@@ -446,27 +448,38 @@ export default function ChatPanel() {
               </AnimatePresence>
 
               {/* ── Input bar ── */}
-              <form
-                onSubmit={submit}
-                className="flex gap-2 p-3 border-t border-white/[0.07] flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-              >
-                <input
-                  ref={inputRef}
-                  value={text}
-                  onChange={e => setText(e.target.value)}
-                  maxLength={280}
-                  placeholder={objectionMode ? 'Object! Coordinate!' : 'Say something…'}
-                  className="flex-1 bg-white/[0.05] border border-white/[0.09] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-plasma/50 focus:bg-white/[0.07] transition-all"
-                />
-                <button
-                  type="submit"
-                  disabled={!text.trim()}
-                  className="w-11 h-11 rounded-xl bg-plasma/25 border border-plasma/40 text-plasma hover:bg-plasma/35 hover:border-plasma/60 disabled:opacity-30 transition-all flex items-center justify-center flex-shrink-0"
-                  aria-label="Send message"
+              {chatLocked ? (
+                <div className="flex items-center gap-2.5 px-4 py-3 border-t border-white/[0.07] flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <div className="flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <svg className="w-3.5 h-3.5 text-white/25 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span className="text-xs text-white/25">
+                      {phase === PHASES.SCOREBOARD ? 'Case closed — chat ended' : 'Chat opens when the case begins'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  onSubmit={submit}
+                  className="flex gap-2 p-3 border-t border-white/[0.07] flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
                 >
-                  <Send className="w-4 h-4" strokeWidth={2.25} />
-                </button>
-              </form>
+                  <input
+                    ref={inputRef}
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    maxLength={280}
+                    placeholder={objectionMode ? 'Object! Coordinate!' : 'Say something…'}
+                    className="flex-1 bg-white/[0.05] border border-white/[0.09] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-plasma/50 focus:bg-white/[0.07] transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!text.trim()}
+                    className="w-11 h-11 rounded-xl bg-plasma/25 border border-plasma/40 text-plasma hover:bg-plasma/35 hover:border-plasma/60 disabled:opacity-30 transition-all flex items-center justify-center flex-shrink-0"
+                    aria-label="Send message"
+                  >
+                    <Send className="w-4 h-4" strokeWidth={2.25} />
+                  </button>
+                </form>
+              )}
             </motion.aside>
           </>
         )}
