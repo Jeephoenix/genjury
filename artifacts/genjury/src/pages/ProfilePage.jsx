@@ -155,22 +155,30 @@ export default function ProfilePage() {
 
       {/* Connect wallet CTA */}
       {!connected && (
-        <div className="glass rounded-2xl border border-crimson/25 p-5 flex items-center gap-4 relative overflow-hidden"
+        <div className="glass rounded-2xl border border-crimson/25 p-5 relative overflow-hidden"
           style={{ background: 'rgba(232,0,45,0.04)' }}>
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/40 to-transparent" />
-          <div className="w-12 h-12 rounded-xl bg-crimson/10 border border-crimson/25 flex items-center justify-center text-crimson flex-shrink-0">
-            <Lock className="w-6 h-6" strokeWidth={1.75} />
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-crimson/10 border border-crimson/25 flex items-center justify-center text-crimson flex-shrink-0 mt-0.5 sm:mt-0">
+              <Lock className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-display font-bold text-base leading-snug">Connect a wallet to get started</div>
+              <div className="text-white/45 text-sm mt-1 leading-relaxed">Your identity, wins, and XP are tied to your address.</div>
+              <button
+                onClick={() => setOpenWallet(true)}
+                className="btn btn-crimson mt-4 px-5 py-2.5 text-sm inline-flex items-center justify-center gap-2 w-full sm:hidden"
+              >
+                <Wallet className="w-4 h-4" /> Connect wallet
+              </button>
+            </div>
+            <button
+              onClick={() => setOpenWallet(true)}
+              className="hidden sm:inline-flex btn btn-crimson px-4 py-2.5 text-sm items-center gap-2 flex-shrink-0"
+            >
+              <Wallet className="w-4 h-4" /> Connect
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-white font-display font-bold text-base">Connect a wallet to get started</div>
-            <div className="text-white/45 text-sm mt-0.5">Your identity, wins, and XP are tied to your address.</div>
-          </div>
-          <button
-            onClick={() => setOpenWallet(true)}
-            className="btn btn-crimson px-4 py-2.5 text-sm inline-flex items-center gap-2 flex-shrink-0"
-          >
-            <Wallet className="w-4 h-4" /> Connect
-          </button>
         </div>
       )}
 
