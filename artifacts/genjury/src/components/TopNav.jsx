@@ -25,7 +25,7 @@ const NavTab = memo(function NavTab({ id, label, icon: Icon, active, onSelect })
       <span>{label}</span>
       {active && (
         <>
-          <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-crimson/50 via-crimson to-crimson/50 shadow-[0_0_8px_#e8002d]" />
+          <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-crimson/40 via-crimson to-crimson/40 shadow-[0_0_5px_#a0324b]" />
           <span className="absolute inset-0 rounded-xl bg-crimson/[0.03]" />
         </>
       )}
@@ -47,7 +47,7 @@ const MobileNavTab = memo(function MobileNavTab({ id, label, icon: Icon, active,
       </div>
       <span className="tracking-wide">{label}</span>
       {active && (
-        <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-crimson to-transparent shadow-[0_0_8px_#e8002d]" />
+        <span className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-gradient-to-r from-transparent via-crimson to-transparent shadow-[0_0_5px_#a0324b]" />
       )}
     </button>
   )
