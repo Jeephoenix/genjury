@@ -101,7 +101,19 @@ export default function WalletButton({ compact = false }) {
   if (connected) {
     return (
       <div className="inline-flex items-center gap-1.5">
-        {/* Network pill — dot only on mobile, dot+name on desktop */}
+        {/* Address pill */}
+        <button
+          onClick={() => setOpen(true)}
+          className={`group inline-flex items-center gap-1.5 rounded-xl border border-plasma/30 bg-plasma/10 text-white transition-all duration-200 hover:bg-plasma/18 hover:border-plasma/50 hover:shadow-[0_0_16px_rgba(162,89,255,0.18)] ${
+            compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-1.5 text-[11px]'
+          }`}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_5px_#7fff6e] flex-shrink-0" />
+          <span className="font-mono tracking-tight text-white/85">{short(address)}</span>
+          {!compact && <ChevronDown className="w-3 h-3 text-white/35 group-hover:text-white/55 transition-colors" strokeWidth={2.5} />}
+        </button>
+
+        {/* Network pill — rightmost, dot only on mobile, dot+name on desktop */}
         <div className="relative" ref={wrapRef}>
           <button
             onClick={() => setDropOpen((v) => !v)}
@@ -118,7 +130,6 @@ export default function WalletButton({ compact = false }) {
               className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{ background: meta.color, boxShadow: `0 0 4px ${meta.color}80` }}
             />
-            {/* Show name only on desktop non-compact */}
             {!compact && (
               <span className="text-[11px] font-mono text-white/55 leading-none tracking-tight hidden sm:inline">
                 {meta.badge}
@@ -139,18 +150,6 @@ export default function WalletButton({ compact = false }) {
             />
           )}
         </div>
-
-        {/* Address pill */}
-        <button
-          onClick={() => setOpen(true)}
-          className={`group inline-flex items-center gap-1.5 rounded-xl border border-plasma/30 bg-plasma/10 text-white transition-all duration-200 hover:bg-plasma/18 hover:border-plasma/50 hover:shadow-[0_0_16px_rgba(162,89,255,0.18)] ${
-            compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-1.5 text-[11px]'
-          }`}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-neon shadow-[0_0_5px_#7fff6e] flex-shrink-0" />
-          <span className="font-mono tracking-tight text-white/85">{short(address)}</span>
-          {!compact && <ChevronDown className="w-3 h-3 text-white/35 group-hover:text-white/55 transition-colors" strokeWidth={2.5} />}
-        </button>
       </div>
     )
   }
