@@ -389,27 +389,32 @@ export const isInjectedActive = isWalletConnected
 const DEFAULT_NETWORK = 'studionet'
 
 const NETWORK_INFO = {
-  bradbury: {
-    label:    'GenLayer Testnet (Bradbury)',
-    explorer: 'https://explorer-bradbury.genlayer.com',
-    faucet:   'https://testnet-faucet.genlayer.foundation',
-  },
-  asimov: {
-    label:    'GenLayer Testnet (Asimov)',
-    explorer: 'https://explorer-asimov.genlayer.com',
-    faucet:   'https://testnet-faucet.genlayer.foundation',
-  },
   studionet: {
     label:    'GenLayer Studio',
     explorer: null,
     faucet:   null,
   },
+  bradbury: {
+    label:    'Testnet · Bradbury',
+    explorer: 'https://explorer-bradbury.genlayer.com',
+    faucet:   'https://testnet-faucet.genlayer.foundation',
+  },
+  asimov: {
+    label:    'Testnet · Asimov',
+    explorer: 'https://explorer-asimov.genlayer.com',
+    faucet:   'https://testnet-faucet.genlayer.foundation',
+  },
   localnet: {
-    label:    'GenLayer Localnet',
+    label:    'Localnet',
     explorer: null,
     faucet:   null,
   },
 }
+
+// ── Runtime network override ──────────────────────────────────────────────────
+// Lets users switch networks from the wallet panel without a redeploy.
+// Stored in localStorage; env var VITE_GENLAYER_NETWORK is the build-time default.
+const STORAGE_NETWORK_KEY = 'genjury_network_override'
 
 function normalizeNetworkKey(raw) {
   const k = (raw || '').toLowerCase()
@@ -422,7 +427,28 @@ function normalizeNetworkKey(raw) {
 }
 
 export function getNetworkName() {
+  // 1. Runtime localStorage override (set by setRuntimeNetworkName)
+  try {
+    const stored = localStorage.getItem(STORAGE_NETWORK_KEY)
+    if (stored && NETWORK_INFO[stored]) return stored
+  } catch {}
+  // 2. Build-time env var (Vercel / .env)
   return normalizeNetworkKey(import.meta.env.VITE_GENLAYER_NETWORK)
+}
+
+// Returns one descriptor per network for the wallet-panel switcher.
+export function getNetworkOptions() {
+  return Object.entries(NETWORK_INFO).map(([key, v]) => ({ key, label: v.label }))
+}
+
+// Persist a network choice at runtime; invalidates cached clients so they
+// rebuild for the new chain on the next read/write.
+export function setRuntimeNetworkName(key) {
+  if (!NETWORK_INFO[key]) return
+  try { localStorage.setItem(STORAGE_NETWORK_KEY, key) } catch {}
+  _client     = null
+  _readClient = null
+  notify()
 }
 
 export function getNetworkInfo() {
@@ -797,13 +823,16 @@ export function parseGen(str) {
   return BigInt(whole) * (10n ** GEN_DECIMALS) + BigInt(fracPadded || '0')
 }
 
-// Returns the best available block-explorer base URL for the current network.
-// Priority: NETWORK_INFO entry → chain.blockExplorers.default.url → null
+// Returns the explorer base URL for the current network.
+// Only uses the curated NETWORK_INFO entries — never falls back to
+// chain.blockExplorers, because studionet's built-in explorer URL
+// (genlayer-explorer.vercel.app) is a paused/unreliable deployment.
+// bradbury → https://explorer-bradbury.genlayer.com
+// asimov   → https://explorer-asimov.genlayer.com
+// studionet / localnet → null (copy-to-clipboard shown instead)
 export function getExplorerBaseUrl() {
   const info = getNetworkInfo()
   if (info?.explorer) return info.explorer.replace(/\/$/, '')
-  const chainExplorer = getChain()?.blockExplorers?.default?.url
-  if (chainExplorer) return chainExplorer.replace(/\/$/, '')
   return null
 }
 
