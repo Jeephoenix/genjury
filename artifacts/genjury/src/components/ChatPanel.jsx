@@ -160,7 +160,7 @@ export default function ChatPanel() {
       {/* ── Floating toggle button ── */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-4 right-4 z-40 px-4 py-2.5 rounded-full glass border border-plasma/35 text-plasma hover:bg-plasma/20 hover:border-plasma/55 transition-all duration-200 inline-flex items-center gap-2 shadow-lg backdrop-blur-xl"
+        className="fixed bottom-[4.5rem] md:bottom-6 right-4 z-[55] px-4 py-2.5 rounded-full glass border border-plasma/35 text-plasma hover:bg-plasma/20 hover:border-plasma/55 transition-all duration-200 inline-flex items-center gap-2 shadow-lg backdrop-blur-xl"
         aria-label="Toggle chat"
       >
         {open
