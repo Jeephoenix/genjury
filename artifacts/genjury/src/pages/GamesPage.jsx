@@ -88,9 +88,9 @@ const ACCENT = {
   signal: {
     border: 'border-signal/40', text: 'text-signal', bg: 'bg-signal/10',
     chip: 'bg-signal/15 text-signal border-signal/30',
-    glow: 'shadow-[0_0_50px_rgba(255,107,53,0.08)]',
+    glow: 'shadow-[0_0_50px_rgba(192,91,48,0.06)]',
     topBar: 'from-signal/60',
-    hoverGlow: 'hover:shadow-[0_0_60px_rgba(255,107,53,0.15)]',
+    hoverGlow: 'hover:shadow-[0_0_60px_rgba(192,91,48,0.11)]',
     notify: 'border-signal/30 bg-signal/10 text-signal hover:bg-signal/18 hover:border-signal/50',
     notifyActive: 'border-signal/50 bg-signal/20 text-signal',
   },
