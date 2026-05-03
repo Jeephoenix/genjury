@@ -1,15 +1,13 @@
-/**
- * Vercel Serverless Function — /api/chat
- * Handles GET (fetch messages), POST (send message), PATCH (toggle reaction)
- *
- * In-memory store is used when DATABASE_URL is not set.
- * NOTE: Vercel serverless functions are stateless; in-memory data resets on
- * cold starts. For persistent chat, set DATABASE_URL (Neon / Supabase etc.).
- */
+// api/chat.js — Vercel Serverless Function
+//
+// IMPORTANT: Zero top-level external imports.
+// Any external package (neon) is loaded lazily via dynamic import ONLY when
+// DATABASE_URL is set. This guarantees the function boots on cold start even
+// with no database configured (pure in-memory fallback).
 
-// ── In-memory fallback ──────────────────────────────────────────────────────
-const _mem = new Map()          // roomCode → message[]
-const _memReactions = new Map() // msgId    → { emoji: userId[] }
+// ── In-memory fallback ────────────────────────────────────────────────────────
+const _mem          = new Map()  // roomCode → msg[]
+const _memReactions = new Map()  // msgId    → { emoji: userId[] }
 
 function memGet(room, since) {
   return (_mem.get(room) || [])
@@ -36,148 +34,166 @@ function memPost(roomCode, msg) {
   }
 }
 
-// ── DB helpers (only used when DATABASE_URL is present) ─────────────────────
-let _db = null
-async function getDb() {
-  if (_db) return _db
-  const { drizzle }    = await import('drizzle-orm/neon-http')
-  const { neon }       = await import('@neondatabase/serverless')
-  const { chatMessages, chatReactions } = await import('@workspace/db')
-  const sql = neon(process.env.DATABASE_URL)
-  _db = { db: drizzle(sql), chatMessages, chatReactions }
-  return _db
-}
-
+// ── Neon DB (only when DATABASE_URL is configured) ────────────────────────────
 const USE_DB = !!process.env.DATABASE_URL
+let sql      = null
+let dbReady  = null
 
-// ── CORS headers ─────────────────────────────────────────────────────────────
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin',  '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+async function getSQL() {
+  if (sql) return sql
+  const { neon } = await import('@neondatabase/serverless')
+  sql = neon(process.env.DATABASE_URL)
+  return sql
 }
 
-// ── Handler ──────────────────────────────────────────────────────────────────
+async function ensureSchema() {
+  if (dbReady) return dbReady
+  dbReady = (async () => {
+    const db = await getSQL()
+    await db`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id          TEXT PRIMARY KEY,
+        room_code   TEXT NOT NULL,
+        author_id   TEXT NOT NULL,
+        author_name TEXT NOT NULL DEFAULT 'Player',
+        avatar      TEXT DEFAULT '',
+        color       TEXT DEFAULT '',
+        text        TEXT NOT NULL,
+        kind        TEXT NOT NULL DEFAULT 'taunt',
+        ts          BIGINT NOT NULL,
+        created_at  TIMESTAMPTZ DEFAULT now()
+      )
+    `
+    await db`CREATE INDEX IF NOT EXISTS chat_room_ts_idx ON chat_messages (room_code, ts)`
+    await db`
+      CREATE TABLE IF NOT EXISTS chat_reactions (
+        msg_id  TEXT NOT NULL,
+        emoji   TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (msg_id, emoji, user_id)
+      )
+    `
+  })().catch(e => { dbReady = null; throw e })
+  return dbReady
+}
+
+function parseBody(req) {
+  if (!req.body) return {}
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body) } catch { return {} }
+  }
+  return req.body
+}
+
 export default async function handler(req, res) {
-  cors(res)
+  res.setHeader('Access-Control-Allow-Origin',  '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') return res.status(204).end()
 
-  // ── GET /api/chat?room=...&since=... ──────────────────────────────────────
-  if (req.method === 'GET') {
-    const room  = String(req.query.room  || '')
-    const since = Number(req.query.since || 0)
-    if (!room) return res.status(400).json({ error: 'room required' })
+  try {
 
-    if (USE_DB) {
-      try {
-        const { db, chatMessages, chatReactions } = await getDb()
-        const { eq, gt, and, inArray } = await import('drizzle-orm')
-        const rows = await db
-          .select()
-          .from(chatMessages)
-          .where(and(eq(chatMessages.roomCode, room), gt(chatMessages.ts, since)))
-          .orderBy(chatMessages.ts)
-          .limit(100)
+    if (req.method === 'GET') {
+      const room  = String(req.query.room  || '')
+      const since = Number(req.query.since || 0)
+      if (!room) return res.status(400).json({ error: 'room required' })
 
+      if (USE_DB) {
+        const db = await getSQL()
+        await ensureSchema()
+        const rows = await db`
+          SELECT id, author_id, author_name, avatar, color, text, kind, ts
+          FROM   chat_messages
+          WHERE  room_code = ${room} AND ts > ${since}
+          ORDER  BY ts ASC
+          LIMIT  100
+        `
         let messages = rows
         if (rows.length) {
           const msgIds = rows.map(r => r.id)
-          const rxRows = await db.select().from(chatReactions).where(inArray(chatReactions.msgId, msgIds))
-          const rxMap  = {}
+          const rxRows = await db`
+            SELECT msg_id, emoji, user_id FROM chat_reactions
+            WHERE  msg_id = ANY(${msgIds})
+          `
+          const rxMap = {}
           for (const rx of rxRows) {
-            if (!rxMap[rx.msgId])         rxMap[rx.msgId] = {}
-            if (!rxMap[rx.msgId][rx.emoji]) rxMap[rx.msgId][rx.emoji] = []
-            rxMap[rx.msgId][rx.emoji].push(rx.userId)
+            if (!rxMap[rx.msg_id])           rxMap[rx.msg_id] = {}
+            if (!rxMap[rx.msg_id][rx.emoji]) rxMap[rx.msg_id][rx.emoji] = []
+            rxMap[rx.msg_id][rx.emoji].push(rx.user_id)
           }
           messages = rows.map(r => ({ ...r, reactions: rxMap[r.id] || {} }))
         }
         return res.status(200).json({ messages })
-      } catch (e) {
-        console.error('chat GET db error', e)
-        return res.status(500).json({ error: 'server error' })
       }
+
+      return res.status(200).json({ messages: memGet(room, since) })
     }
 
-    return res.status(200).json({ messages: memGet(room, since) })
-  }
-
-  // ── POST /api/chat ────────────────────────────────────────────────────────
-  if (req.method === 'POST') {
-    const { roomCode, msg } = req.body || {}
-    if (!roomCode || !msg?.text || !msg?.authorId) {
-      return res.status(400).json({ error: 'bad payload' })
-    }
-
-    if (USE_DB) {
-      try {
-        const { db, chatMessages } = await getDb()
-        await db.insert(chatMessages).values({
-          id:         String(msg.id),
-          roomCode,
-          authorId:   msg.authorId,
-          authorName: msg.authorName,
-          avatar:     msg.avatar  || '',
-          color:      msg.color   || '',
-          text:       String(msg.text).slice(0, 280),
-          kind:       msg.kind === 'objection' ? 'objection' : 'taunt',
-          ts:         Number(msg.ts) || Date.now(),
-        }).onConflictDoNothing()
-        return res.status(200).json({ ok: true })
-      } catch (e) {
-        console.error('chat POST db error', e)
-        return res.status(500).json({ error: 'server error' })
+    if (req.method === 'POST') {
+      const { roomCode, msg } = parseBody(req)
+      if (!roomCode || !msg?.text || !msg?.authorId) {
+        return res.status(400).json({ error: 'bad payload' })
       }
+      if (USE_DB) {
+        const db   = await getSQL()
+        await ensureSchema()
+        const text = String(msg.text).slice(0, 280)
+        const kind = msg.kind === 'objection' ? 'objection' : 'taunt'
+        const ts   = Number(msg.ts) || Date.now()
+        await db`
+          INSERT INTO chat_messages
+            (id, room_code, author_id, author_name, avatar, color, text, kind, ts)
+          VALUES
+            (${String(msg.id)}, ${roomCode}, ${msg.authorId}, ${msg.authorName || 'Player'},
+             ${msg.avatar || ''}, ${msg.color || ''}, ${text}, ${kind}, ${ts})
+          ON CONFLICT (id) DO NOTHING
+        `
+      } else {
+        memPost(roomCode, msg)
+      }
+      return res.status(200).json({ ok: true })
     }
 
-    memPost(roomCode, msg)
-    return res.status(200).json({ ok: true })
-  }
-
-  // ── PATCH /api/chat (toggle reaction) ─────────────────────────────────────
-  if (req.method === 'PATCH') {
-    const { roomCode, msgId, emoji, userId } = req.body || {}
-    const VALID = ['👍', '🔥', '⚖️']
-    if (!roomCode || !msgId || !emoji || !userId || !VALID.includes(emoji)) {
-      return res.status(400).json({ error: 'bad payload' })
-    }
-
-    if (USE_DB) {
-      try {
-        const { db, chatReactions } = await getDb()
-        const { eq, and }  = await import('drizzle-orm')
-        const existing = await db.select().from(chatReactions)
-          .where(and(eq(chatReactions.msgId, msgId), eq(chatReactions.emoji, emoji), eq(chatReactions.userId, userId)))
-
-        if (existing.length) {
-          await db.delete(chatReactions).where(
-            and(eq(chatReactions.msgId, msgId), eq(chatReactions.emoji, emoji), eq(chatReactions.userId, userId))
-          )
+    if (req.method === 'PATCH') {
+      const { roomCode, msgId, emoji, userId } = parseBody(req)
+      const VALID = ['👍', '🔥', '⚖️']
+      if (!roomCode || !msgId || !emoji || !userId || !VALID.includes(emoji)) {
+        return res.status(400).json({ error: 'bad payload' })
+      }
+      if (USE_DB) {
+        const db = await getSQL()
+        await ensureSchema()
+        const exists = await db`
+          SELECT 1 FROM chat_reactions
+          WHERE msg_id = ${msgId} AND emoji = ${emoji} AND user_id = ${userId}
+        `
+        if (exists.length) {
+          await db`DELETE FROM chat_reactions WHERE msg_id = ${msgId} AND emoji = ${emoji} AND user_id = ${userId}`
         } else {
-          await db.insert(chatReactions).values({ msgId, emoji, userId }).onConflictDoNothing()
+          await db`INSERT INTO chat_reactions (msg_id, emoji, user_id) VALUES (${msgId}, ${emoji}, ${userId}) ON CONFLICT DO NOTHING`
         }
-
-        const all       = await db.select().from(chatReactions).where(eq(chatReactions.msgId, msgId))
+        const all       = await db`SELECT emoji, user_id FROM chat_reactions WHERE msg_id = ${msgId}`
         const reactions = {}
         for (const r of all) {
           if (!reactions[r.emoji]) reactions[r.emoji] = []
-          reactions[r.emoji].push(r.userId)
+          reactions[r.emoji].push(r.user_id)
         }
         return res.status(200).json({ ok: true, reactions })
-      } catch (e) {
-        console.error('chat PATCH db error', e)
-        return res.status(500).json({ error: 'server error' })
       }
+      const cur   = { ...(_memReactions.get(msgId) || {}) }
+      const users = cur[emoji] ? [...cur[emoji]] : []
+      const idx   = users.indexOf(userId)
+      if (idx >= 0) { users.splice(idx, 1) } else { users.push(userId) }
+      if (users.length) { cur[emoji] = users } else { delete cur[emoji] }
+      _memReactions.set(msgId, cur)
+      return res.status(200).json({ ok: true, reactions: cur })
     }
 
-    // In-memory reaction toggle
-    const cur   = { ...(_memReactions.get(msgId) || {}) }
-    const users = cur[emoji] ? [...cur[emoji]] : []
-    const idx   = users.indexOf(userId)
-    if (idx >= 0) { users.splice(idx, 1) } else { users.push(userId) }
-    if (users.length) { cur[emoji] = users } else { delete cur[emoji] }
-    _memReactions.set(msgId, cur)
-    return res.status(200).json({ ok: true, reactions: cur })
-  }
+    res.setHeader('Allow', 'GET, POST, PATCH')
+    return res.status(405).end()
 
-  return res.status(405).json({ error: 'method not allowed' })
+  } catch (e) {
+    console.error('[chat api]', e)
+    return res.status(500).json({ error: 'server error', detail: String(e?.message || e) })
+  }
 }
