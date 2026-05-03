@@ -12,6 +12,7 @@ import {
   subscribeJoinedRooms,
 } from '../lib/joinedRooms'
 import Avatar from '../components/Avatar'
+import { resolveUsernames } from '../lib/profileApi'
 
 // Fallback: aggregate stats from per-room state snapshots.
 function aggregateFromRooms(roomStates, address) {
@@ -57,6 +58,7 @@ export default function LeaderboardPage() {
   const [roomCount, setRoomCount] = useState(0) // -1 = global mode
   const [tick,      setTick]      = useState(0)
   const [, force]                  = useState(0)
+  const [nameMap,   setNameMap]   = useState({})
   const address = myAddress()
 
   useEffect(() => subscribeWallet(() => force(n => n + 1)), [])
@@ -114,6 +116,14 @@ export default function LeaderboardPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refresh() }, [rooms, tick, address])
+
+  // Resolve server-registered usernames for all players on the board
+  useEffect(() => {
+    if (!players.length) return
+    resolveUsernames(players.map(p => p.addr)).then(map => {
+      if (Object.keys(map).length) setNameMap(prev => ({ ...prev, ...map }))
+    }).catch(() => {})
+  }, [players])
 
   const top3 = players.slice(0, 3)
   const rest = players.slice(3)
@@ -187,13 +197,13 @@ export default function LeaderboardPage() {
                       <div className="min-w-0 flex-1">
                         <div className="text-white/35 text-[10px] font-mono mb-0.5">RANK #{p.rank}</div>
                         <div className="text-white font-display font-bold text-base truncate flex items-center gap-1.5">
-                          {p.name}
+                          {nameMap[p.addr] || p.name}
                           {p.isMe && (
                             <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest flex-shrink-0">YOU</span>
                           )}
                         </div>
                       </div>
-                      <Avatar name={p.name} color={p.color} size={36} />
+                      <Avatar name={nameMap[p.addr] || p.name} color={p.color} size={36} />
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
@@ -230,10 +240,10 @@ export default function LeaderboardPage() {
                   >
                     <div className="col-span-1 text-white/35 font-mono text-sm">{p.rank}</div>
                     <div className="col-span-6 min-w-0 flex items-center gap-2.5">
-                      <Avatar name={p.name} color={p.color} size={28} />
+                      <Avatar name={nameMap[p.addr] || p.name} color={p.color} size={28} />
                       <div className="min-w-0">
                         <div className="text-white text-sm truncate flex items-center gap-1.5">
-                          {p.name}
+                          {nameMap[p.addr] || p.name}
                           {p.isMe && (
                             <span className="badge bg-plasma/15 text-plasma border border-plasma/30 text-[9px] tracking-widest">YOU</span>
                           )}
