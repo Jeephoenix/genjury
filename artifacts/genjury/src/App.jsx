@@ -1,6 +1,8 @@
 import React, { useEffect, Suspense, lazy } from 'react'
 import useGameStore, { PHASES } from './lib/store'
-import { isValidRoomCode, normalizeRoomCode, autoReconnect } from './lib/genlayer'
+import { isValidRoomCode, normalizeRoomCode, autoReconnect, myAddress, subscribeWallet } from './lib/genlayer'
+import { applyServerProfile } from './lib/profile'
+import { fetchServerProfile } from './lib/profileApi'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
 import TopNav from './components/TopNav'
@@ -51,6 +53,22 @@ export default function App() {
   // Uses eth_accounts (no popup) — only restores if already authorised.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { autoReconnect() }, [])
+
+  // Globally sync the claimed username whenever wallet connects or switches.
+  // This ensures profile.name is the server-registered identity everywhere —
+  // in chat bubbles, the game lobby, leaderboard, and the wallet button.
+  useEffect(() => {
+    async function syncProfile(addr) {
+      if (!addr) return
+      try {
+        const p = await fetchServerProfile(addr)
+        if (p) applyServerProfile(p)
+      } catch {}
+    }
+    const unsub = subscribeWallet(() => syncProfile(myAddress()))
+    syncProfile(myAddress())  // also run immediately on mount
+    return unsub
+  }, [])
 
   // Deep-link: ?join=CODE → auto-navigate to Mistrial tab so the
   // JoinInviteSheet fires even if the user lands on a different tab.
