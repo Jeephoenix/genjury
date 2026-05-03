@@ -27,6 +27,7 @@ import {
 } from './genlayer'
 import { getProfile } from './profile'
 import { rememberJoinedRoom, forgetJoinedRoom, markRoomFinished } from './joinedRooms'
+import { registerMember, clearRoom } from './chatApi'
 
 export const PHASES = {
   LOBBY:          'lobby',
@@ -301,6 +302,10 @@ function applyContractState(get, s) {
           winnerName:  _sorted[0]?.name || null,
           finishedAt:  Date.now(),
         })
+        // Wipe server-side chat history so the room starts fresh if reused
+        if (local.myId && norm(local.myId) === norm(local.hostAddress)) {
+          clearRoom(local.roomCode, local.myId).catch(() => {})
+        }
       }
   }
 
@@ -567,6 +572,7 @@ const useGameStore = create((set, get) => ({
         prizePoolWei: 0n,
         activeTab:    'lobby',
       })
+      registerMember(code, me, true).catch(() => {})
       startPolling(get)
       pushToast('success', `Room opened — code ${code}`)
       // Refresh lobby in the background so the new room shows up.
@@ -667,6 +673,7 @@ const useGameStore = create((set, get) => ({
             set({ roomCode: code, myId: me, activeTab: 'lobby' })
             applyContractState(get, freshParsed)
             startPolling(get)
+            registerMember(code, me, false).catch(() => {})
             pushToast('success', `You're seated in ${code}`)
             set({ loading: false })
             return
@@ -680,6 +687,7 @@ const useGameStore = create((set, get) => ({
       set({ roomCode: code, myId: me, activeTab: 'lobby' })
       applyContractState(get, parsed)
       startPolling(get)
+      registerMember(code, me, false).catch(() => {})
       pushToast('success', `You're seated in ${code}`)
       set({ loading: false })
     } catch (e) {
@@ -744,6 +752,7 @@ const useGameStore = create((set, get) => ({
           rememberJoinedRoom(code)
           applyContractState(get, parsed)
           startPolling(get)
+          registerMember(code, me, false).catch(() => {})
           return
         }
       } catch {
@@ -754,6 +763,7 @@ const useGameStore = create((set, get) => ({
     set({ roomCode: code, myId: me, chatMessages: [], activeTab: 'lobby' })
     rememberJoinedRoom(code)
     startPolling(get)
+    registerMember(code, me, false).catch(() => {})
     await refreshState(get)
   },
 
