@@ -7,6 +7,8 @@
 // give users a false sense of permanence. The server returns 503 when
 // DATABASE_URL is not configured, and we surface that clearly.
 
+import { seedEnsCache } from './ens'
+
 const BASE = '/api/profile'
 
 let _cache = {}        // address -> profile | null
@@ -37,6 +39,8 @@ export async function fetchServerProfile(address) {
   try {
     const data = await resp.json()
     _cache[key] = data
+    // Seed ENS cache if the server returned an ENS name for this address
+    if (data.ensName) seedEnsCache({ [key]: data.ensName })
     notify()
     return data
   } catch {
@@ -45,10 +49,6 @@ export async function fetchServerProfile(address) {
 }
 
 // Check availability of a username.
-// Returns { available: true/false, error?: string }.
-// If the server is unreachable (network error), optimistically allows the
-// user to proceed — the claim step will catch real conflicts.
-// 4xx/5xx responses from a reachable server are always respected.
 export async function checkUsername(username) {
   const trimmed = (username || '').trim()
   if (trimmed.length < 5) {
@@ -62,11 +62,9 @@ export async function checkUsername(username) {
   try {
     resp = await fetch(`${BASE}/check?username=${encodeURIComponent(trimmed)}`)
   } catch {
-    // Genuine network error (offline, DNS failure) — allow optimistically
     return { available: true }
   }
 
-  // 503 = DB not configured; 5xx = server error
   if (resp.status === 503 || resp.status >= 500) {
     let data = {}
     try { data = await resp.json() } catch {}
@@ -76,7 +74,6 @@ export async function checkUsername(username) {
     }
   }
 
-  // Non-2xx (e.g. 404) from a deployed but misconfigured server
   if (!resp.ok) return { available: false, error: 'Could not verify availability.' }
 
   try {
@@ -86,9 +83,7 @@ export async function checkUsername(username) {
   }
 }
 
-// Claim a permanent identity. Returns { ok, username } or throws.
-// Never silently falls back to localStorage — the claim MUST be persisted
-// server-side or the user gets a real error explaining why.
+// Claim a permanent identity.
 export async function claimIdentity(address, username, avatarUrl = '', color = '#a259ff') {
   const key     = address.toLowerCase()
   const trimmed = username.trim()
@@ -101,14 +96,12 @@ export async function claimIdentity(address, username, avatarUrl = '', color = '
       body:    JSON.stringify({ address: key, username: trimmed, avatarUrl, color }),
     })
   } catch {
-    // Network error — user is offline or server is completely down
     throw new Error('Could not reach the identity server. Check your connection and try again.')
   }
 
   let data = {}
   try { data = await resp.json() } catch {}
 
-  // 503 = DATABASE_URL not configured on the server
   if (resp.status === 503) {
     throw new Error(
       data.error ||
@@ -116,9 +109,7 @@ export async function claimIdentity(address, username, avatarUrl = '', color = '
     )
   }
 
-  // 409 = conflict (username taken OR wallet already claimed)
   if (resp.status === 409) {
-    // If the wallet already claimed, load the existing profile
     if (data.username) {
       _cache[key] = { address: key, username: data.username, avatarUrl, color }
       notify()
@@ -126,17 +117,14 @@ export async function claimIdentity(address, username, avatarUrl = '', color = '
     throw new Error(data.error || 'Username already taken.')
   }
 
-  // Other 4xx = validation / bad request
   if (resp.status >= 400 && resp.status < 500) {
     throw new Error(data.error || 'Invalid claim request.')
   }
 
-  // 5xx = server/DB error (transient)
   if (!resp.ok) {
     throw new Error(data.error || 'Server error — please try again in a moment.')
   }
 
-  // Success — update cache and notify subscribers
   _cache[key] = {
     address:   key,
     username:  data.username ?? trimmed,
@@ -171,16 +159,20 @@ export async function updateAvatar(address, avatarUrl) {
   return data
 }
 
-// Synchronous cache lookup (may be null if not yet fetched).
+// Synchronous cache lookup.
+export function getCachedServerProfile(address) {
+  if (!address) return null
+  return _cache[address.toLowerCase()] || null
+}
 
-// Batch-resolve wallet addresses to their server-registered usernames.
-// Used by the Leaderboard and any component showing multiple players.
+// Batch-resolve wallet addresses to their server-registered usernames + ENS names.
 // Returns { [lowercaseAddress]: username } for addresses that have claimed an identity.
+// Also seeds the ENS cache from server data as a side-effect, so batchLookupEns
+// avoids redundant mainnet RPC calls for addresses the server already knows about.
 export async function resolveUsernames(addresses) {
   if (!addresses || !addresses.length) return {}
   const unique = [...new Set(addresses.map(a => String(a).toLowerCase()))]
 
-  // Fill from local cache first
   const result = {}
   const missing = []
   for (const addr of unique) {
@@ -196,19 +188,22 @@ export async function resolveUsernames(addresses) {
     const resp = await fetch(`${BASE}/batch?addresses=${encodeURIComponent(missing.join(','))}`)
     if (!resp.ok) return result
     const data = await resp.json()
+
+    // Collect ENS names returned by the batch endpoint to seed the ENS cache
+    const ensMap: Record<string, string> = {}
+
     for (const [addr, prof] of Object.entries(data || {})) {
-      if (prof?.username) {
-        result[addr] = prof.username
-        _cache[addr] = prof
+      const p = prof as any
+      if (p?.username) {
+        result[addr] = p.username
+        _cache[addr] = p
       }
+      if (p?.ensName) ensMap[addr] = p.ensName
     }
+
+    if (Object.keys(ensMap).length) seedEnsCache(ensMap)
     if (Object.keys(data).length) notify()
   } catch {}
 
   return result
-}
-
-export function getCachedServerProfile(address) {
-  if (!address) return null
-  return _cache[address.toLowerCase()] || null
 }

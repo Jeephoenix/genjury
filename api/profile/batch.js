@@ -1,6 +1,7 @@
 // api/profile/batch.js — GET /api/profile/batch?addresses=addr1,addr2,...
-// Returns { [lowercaseAddress]: { username, avatarUrl, color } }
+// Returns { [lowercaseAddress]: { username?, avatarUrl?, color?, ensName? } }
 // Accepts up to 50 addresses per request; silently ignores extras.
+// ensName is included from the server-side ens_cache table when available.
 
 const USE_DB = !!process.env.DATABASE_URL
 let sql     = null
@@ -28,6 +29,13 @@ async function ensureSchema() {
         CONSTRAINT player_profiles_username_lower_uniq UNIQUE (username_lower)
       )
     `
+    await db`
+      CREATE TABLE IF NOT EXISTS ens_cache (
+        address    TEXT PRIMARY KEY,
+        ens_name   TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      )
+    `
   })().catch(e => { dbReady = null; throw e })
   return dbReady
 }
@@ -49,25 +57,34 @@ module.exports = async function handler(req, res) {
   if (!addresses.length) return res.status(200).json({})
 
   if (!USE_DB) {
-    // No DB — return empty map; clients fall back to contract names
     return res.status(200).json({})
   }
 
   try {
     const db = await getSQL()
     await ensureSchema()
+
+    // Left join ens_cache so ENS names come back alongside profile data in
+    // a single round-trip, even for addresses that haven't claimed a username.
     const rows = await db`
-      SELECT address, username, avatar_url, color
-      FROM player_profiles
-      WHERE address = ANY(${addresses})
+      SELECT
+        COALESCE(p.address, e.address) AS address,
+        p.username,
+        p.avatar_url,
+        p.color,
+        e.ens_name
+      FROM player_profiles p
+      FULL OUTER JOIN ens_cache e ON e.address = p.address
+      WHERE COALESCE(p.address, e.address) = ANY(${addresses})
     `
     const result = {}
     for (const r of rows) {
-      result[r.address] = {
-        username:  r.username,
-        avatarUrl: r.avatar_url,
-        color:     r.color,
-      }
+      const entry = {}
+      if (r.username)  entry.username  = r.username
+      if (r.avatar_url) entry.avatarUrl = r.avatar_url
+      if (r.color)     entry.color     = r.color
+      if (r.ens_name)  entry.ensName   = r.ens_name
+      if (Object.keys(entry).length) result[r.address] = entry
     }
     return res.status(200).json(result)
   } catch (e) {

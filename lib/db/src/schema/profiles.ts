@@ -20,3 +20,14 @@ export const insertPlayerProfileSchema = createInsertSchema(playerProfiles).omit
 });
 export type InsertPlayerProfile = z.infer<typeof insertPlayerProfileSchema>;
 export type PlayerProfile = typeof playerProfiles.$inferSelect;
+
+// Server-side ENS name cache.
+// Stores the result of mainnet reverse lookups so every client benefits from
+// resolutions performed by any other client. Updated via POST /api/profile/ens.
+export const ensCache = pgTable("ens_cache", {
+  address:   text("address").primaryKey(),
+  ensName:   text("ens_name").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type EnsCache = typeof ensCache.$inferSelect;
