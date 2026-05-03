@@ -38,7 +38,7 @@ export default function Footer() {
             {(() => {
                 const addr = getContractAddress()
                 if (!addr) return null
-                // Use getExplorerBaseUrl() which checks NETWORK_INFO → chain.blockExplorers
+                // Use getExplorerBaseUrl() which checks curated network explorer URLs
                 const explorerBase = getExplorerBaseUrl()
                 const explorerHref = explorerBase ? `${explorerBase}/address/${addr}` : null
                 return (

@@ -391,7 +391,7 @@ const DEFAULT_NETWORK = 'studionet'
 const NETWORK_INFO = {
   studionet: {
     label:    'GenLayer Studio',
-    explorer: null,
+    explorer: 'https://explorer-studio.genlayer.com',
     faucet:   null,
   },
   bradbury: {
