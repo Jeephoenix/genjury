@@ -160,7 +160,7 @@ export default function ObjectionPhase() {
         {myId !== objectionBy && !myObjVote && (
           <div className="grid grid-cols-2 gap-4 mb-5">
             <button
-              className="vote-btn border-neon/35 bg-neon/8 text-neon hover:bg-neon/15 hover:border-neon/55 hover:shadow-[0_0_30px_rgba(127,255,110,0.15)]"
+              className="vote-btn border-neon/35 bg-neon/8 text-neon hover:bg-neon/15 hover:border-neon/55 hover:shadow-[0_0_24px_rgba(61,184,122,0.12)]"
               onClick={() => castObjectionVote(myId, 'sustain')}
             >
               <div className="w-10 h-10 rounded-xl bg-neon/15 border border-neon/30 flex items-center justify-center">
@@ -217,7 +217,7 @@ export default function ObjectionPhase() {
               className="h-full bg-neon rounded-full transition-all duration-700"
               style={{
                 width: `${sustainPct}%`,
-                boxShadow: '0 0 10px rgba(127,255,110,0.4)',
+                boxShadow: '0 0 8px rgba(61,184,122,0.28)',
               }}
             />
           </div>
