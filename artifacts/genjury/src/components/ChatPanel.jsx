@@ -12,25 +12,24 @@ export default function ChatPanel() {
   const phase    = useGameStore(s => s.phase)
   const myId     = useGameStore(s => s.myId)
   const messages = useGameStore(s => s.chatMessages)
-  const pushChat           = useGameStore(s => s.pushChat)
-    const patchChatReaction  = useGameStore(s => s.patchChatReaction)
-  const openProfileCard    = useGameStore(s => s.openProfileCard)
+  const pushChat          = useGameStore(s => s.pushChat)
+  const patchChatReaction = useGameStore(s => s.patchChatReaction)
+  const openProfileCard   = useGameStore(s => s.openProfileCard)
 
-  const [open, setOpen]     = useState(false)
-  const [text, setText]     = useState('')
-  const [unread, setUnread]  = useState(0)
-    const [apiOk,  setApiOk]   = useState(true)
-  const apiOkRef             = React.useRef(true)
+  const [open, setOpen]           = useState(false)
+  const [text, setText]           = useState('')
+  const [unread, setUnread]       = useState(0)
+  const [apiOk, setApiOk]         = useState(true)
+  const apiOkRef                  = React.useRef(true)
   const [hoveredId, setHoveredId] = useState(null)
-  const [, force]           = useState(0)
-  const scrollRef           = useRef(null)
-  const inputRef            = useRef(null)
-  const longPressTimer      = useRef(null)
+  const [, force]                 = useState(0)
+  const scrollRef      = useRef(null)
+  const inputRef       = useRef(null)
+  const longPressTimer = useRef(null)
 
-  const activePhase    = phase === PHASES.WRITING || phase === PHASES.VOTING
-  const objectionMode  = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
+  const activePhase   = phase === PHASES.WRITING || phase === PHASES.VOTING
+  const objectionMode = phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE
 
-  // Auto-collapse during active timed phases
   useEffect(() => {
     if (activePhase) setOpen(false)
   }, [activePhase])
@@ -48,37 +47,37 @@ export default function ChatPanel() {
       ? Number(messages[messages.length - 1].ts) || 0
       : 0
     const intervalMs = objectionMode ? 1000 : 2500
-
     let failCount = 0
-      async function tick() {
-        try {
-          const fresh = await fetchSince(roomCode, since)
-          if (cancelled) return
-          failCount = 0
-          if (!apiOkRef.current) { apiOkRef.current = true; setApiOk(true) }
-          if (!fresh.length) return
-          since = Number(fresh[fresh.length - 1].ts) || since
-          for (const m of fresh) {
-            pushChat({
-              id:         m.id,
-              authorId:   m.author_id,
-              authorName: m.author_name,
-              avatar:     m.avatar,
-              color:      m.color,
-              text:       m.text,
-              kind:       m.kind,
-              ts:         Number(m.ts),
-              reactions:  m.reactions || {},
-            })
-            if (!open && m.author_id !== meId) setUnread(u => u + 1)
-          }
-        } catch {
-          if (!cancelled) {
-            failCount++
-            if (failCount >= 3) { apiOkRef.current = false; setApiOk(false) }
-          }
+
+    async function tick() {
+      try {
+        const fresh = await fetchSince(roomCode, since)
+        if (cancelled) return
+        failCount = 0
+        if (!apiOkRef.current) { apiOkRef.current = true; setApiOk(true) }
+        if (!fresh.length) return
+        since = Number(fresh[fresh.length - 1].ts) || since
+        for (const m of fresh) {
+          pushChat({
+            id:         m.id,
+            authorId:   m.author_id,
+            authorName: m.author_name,
+            avatar:     m.avatar,
+            color:      m.color,
+            text:       m.text,
+            kind:       m.kind,
+            ts:         Number(m.ts),
+            reactions:  m.reactions || {},
+          })
+          if (!open && m.author_id !== meId) setUnread(u => u + 1)
+        }
+      } catch {
+        if (!cancelled) {
+          failCount++
+          if (failCount >= 3) { apiOkRef.current = false; setApiOk(false) }
         }
       }
+    }
 
     tick()
     const id = setInterval(tick, intervalMs)
@@ -123,36 +122,35 @@ export default function ChatPanel() {
 
   const REACTION_EMOJIS = ['👍', '🔥', '⚖️']
 
-    async function react(msgId, emoji) {
-      const msg = messages.find(m => m.id === msgId)
-      if (!msg) return
-      const current  = msg.reactions || {}
-      const users    = current[emoji] || []
-      const removing = users.includes(meId)
-      // Optimistic update
-      const updated = { ...current }
-      if (removing) {
-        updated[emoji] = users.filter(u => u !== meId)
-        if (!updated[emoji].length) delete updated[emoji]
-      } else {
-        updated[emoji] = [...users, meId]
-      }
-      patchChatReaction(msgId, updated)
-      setHoveredId(null)
-      try {
-        const fresh = await toggleReaction(roomCode, msgId, emoji, meId)
-        patchChatReaction(msgId, fresh)
-      } catch {
-        patchChatReaction(msgId, current) // rollback
-      }
+  async function react(msgId, emoji) {
+    const msg = messages.find(m => m.id === msgId)
+    if (!msg) return
+    const current  = msg.reactions || {}
+    const users    = current[emoji] || []
+    const removing = users.includes(meId)
+    const updated  = { ...current }
+    if (removing) {
+      updated[emoji] = users.filter(u => u !== meId)
+      if (!updated[emoji].length) delete updated[emoji]
+    } else {
+      updated[emoji] = [...users, meId]
     }
-
-    function startLongPress(msgId) {
-      longPressTimer.current = setTimeout(() => setHoveredId(msgId), 400)
+    patchChatReaction(msgId, updated)
+    setHoveredId(null)
+    try {
+      const fresh = await toggleReaction(roomCode, msgId, emoji, meId)
+      patchChatReaction(msgId, fresh)
+    } catch {
+      patchChatReaction(msgId, current)
     }
-    function cancelLongPress() { clearTimeout(longPressTimer.current) }
+  }
 
-    const panelTitle = objectionMode
+  function startLongPress(msgId) {
+    longPressTimer.current = setTimeout(() => setHoveredId(msgId), 400)
+  }
+  function cancelLongPress() { clearTimeout(longPressTimer.current) }
+
+  const panelTitle = objectionMode
     ? <><Scale className="w-4 h-4 text-neon" strokeWidth={2.25} />Objections</>
     : <><MessageSquare className="w-4 h-4 text-plasma" strokeWidth={2.25} />Table Talk</>
 
@@ -179,11 +177,6 @@ export default function ChatPanel() {
       <AnimatePresence>
         {open && (
           <>
-            {/*
-              ── Backdrop (mobile only) ──
-              Tapping outside the drawer closes it.
-              Hidden on sm+ since the panel is just a floating card there.
-            */}
             <motion.div
               key="chat-backdrop"
               initial={{ opacity: 0 }}
@@ -195,11 +188,6 @@ export default function ChatPanel() {
               aria-hidden="true"
             />
 
-            {/*
-              ── Drawer / Panel ──
-              Mobile  : full-height right drawer (slides in from right edge)
-              Desktop : small floating card above the toggle button
-            */}
             <motion.aside
               key="chat-panel"
               initial={{ x: '100%' }}
@@ -207,12 +195,9 @@ export default function ChatPanel() {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 240, mass: 0.9 }}
               className={[
-                // shared
                 'fixed right-0 z-50 flex flex-col',
                 'border-white/[0.08] bg-void/95 backdrop-blur-2xl shadow-2xl',
-                // mobile: full height, full width, no rounded corners, border-l only
                 'top-0 bottom-0 w-full border-l',
-                // desktop: floating card with rounded corners, constrained size
                 'sm:top-auto sm:bottom-20 sm:w-[340px] sm:max-h-[65vh] sm:rounded-2xl sm:border sm:border-white/10',
               ].join(' ')}
               aria-label="Chat panel"
@@ -220,11 +205,7 @@ export default function ChatPanel() {
               {/* Top accent line */}
               <div className="h-px bg-gradient-to-r from-transparent via-plasma/50 to-transparent flex-shrink-0" />
 
-              {/*
-                ── Panel header ──
-                On mobile: extra top padding to clear the 2-row game header (80 px).
-                On desktop: normal padding.
-              */}
+              {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 pt-[84px] sm:pt-3 border-b border-white/[0.07] flex-shrink-0">
                 <div className="flex items-center gap-2 text-sm font-semibold text-white/80 uppercase tracking-wider">
                   {panelTitle}
@@ -241,7 +222,7 @@ export default function ChatPanel() {
               {/* ── Message list ── */}
               <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto px-3 py-3 space-y-3 overscroll-contain"
+                className="flex-1 overflow-y-auto px-3 py-3 space-y-2 overscroll-contain"
               >
                 {!apiOk && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs mb-1">
@@ -257,98 +238,114 @@ export default function ChatPanel() {
                   </div>
                 )}
                 {messages.map(m => {
-                    const rxEntries = Object.entries(m.reactions || {}).filter(([, u]) => u.length > 0)
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex items-start gap-2.5 ${m.authorId === meId ? 'flex-row-reverse' : ''}`}
-                        onMouseEnter={() => setHoveredId(m.id)}
-                        onMouseLeave={() => setHoveredId(null)}
-                        onTouchStart={() => startLongPress(m.id)}
-                        onTouchEnd={cancelLongPress}
-                        onTouchMove={cancelLongPress}
+                  const isMe      = m.authorId === meId
+                  const rxEntries = Object.entries(m.reactions || {}).filter(([, u]) => u.length > 0)
+
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                      onMouseEnter={() => setHoveredId(m.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      onTouchStart={() => startLongPress(m.id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                    >
+                      {/* Avatar */}
+                      <button
+                        type="button"
+                        className="flex-shrink-0 rounded-full hover:opacity-80 active:scale-95 transition-all mb-0.5"
+                        onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
+                        aria-label={`View ${m.authorName}'s profile`}
                       >
-                        <button
-                          type="button"
-                          className="flex-shrink-0 rounded-full hover:opacity-80 active:scale-95 transition-all"
-                          onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
-                          aria-label={`View ${m.authorName}'s profile`}
-                        >
-                          <Avatar
-                            name={m.authorName}
-                            src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
-                            color={m.color}
-                            size={28}
-                          />
-                        </button>
-                        <div className={`flex-1 min-w-0 ${m.authorId === meId ? 'items-end' : 'items-start'} flex flex-col`}>
-                          {m.authorId !== meId && (
-                            <div className="flex items-baseline gap-1.5 mb-0.5">
-                              <button
-                                type="button"
-                                className="text-xs font-semibold hover:opacity-70 transition-opacity cursor-pointer"
-                                style={{ color: m.color || '#a259ff' }}
-                                onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
-                              >
-                                {m.authorName || 'Player'}
-                              </button>
-                              {m.kind === 'objection' && (
-                                <span className="text-[10px] uppercase tracking-wider text-neon font-bold">objection</span>
-                              )}
-                            </div>
-                          )}
-                          {/* Bubble + floating reaction picker */}
-                          <div className="relative">
-                            {hoveredId === m.id && (
-                              <div className={`absolute -top-9 z-10 flex gap-0.5 px-1 py-1 rounded-xl bg-void/95 border border-white/10 shadow-xl backdrop-blur-xl ${m.authorId === meId ? 'right-0' : 'left-0'}`}>
-                                {REACTION_EMOJIS.map(e => (
-                                  <button
-                                    key={e}
-                                    onClick={() => react(m.id, e)}
-                                    className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${
-                                      (m.reactions?.[e] || []).includes(meId)
-                                        ? 'bg-plasma/25 border border-plasma/40'
-                                        : 'hover:bg-white/10'
-                                    }`}
-                                    aria-label={`React ${e}`}
-                                  >
-                                    {e}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            <div
-                              className={`rounded-2xl px-3 py-2 text-sm break-words max-w-[85%] leading-snug ${
-                                m.authorId === meId
-                                  ? 'bg-plasma/20 border border-plasma/25 text-white rounded-tr-sm'
-                                  : 'bg-white/[0.06] border border-white/[0.07] text-white/90 rounded-tl-sm'
-                              }`}
+                        <Avatar
+                          name={m.authorName}
+                          src={m.avatar && m.avatar.startsWith('data:') ? m.avatar : ''}
+                          color={m.color}
+                          size={28}
+                        />
+                      </button>
+
+                      {/* Message content — max 75% of panel width */}
+                      <div className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+
+                        {/* Author name + badge (others only) */}
+                        {!isMe && (
+                          <div className="flex items-baseline gap-1.5 px-1">
+                            <button
+                              type="button"
+                              className="text-xs font-semibold hover:opacity-70 transition-opacity cursor-pointer leading-none"
+                              style={{ color: m.color || '#a259ff' }}
+                              onClick={() => openProfileCard({ address: m.authorId, name: m.authorName, color: m.color, avatar: m.avatar })}
                             >
-                              {m.text}
-                            </div>
+                              {m.authorName || 'Player'}
+                            </button>
+                            {m.kind === 'objection' && (
+                              <span className="text-[9px] uppercase tracking-widest text-neon font-bold">
+                                Objection
+                              </span>
+                            )}
                           </div>
-                          {/* Reaction pills */}
-                          {rxEntries.length > 0 && (
-                            <div className={`flex flex-wrap gap-1 mt-1 ${m.authorId === meId ? 'justify-end' : 'justify-start'}`}>
-                              {rxEntries.map(([emoji, users]) => (
+                        )}
+
+                        {/* Bubble row — relative for the reaction picker */}
+                        <div className="relative">
+                          {/* Floating reaction picker */}
+                          {hoveredId === m.id && (
+                            <div
+                              className={`absolute -top-9 z-10 flex gap-0.5 px-1 py-1 rounded-xl bg-void/95 border border-white/10 shadow-xl backdrop-blur-xl ${isMe ? 'right-0' : 'left-0'}`}
+                            >
+                              {REACTION_EMOJIS.map(e => (
                                 <button
-                                  key={emoji}
-                                  onClick={() => react(m.id, emoji)}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
-                                    users.includes(meId)
-                                      ? 'bg-plasma/20 border-plasma/40 text-plasma'
-                                      : 'bg-white/[0.05] border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
+                                  key={e}
+                                  onClick={() => react(m.id, e)}
+                                  className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${
+                                    (m.reactions?.[e] || []).includes(meId)
+                                      ? 'bg-plasma/25 border border-plasma/40'
+                                      : 'hover:bg-white/10'
                                   }`}
+                                  aria-label={`React ${e}`}
                                 >
-                                  {emoji} <span>{users.length}</span>
+                                  {e}
                                 </button>
                               ))}
                             </div>
                           )}
+
+                          {/* Bubble — no max-w here; parent's max-w-[75%] constrains it */}
+                          <div
+                            className={`px-3.5 py-2 text-sm leading-relaxed break-words rounded-2xl ${
+                              isMe
+                                ? 'bg-plasma/20 border border-plasma/25 text-white rounded-br-sm'
+                                : 'bg-white/[0.07] border border-white/[0.08] text-white/90 rounded-bl-sm'
+                            }`}
+                          >
+                            {m.text}
+                          </div>
                         </div>
+
+                        {/* Reaction pills */}
+                        {rxEntries.length > 0 && (
+                          <div className={`flex flex-wrap gap-1 px-0.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            {rxEntries.map(([emoji, users]) => (
+                              <button
+                                key={emoji}
+                                onClick={() => react(m.id, emoji)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                                  users.includes(meId)
+                                    ? 'bg-plasma/20 border-plasma/40 text-plasma'
+                                    : 'bg-white/[0.05] border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
+                                }`}
+                              >
+                                {emoji} <span>{users.length}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )
-                  })}
+                    </div>
+                  )
+                })}
               </div>
 
               {/* ── Input bar ── */}
