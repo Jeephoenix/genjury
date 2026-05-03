@@ -172,6 +172,42 @@ export async function updateAvatar(address, avatarUrl) {
 }
 
 // Synchronous cache lookup (may be null if not yet fetched).
+
+// Batch-resolve wallet addresses to their server-registered usernames.
+// Used by the Leaderboard and any component showing multiple players.
+// Returns { [lowercaseAddress]: username } for addresses that have claimed an identity.
+export async function resolveUsernames(addresses) {
+  if (!addresses || !addresses.length) return {}
+  const unique = [...new Set(addresses.map(a => String(a).toLowerCase()))]
+
+  // Fill from local cache first
+  const result = {}
+  const missing = []
+  for (const addr of unique) {
+    if (_cache[addr]?.username) {
+      result[addr] = _cache[addr].username
+    } else {
+      missing.push(addr)
+    }
+  }
+  if (!missing.length) return result
+
+  try {
+    const resp = await fetch(`${BASE}/batch?addresses=${encodeURIComponent(missing.join(','))}`)
+    if (!resp.ok) return result
+    const data = await resp.json()
+    for (const [addr, prof] of Object.entries(data || {})) {
+      if (prof?.username) {
+        result[addr] = prof.username
+        _cache[addr] = prof
+      }
+    }
+    if (Object.keys(data).length) notify()
+  } catch {}
+
+  return result
+}
+
 export function getCachedServerProfile(address) {
   if (!address) return null
   return _cache[address.toLowerCase()] || null
