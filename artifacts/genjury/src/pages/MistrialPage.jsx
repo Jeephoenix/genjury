@@ -17,8 +17,10 @@ import {
 import { getProfile, subscribeProfile } from '../lib/profile'
 import { rememberJoinedRoom } from '../lib/joinedRooms'
 
-const PRESET_FEES          = ['1', '2', '5', '10']
-const MIN_ENTRY_FEE_GEN    = 1n
+const PRESET_FEES           = ['1', '2', '5', '10']
+const GEN_WEI               = 10n ** 18n
+const MIN_ENTRY_FEE_GEN     = 1n * GEN_WEI
+const MAX_ENTRY_FEE_GEN     = 10_000n * GEN_WEI
 const HOUSE_CUT_BPS_DEFAULT = 500
 
 export default function MistrialPage() {
@@ -27,7 +29,7 @@ export default function MistrialPage() {
   const [joinCodeInput,   setJoinCodeInput]   = useState('')
   const [invitedCode,     setInvitedCode]     = useState(null)
 
-  const [entryFee,    setEntryFee]    = useState('0.01')
+  const [entryFee,    setEntryFee]    = useState('1')
   const [maxRounds,   setMaxRounds]   = useState(3)
   const [maxPlayers,  setMaxPlayers]  = useState(8)
   const [feeError,    setFeeError]    = useState(null)
@@ -101,7 +103,24 @@ export default function MistrialPage() {
   const entryFeeWei = useMemo(() => {
     try { return parseGen(entryFee) } catch { return null }
   }, [entryFee])
-  const entryFeeBelowMinimum = entryFeeWei !== null && entryFeeWei < MIN_ENTRY_FEE_GEN
+  const entryFeeBelowMinimum = entryFeeWei !== null && entryFeeWei > 0n && entryFeeWei < MIN_ENTRY_FEE_GEN
+  const entryFeeExceedsMax   = entryFeeWei !== null && entryFeeWei > MAX_ENTRY_FEE_GEN
+
+  const feeValidationError = entryFeeBelowMinimum
+    ? `Minimum stake is 1 ${symbol}`
+    : entryFeeExceedsMax
+    ? `Maximum stake is 10,000 ${symbol}`
+    : null
+
+  const handleFeeChange = (raw) => {
+    const cleaned = raw.replace(',', '.')
+    if (!/^(\d*\.?\d*)$/.test(cleaned)) return
+    const parts = cleaned.split('.')
+    if (parts.length > 2) return
+    if (parts[1]?.length > 18) return
+    setEntryFee(cleaned)
+    setFeeError(null)
+  }
 
   const handleCreate = () => {
     if (loading) return
@@ -273,11 +292,12 @@ export default function MistrialPage() {
                 Entry fee per juror ({symbol})
               </label>
               <input
-                className="input font-mono"
-                placeholder="0.0"
+                className={`input font-mono ${feeValidationError ? 'border-crimson/40 focus:border-crimson/60' : ''}`}
+                placeholder="1"
                 value={entryFee}
-                onChange={(e) => setEntryFee(e.target.value.replace(',', '.'))}
+                onChange={(e) => handleFeeChange(e.target.value)}
                 inputMode="decimal"
+                autoComplete="off"
               />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {PRESET_FEES.map((v) => (
@@ -295,7 +315,11 @@ export default function MistrialPage() {
                   </button>
                 ))}
               </div>
-              {feeError && <p className="text-signal text-xs mt-1.5">{feeError}</p>}
+              {(feeValidationError || feeError) && (
+                <p className="text-crimson/70 text-xs mt-1.5 font-mono">
+                  {feeValidationError || feeError}
+                </p>
+              )}
             </div>
 
             {/* Rounds + jury size */}
@@ -353,12 +377,12 @@ export default function MistrialPage() {
 
             <button
               className={`btn w-full py-3.5 text-base inline-flex items-center justify-center gap-2 ${
-                entryFeeBelowMinimum
-                  ? 'bg-signal/15 text-signal border border-signal/35 hover:bg-signal/20'
+                feeValidationError
+                  ? 'bg-white/[0.04] text-crimson/40 border border-crimson/20 cursor-not-allowed opacity-60'
                   : 'btn-crimson'
               }`}
               onClick={handleCreate}
-              disabled={loading || entryFeeWei === null || entryFeeBelowMinimum || !profile.name || !contractConfigured}
+              disabled={loading || entryFeeWei === null || !!feeValidationError || !profile.name || !contractConfigured}
             >
               {loading ? (
                 <>
@@ -370,10 +394,10 @@ export default function MistrialPage() {
                 </>
               ) : !connected ? (
                 <><Wallet className="w-4 h-4" strokeWidth={2.25} /> Connect wallet to file case</>
+              ) : feeValidationError ? (
+                <><Zap className="w-4 h-4" strokeWidth={2.5} /> {feeValidationError}</>
               ) : entryFeeWei && entryFeeWei >= MIN_ENTRY_FEE_GEN ? (
                 <><Zap className="w-4 h-4" strokeWidth={2.5} /> File case · stake {formatGen(entryFeeWei, 6)} {symbol}</>
-              ) : entryFeeBelowMinimum ? (
-                <><Zap className="w-4 h-4" strokeWidth={2.5} /> Minimum stake is 1 {symbol}</>
               ) : (
                 <><Zap className="w-4 h-4" strokeWidth={2.5} /> File case</>
               )}
