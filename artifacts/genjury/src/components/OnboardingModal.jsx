@@ -17,9 +17,9 @@ const STEP_COLORS = {
     bg: 'bg-crimson/10',
     border: 'border-crimson/25',
     icon: 'text-crimson',
-    glow: 'shadow-[0_0_60px_rgba(232,0,45,0.10)]',
+    glow: 'shadow-[0_0_50px_rgba(160,50,75,0.08)]',
     dot: 'bg-crimson',
-    dotActive: 'bg-crimson shadow-[0_0_8px_#e8002d]',
+    dotActive: 'bg-crimson shadow-[0_0_6px_#a0324b]',
   },
   ice: {
     bg: 'bg-ice/10',
