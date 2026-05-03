@@ -18,7 +18,7 @@ const NETWORK_META = {
   bradbury:  { color: '#a259ff', badge: 'Bradbury' },
   asimov:    { color: '#a259ff', badge: 'Asimov'   },
 }
-const getMeta = (key) => NETWORK_META[key] ?? { color: '#ff6b35', badge: key }
+const getMeta = (key) => NETWORK_META[key] ?? { color: '#c05b30', badge: key }
 
 function NetworkDropdown({ onClose, onSwitch, currentNetwork }) {
   const options = getNetworkOptions()
