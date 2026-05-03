@@ -156,7 +156,7 @@ export default function ProfilePage() {
       {/* Connect wallet CTA */}
       {!connected && (
         <div className="glass rounded-2xl border border-crimson/25 px-6 py-7 relative overflow-hidden text-center"
-          style={{ background: 'rgba(232,0,45,0.04)' }}>
+          style={{ background: 'rgba(160,50,75,0.04)' }}>
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-crimson/40 to-transparent" />
           <div className="w-12 h-12 rounded-2xl bg-crimson/10 border border-crimson/25 flex items-center justify-center text-crimson mx-auto mb-4">
             <Lock className="w-6 h-6" strokeWidth={1.75} />
