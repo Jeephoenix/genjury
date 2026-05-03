@@ -55,6 +55,7 @@
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "catalog:",
     "genlayer-js": "^1.1.7",
+    "viem": "2.48.7",
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
     "nanoid": "^5.1.11",
