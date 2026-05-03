@@ -102,7 +102,7 @@ import React, { useEffect, useRef, useState } from 'react'
     const isPaid      = !!preview && preview.entryFee > 0n
     const isLobby     = !preview || preview.phase === 'lobby'
     const isFull      = !!preview && preview.playerCount >= preview.maxPlayers
-    const cannotJoin  = previewDone && (preview === false || !isLobby || isFull)
+    const cannotJoin  = previewDone && preview === false
 
     return (
       <>
@@ -187,16 +187,12 @@ import React, { useEffect, useRef, useState } from 'react'
                   </div>
                 )}
 
-                {/* Cannot join warning */}
+                {/* Cannot join warning — only shown when room is truly unreachable */}
                 {cannotJoin && (
                   <div className="rounded-xl bg-signal/[0.07] border border-signal/20 px-4 py-3 mb-4 flex items-start gap-2">
                     <Lock className="w-4 h-4 text-signal/70 mt-0.5 flex-shrink-0" strokeWidth={2} />
                     <p className="text-signal/80 text-xs leading-relaxed">
-                      {preview === false
-                        ? 'This case is unreachable.'
-                        : !isLobby
-                        ? 'This case is already in session — the courtroom is sealed to new jurors.'
-                        : 'This case is full.'}
+                      This case is unreachable.
                     </p>
                   </div>
                 )}

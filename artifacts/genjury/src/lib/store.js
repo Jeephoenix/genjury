@@ -685,6 +685,26 @@ const useGameStore = create((set, get) => ({
             return
           }
 
+          // If still in lobby and not yet on-chain, submit the join tx first
+          // so the player actually appears in the room before we navigate.
+          if (roomPhase === 'lobby' && !alreadyIn) {
+            const name = getProfile().name || me.slice(0, 6)
+            const fee  = safeBigInt(parsed?.entryFee)
+            const sym  = getChainNativeSymbol()
+            try {
+              await callMethod(
+                requireContractAddress(),
+                'join',
+                [code, name],
+                fee,
+                fee > 0n ? `Take seat in ${code} (stake ${formatGen(fee)} ${sym})` : `Take seat in ${code}`,
+              )
+            } catch (e) {
+              pushToast('error', `Could not join: ${e?.shortMessage || e?.message || e}`)
+              return
+            }
+          }
+
           set({ roomCode: code, myId: me, chatMessages: [], activeTab: 'lobby' })
           rememberJoinedRoom(code)
           applyContractState(get, parsed)
