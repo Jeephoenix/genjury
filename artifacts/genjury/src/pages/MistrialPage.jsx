@@ -18,8 +18,9 @@ import { getProfile, subscribeProfile } from '../lib/profile'
 import { rememberJoinedRoom } from '../lib/joinedRooms'
 
 const PRESET_FEES           = ['1', '2', '5', '10']
-const MIN_ENTRY_FEE_GEN     = 1n
-const MAX_ENTRY_FEE_GEN     = 10_000n
+const GEN_WEI               = 10n ** 18n
+const MIN_ENTRY_FEE_GEN     = 1n * GEN_WEI
+const MAX_ENTRY_FEE_GEN     = 10_000n * GEN_WEI
 const HOUSE_CUT_BPS_DEFAULT = 500
 
 export default function MistrialPage() {
