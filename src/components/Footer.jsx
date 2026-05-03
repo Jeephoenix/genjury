@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { getNetworkInfo, getContractAddress, getExplorerBaseUrl } from '../lib/genlayer'
+import { getNetworkInfo, getContractAddress } from '../lib/genlayer'
 import { Github, ExternalLink, Copy, Check } from 'lucide-react'
 
 const short = (a) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : null
@@ -38,8 +38,7 @@ export default function Footer() {
             {(() => {
                 const addr = getContractAddress()
                 if (!addr) return null
-                // Use getExplorerBaseUrl() which checks curated network explorer URLs
-                const explorerBase = getExplorerBaseUrl()
+                const explorerBase = net.explorer
                 const explorerHref = explorerBase ? `${explorerBase}/address/${addr}` : null
                 return (
                   <div className="flex items-center gap-1.5">
