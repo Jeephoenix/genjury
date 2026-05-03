@@ -6,7 +6,7 @@ export async function fetchSince(roomCode, since) {
   return (await r.json()).messages || []
 }
 
-export async function postChat(roomCode, player, text, kind = 'taunt') {
+export async function postChat(roomCode, player, text, kind = 'taunt', replyTo = null) {
   const msg = {
     id: crypto.randomUUID(),
     authorId: player.id,
@@ -16,6 +16,7 @@ export async function postChat(roomCode, player, text, kind = 'taunt') {
     text: text.slice(0, 280),
     kind,
     ts: Date.now(),
+    replyTo: replyTo || null,
   }
   const res = await fetch(BASE, {
     method: 'POST',
@@ -26,14 +27,13 @@ export async function postChat(roomCode, player, text, kind = 'taunt') {
   return msg
 }
 
-  export async function toggleReaction(roomCode, msgId, emoji, userId) {
-    const r = await fetch('/api/chat', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ roomCode, msgId, emoji, userId }),
-    })
-    if (!r.ok) throw new Error('reaction failed')
-    const data = await r.json()
-    return data.reactions || {}
-  }
-  
+export async function toggleReaction(roomCode, msgId, emoji, userId) {
+  const r = await fetch('/api/chat', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ roomCode, msgId, emoji, userId }),
+  })
+  if (!r.ok) throw new Error('reaction failed')
+  const data = await r.json()
+  return data.reactions || {}
+}
