@@ -25,7 +25,7 @@ function getPenaltyIfWrong(confidence) {
 
 // ── Risk tier ─────────────────────────────────────────────────────────────────
 function getRiskTier(confidence) {
-  if (confidence < 0.35) return { label: 'Safe bet',    color: '#7fff6e', bg: 'rgba(127,255,110,0.10)', border: 'rgba(127,255,110,0.25)' }
+  if (confidence < 0.35) return { label: 'Safe bet',    color: '#3db87a', bg: 'rgba(61,184,122,0.08)',  border: 'rgba(61,184,122,0.20)' }
   if (confidence < 0.65) return { label: 'Confident',   color: '#38d9f5', bg: 'rgba(56,217,245,0.10)',  border: 'rgba(56,217,245,0.25)' }
   if (confidence < 0.85) return { label: 'High stakes', color: '#f5c842', bg: 'rgba(245,200,66,0.09)',  border: 'rgba(245,200,66,0.25)' }
   return                         { label: 'All-in',      color: '#c05b30', bg: 'rgba(192,91,48,0.08)',   border: 'rgba(192,91,48,0.25)' }
@@ -35,7 +35,7 @@ function getRiskTier(confidence) {
 function trackGradient(pct) {
   // Filled portion blends neon → ice → gold → signal across the track
   return `linear-gradient(90deg,
-    #7fff6e 0%,
+    #3db87a 0%,
     #38d9f5 40%,
     #f5c842 70%,
     #c05b30 100%
@@ -394,7 +394,7 @@ export default function VotingPhase() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             className="glass rounded-2xl border border-neon/25 px-5 py-4 text-center mb-5"
-            style={{ background: 'rgba(127,255,110,0.05)' }}
+            style={{ background: 'rgba(61,184,122,0.05)' }}
           >
             <p className="text-neon text-sm inline-flex items-center gap-2 justify-center font-semibold mb-1.5">
               <Check className="w-4 h-4" strokeWidth={2.5} />
