@@ -165,7 +165,7 @@ export default function ProfilePage() {
           <div className="text-white/40 text-sm mb-6">Your identity, wins, and XP are tied to your address.</div>
           <button
             onClick={() => setOpenWallet(true)}
-            className="btn btn-crimson w-full py-3 text-sm font-semibold inline-flex items-center justify-center gap-2"
+            className="btn btn-crimson w-full py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 animate-pulse-crimson"
           >
             <Wallet className="w-4 h-4" /> Connect
           </button>
