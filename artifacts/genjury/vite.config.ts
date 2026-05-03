@@ -11,6 +11,7 @@ const port = Number(process.env.PORT || 3000);
 const basePath = process.env.BASE_PATH || "/";
 
 const isReplit = !!process.env.REPL_ID;
+const isProd = process.env.NODE_ENV === "production";
 
 export default defineConfig({
   base: basePath,
@@ -24,7 +25,7 @@ export default defineConfig({
           ),
         ]
       : []),
-    ...(isReplit && process.env.NODE_ENV !== "production"
+    ...(isReplit && !isProd
       ? [
           await import("@replit/vite-plugin-cartographer").then((m) =>
             m.cartographer({
@@ -36,7 +37,7 @@ export default defineConfig({
           ),
         ]
       : []),
-  ],
+  ].filter(Boolean),
   css: {
     postcss: {
       plugins: [autoprefixer(), tailwindcss()],
@@ -58,6 +59,42 @@ export default defineConfig({
   build: {
     outDir: "dist/public",
     emptyOutDir: true,
+    minify: "esbuild",
+    target: "es2020",
+    sourcemap: false,
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks for better caching
+          vendor: [
+            'react',
+            'react-dom',
+            'zustand',
+            'wouter',
+          ],
+          web3: [
+            'genlayer-js',
+          ],
+          ui: [
+            'lucide-react',
+            'framer-motion',
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-scroll-area',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tooltip',
+            'recharts',
+          ],
+        },
+        // Optimize chunk names
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/chunk-[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      },
+    },
   },
   server: {
     port,

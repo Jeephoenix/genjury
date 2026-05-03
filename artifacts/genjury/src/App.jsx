@@ -1,18 +1,6 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, Suspense, lazy } from 'react'
 import useGameStore, { PHASES } from './lib/store'
 import { isValidRoomCode, normalizeRoomCode, autoReconnect } from './lib/genlayer'
-import HomePage from './pages/HomePage'
-import MistrialPage from './pages/MistrialPage'
-import LobbyPage from './pages/LobbyPage'
-import WritingPhase from './pages/WritingPhase'
-import VotingPhase from './pages/VotingPhase'
-import AIJudgingPhase from './pages/AIJudgingPhase'
-import ObjectionPhase from './pages/ObjectionPhase'
-import RevealPhase from './pages/RevealPhase'
-import ScoreboardPage from './pages/ScoreboardPage'
-import GamesPage from './pages/GamesPage'
-import LeaderboardPage from './pages/LeaderboardPage'
-import ProfilePage from './pages/ProfilePage'
 import ToastContainer from './components/ToastContainer'
 import GameHeader from './components/GameHeader'
 import TopNav from './components/TopNav'
@@ -23,6 +11,27 @@ import NetworkBanner from './components/NetworkBanner'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
 import OnboardingModal from './components/OnboardingModal'
+
+// Lazy load pages for better code splitting
+const HomePage = lazy(() => import('./pages/HomePage'))
+const MistrialPage = lazy(() => import('./pages/MistrialPage'))
+const LobbyPage = lazy(() => import('./pages/LobbyPage'))
+const WritingPhase = lazy(() => import('./pages/WritingPhase'))
+const VotingPhase = lazy(() => import('./pages/VotingPhase'))
+const AIJudgingPhase = lazy(() => import('./pages/AIJudgingPhase'))
+const ObjectionPhase = lazy(() => import('./pages/ObjectionPhase'))
+const RevealPhase = lazy(() => import('./pages/RevealPhase'))
+const ScoreboardPage = lazy(() => import('./pages/ScoreboardPage'))
+const GamesPage = lazy(() => import('./pages/GamesPage'))
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+
+// Loading placeholder for Suspense
+const LoadingPage = lazy(() => import('./pages/LoadingPage'))
+
+function PageLoader() {
+  return <LoadingPage />
+}
 
 export default function App() {
   const phase        = useGameStore(s => s.phase)
@@ -73,25 +82,27 @@ export default function App() {
           id="main-content"
           className={`flex-1 ${inGame ? 'pt-20 md:pt-16' : ''} ${showTopNav ? 'pb-20 md:pb-0' : ''}`}
         >
-          {inGame ? (
-            <>
-              {phase === PHASES.WRITING && <WritingPhase />}
-              {phase === PHASES.VOTING && <VotingPhase />}
-              {phase === PHASES.AI_JUDGING && <AIJudgingPhase />}
-              {(phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE) && <ObjectionPhase />}
-              {phase === PHASES.REVEAL && <RevealPhase />}
-              {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
-            </>
-          ) : (
-            <>
-              {activeTab === 'lobby' && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
-              {activeTab === 'home'        && <HomePage />}
-              {activeTab === 'mistrial'    && <MistrialPage />}
-              {activeTab === 'games'       && <GamesPage />}
-              {activeTab === 'leaderboard' && <LeaderboardPage />}
-              {activeTab === 'profile'     && <ProfilePage />}
-            </>
-          )}
+          <Suspense fallback={<PageLoader />}>
+            {inGame ? (
+              <>
+                {phase === PHASES.WRITING && <WritingPhase />}
+                {phase === PHASES.VOTING && <VotingPhase />}
+                {phase === PHASES.AI_JUDGING && <AIJudgingPhase />}
+                {(phase === PHASES.OBJECTION || phase === PHASES.OBJECTION_VOTE) && <ObjectionPhase />}
+                {phase === PHASES.REVEAL && <RevealPhase />}
+                {phase === PHASES.SCOREBOARD && <ScoreboardPage />}
+              </>
+            ) : (
+              <>
+                {activeTab === 'lobby' && roomCode && phase === PHASES.LOBBY && <LobbyPage />}
+                {activeTab === 'home'        && <HomePage />}
+                {activeTab === 'mistrial'    && <MistrialPage />}
+                {activeTab === 'games'       && <GamesPage />}
+                {activeTab === 'leaderboard' && <LeaderboardPage />}
+                {activeTab === 'profile'     && <ProfilePage />}
+              </>
+            )}
+          </Suspense>
         </main>
 
         <Footer />
