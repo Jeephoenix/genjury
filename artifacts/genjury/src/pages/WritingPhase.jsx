@@ -23,7 +23,7 @@ function barColor(len) {
   if (len < MIN_LEN)    return 'rgba(192,91,48,0.70)'
   if (len >= DANGER_LEN) return 'rgba(192,91,48,0.85)'
   if (len >= WARN_LEN)   return 'rgba(245,200,66,0.75)'
-  return 'rgba(127,255,110,0.6)'
+  return 'rgba(61,184,122,0.55)'
 }
 
 // ── Small animated character-count bar ───────────────────────────────────────
@@ -123,7 +123,7 @@ function ReadinessDot({ ready }) {
           exit={{    scale: 0, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 500, damping: 22 }}
           className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-neon border-2 border-void flex items-center justify-center"
-          style={{ boxShadow: '0 0 6px rgba(127,255,110,0.7)' }}
+          style={{ boxShadow: '0 0 5px rgba(61,184,122,0.45)' }}
         />
       )}
     </AnimatePresence>
@@ -146,8 +146,8 @@ function CompletionTracker({ statements, lieIndex }) {
             <motion.div
               key={i}
               animate={{
-                background: ok ? 'rgba(127,255,110,0.8)' : 'rgba(255,255,255,0.12)',
-                boxShadow:  ok ? '0 0 6px rgba(127,255,110,0.5)' : 'none',
+                background: ok ? 'rgba(61,184,122,0.80)' : 'rgba(255,255,255,0.12)',
+                boxShadow:  ok ? '0 0 5px rgba(61,184,122,0.40)' : 'none',
                 scale: ok ? 1.1 : 1,
               }}
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
@@ -407,7 +407,7 @@ export default function WritingPhase() {
                         borderColor: isLie
                           ? 'rgba(192,91,48,0.40)'
                           : ready
-                          ? 'rgba(127,255,110,0.18)'
+                          ? 'rgba(61,184,122,0.14)'
                           : undefined,
                         background: isLie
                           ? 'rgba(192,91,48,0.05)'
@@ -415,7 +415,7 @@ export default function WritingPhase() {
                         boxShadow: isLie
                           ? '0 0 0 3px rgba(192,91,48,0.07)'
                           : ready
-                          ? '0 0 0 2px rgba(127,255,110,0.05)'
+                          ? '0 0 0 2px rgba(61,184,122,0.05)'
                           : undefined,
                       }}
                     />
