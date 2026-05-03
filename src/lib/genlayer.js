@@ -710,11 +710,39 @@ export async function getGenBalanceWei(addr) {
     if (key !== 'studionet' && key !== 'localnet') {
       throw new Error('debug_fundAccount is only available on studionet and localnet.')
     }
+    const amount = typeof amountWei === 'bigint' ? amountWei : BigInt(amountWei || 0)
+    const amountHex = `0x${amount.toString(16)}`
+
+    // ── Try the server-side proxy first (avoids CORS on deployed apps) ─────────
+    // The /api/faucet Vercel function reads GENLAYER_RPC from server env and
+    // proxies the call, so the browser never needs direct RPC access.
+    try {
+      const proxyRes = await fetch('/api/faucet', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ address, amount: amountHex }),
+      })
+      if (proxyRes.ok) {
+        const proxyData = await proxyRes.json()
+        if (proxyData?.error) throw new Error(proxyData.error)
+        return proxyData?.result ?? null
+      }
+      // Non-2xx from proxy — fall through to direct RPC attempt below
+    } catch (proxyErr) {
+      // If the proxy itself 404s (local dev without Vercel) or throws a network
+      // error, fall through to the direct RPC path.
+      const isNetworkOrNotFound =
+        proxyErr?.message?.includes('Failed to fetch') ||
+        proxyErr?.message?.includes('404') ||
+        proxyErr?.message?.includes('GENLAYER_RPC env var')
+      if (!isNetworkOrNotFound) throw proxyErr
+    }
+
+    // ── Direct RPC fallback (local dev / GenLayer Studio running locally) ──────
     const chain = getChain()
     const rpc = import.meta.env.VITE_GENLAYER_RPC || chain?.rpcUrls?.default?.http?.[0]
-    if (!rpc) throw new Error('No RPC URL configured for this network.')
+    if (!rpc) throw new Error('No RPC URL configured. Set GENLAYER_RPC in your Vercel env vars or VITE_GENLAYER_RPC locally.')
 
-    const amount = typeof amountWei === 'bigint' ? amountWei : BigInt(amountWei || 0)
     const res = await fetch(rpc, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -722,7 +750,7 @@ export async function getGenBalanceWei(addr) {
         jsonrpc: '2.0',
         id:      Date.now(),
         method:  'debug_fundAccount',
-        params:  [address, `0x${amount.toString(16)}`],
+        params:  [address, amountHex],
       }),
     })
 
@@ -769,10 +797,26 @@ export function parseGen(str) {
   return BigInt(whole) * (10n ** GEN_DECIMALS) + BigInt(fracPadded || '0')
 }
 
-export function explorerAddressUrl(address) {
+// Returns the best available block-explorer base URL for the current network.
+// Priority: NETWORK_INFO entry → chain.blockExplorers.default.url → null
+export function getExplorerBaseUrl() {
   const info = getNetworkInfo()
-  if (!info?.explorer || !address) return null
-  return `${info.explorer.replace(/\/$/, '')}/address/${address}`
+  if (info?.explorer) return info.explorer.replace(/\/$/, '')
+  const chainExplorer = getChain()?.blockExplorers?.default?.url
+  if (chainExplorer) return chainExplorer.replace(/\/$/, '')
+  return null
+}
+
+export function explorerAddressUrl(address) {
+  const base = getExplorerBaseUrl()
+  if (!base || !address) return null
+  return `${base}/address/${address}`
+}
+
+export function explorerTxUrl(hash) {
+  const base = getExplorerBaseUrl()
+  if (!base || !hash) return null
+  return `${base}/tx/${hash}`
 }
 
 // ── Room code helpers ────────────────────────────────────────────────────────

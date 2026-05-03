@@ -1,12 +1,19 @@
-import React, { useState, useCallback } from 'react'
-import { getNetworkInfo, getContractAddress } from '../lib/genlayer'
-import { Github, ExternalLink, Zap } from 'lucide-react'
+import React, { useState } from 'react'
+import { getNetworkInfo, getContractAddress, getExplorerBaseUrl } from '../lib/genlayer'
+import { Github, ExternalLink, Copy, Check } from 'lucide-react'
 
 const short = (a) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : null
 
 export default function Footer() {
   const net    = getNetworkInfo()
   const [copied, setCopied] = useState(false)
+
+  const copyAddr = (addr) => {
+    navigator.clipboard?.writeText(addr).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
+  }
+
   return (
     <footer className="relative z-10 mt-16 border-t border-white/[0.06]">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-plasma/20 to-transparent" />
@@ -31,7 +38,9 @@ export default function Footer() {
             {(() => {
                 const addr = getContractAddress()
                 if (!addr) return null
-                const explorerHref = net.explorer ? `${net.explorer.replace(/\/$/, '')}/address/${addr}` : null
+                // Use getExplorerBaseUrl() which checks NETWORK_INFO → chain.blockExplorers
+                const explorerBase = getExplorerBaseUrl()
+                const explorerHref = explorerBase ? `${explorerBase}/address/${addr}` : null
                 return (
                   <div className="flex items-center gap-1.5">
                     <span className="text-white/20 text-[10px] font-mono uppercase tracking-wider">Contract</span>
@@ -40,24 +49,24 @@ export default function Footer() {
                         href={explorerHref}
                         target="_blank"
                         rel="noopener"
+                        title={addr}
                         className="font-mono text-[11px] text-plasma/55 hover:text-plasma transition-colors inline-flex items-center gap-1 group"
                       >
                         {short(addr)}
-                        <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={2.25} />
                       </a>
                     ) : (
+                      /* No explorer available for this network — copy-to-clipboard */
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard?.writeText(addr).catch(() => {})
-                          setCopied(true)
-                          setTimeout(() => setCopied(false), 1800)
-                        }}
-                        title={`Copy: ${addr}`}
-                        className="font-mono text-[11px] text-white/35 hover:text-white/70 inline-flex items-center gap-1 group transition-colors cursor-pointer"
+                        onClick={() => copyAddr(addr)}
+                        title={`Copy full address: ${addr}`}
+                        className="font-mono text-[11px] text-plasma/55 hover:text-plasma inline-flex items-center gap-1 group transition-colors cursor-pointer"
                       >
-                        {copied ? <span className="text-neon text-[10px]">Copied!</span> : short(addr)}
-                        <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {copied
+                          ? <><Check className="w-2.5 h-2.5 text-neon" strokeWidth={2.5} /><span className="text-neon text-[10px]">Copied!</span></>
+                          : <>{short(addr)}<Copy className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" strokeWidth={2.25} /></>
+                        }
                       </button>
                     )}
                   </div>
