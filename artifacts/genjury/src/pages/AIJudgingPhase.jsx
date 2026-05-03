@@ -111,7 +111,7 @@ export default function AIJudgingPhase() {
               {/* Status dot */}
               <div className={`relative w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
                 done
-                  ? 'bg-neon shadow-[0_0_10px_rgba(127,255,110,0.4)]'
+                  ? 'bg-neon shadow-[0_0_8px_rgba(61,184,122,0.28)]'
                   : active
                   ? 'bg-plasma/20 border border-plasma/50'
                   : 'bg-white/[0.06] border border-white/10'
