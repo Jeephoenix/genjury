@@ -54,12 +54,13 @@ export default function ProfilePage() {
 
       // Seed instantly from stored finished-room metadata (no RPC needed).
       const games = finishedRooms.length
-      const wins  = finishedRooms.filter((r) => r.myRank === 1).length
+      let   wins  = finishedRooms.filter((r) => r.myRank === 1).length
       let   xp    = finishedRooms.reduce((s, r) => s + (r.myXP || 0), 0)
       let   level = 1
       setStats({ loading: rooms.length > 0, games, wins, xp, level })
 
-      // Scan active (in-progress) rooms on-chain for any additional live XP.
+      // Scan active (in-progress) rooms on-chain for any additional live XP
+      // and wins that may not yet have been persisted to localStorage.
       if (!hasContractAddress() || rooms.length === 0) return
       ;(async () => {
         const me = address.toLowerCase()
@@ -72,6 +73,13 @@ export default function ProfilePage() {
             if (rec) {
               xp    += Number(rec.xp || 0)
               level  = Math.max(level, Number(rec.level || 1))
+            }
+            // Count wins from rooms that concluded while we were away —
+            // winnerAddress is the contract's authoritative source of truth.
+            const winnerAddr = (parsed.winnerAddress || '').toLowerCase()
+            const phase      = parsed.phase || ''
+            if (winnerAddr && winnerAddr === me && phase === 'scoreboard') {
+              wins++
             }
           } catch {}
         }))

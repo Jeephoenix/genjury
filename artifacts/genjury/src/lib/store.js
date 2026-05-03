@@ -285,7 +285,12 @@ function applyContractState(get, s) {
         const _sorted    = [...(next.players || [])].sort((a, b) => b.xp - a.xp)
         const _myId      = local.myId
         const _me        = _sorted.find((p) => p.id === _myId)
-        const _myRank    = _me ? _sorted.findIndex((p) => p.id === _myId) + 1 : 0
+        let   _myRank    = _me ? _sorted.findIndex((p) => p.id === _myId) + 1 : 0
+        // Prefer the contract's explicit winnerAddress over XP-sort rank.
+        // This is the authoritative source of truth for who won the game.
+        if (next.winnerAddress && _myId && next.winnerAddress === _myId) {
+          _myRank = 1
+        }
         markRoomFinished(local.roomCode, {
           category:    next.category    || local.category    || '',
           rounds:      next.round       || local.round       || 0,
