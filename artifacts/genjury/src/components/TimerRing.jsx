@@ -9,7 +9,7 @@ export default function TimerRing({ seconds, max, size = 48 }) {
   const color = useMemo(() => {
     if (progress > 0.5) return '#7fff6e'
     if (progress > 0.25) return '#f5c842'
-    return '#ff6b35'
+    return '#c05b30'
   }, [progress])
 
   const isUrgent = progress <= 0.25 && seconds > 0
