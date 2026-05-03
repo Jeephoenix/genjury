@@ -17,11 +17,12 @@ export async function postChat(roomCode, player, text, kind = 'taunt') {
     kind,
     ts: Date.now(),
   }
-  await fetch(BASE, {
+  const res = await fetch(BASE, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ roomCode, msg }),
   })
+  if (!res.ok) throw new Error('post failed')
   return msg
 }
 

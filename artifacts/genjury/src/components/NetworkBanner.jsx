@@ -10,6 +10,7 @@ import {
   getGenBalanceWei,
   formatGen,
   subscribeWallet,
+  getChosenProvider,
 } from '../lib/genlayer'
 import useGameStore from '../lib/store'
 
@@ -32,17 +33,19 @@ export default function NetworkBanner() {
       setWrongChain(false)
       return
     }
+    const provider = getChosenProvider() || window.ethereum
+    if (!provider) return
     const expected = `0x${getChain().id.toString(16)}`
     const check = async () => {
       try {
-        const cur = await window.ethereum.request({ method: 'eth_chainId' })
+        const cur = await provider.request({ method: 'eth_chainId' })
         setWrongChain(cur !== expected)
       } catch { setWrongChain(false) }
     }
     check()
     const onChainChanged = () => check()
-    window.ethereum.on?.('chainChanged', onChainChanged)
-    return () => window.ethereum.removeListener?.('chainChanged', onChainChanged)
+    provider.on?.('chainChanged', onChainChanged)
+    return () => provider.removeListener?.('chainChanged', onChainChanged)
   }, [address])
 
   useEffect(() => {
@@ -62,7 +65,9 @@ export default function NetworkBanner() {
   const switchChain = async () => {
     setSwitching(true)
     try {
-      await window.ethereum.request({
+      const provider = getChosenProvider() || window.ethereum
+      if (!provider) return
+      await provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${getChain().id.toString(16)}` }],
       })

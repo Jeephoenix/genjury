@@ -333,42 +333,52 @@ export function disconnectInjectedWallet() {
 //
 // Silently re-establishes a previously approved wallet connection without any
 // popup. Uses eth_accounts (read-only, no user prompt) against every detected
-// provider, then restores _chosenProvider when the remembered address is still
-// authorised. Call once from the app root on mount.
+// EIP-6963 provider first, then falls back to window.ethereum. This ensures
+// that users who connected Rabby, Coinbase, etc. are properly restored.
 export async function autoReconnect() {
     const stored = injectedAddress()
     if (!stored) return false
+    if (typeof window === 'undefined') return false
 
-    const provider = typeof window !== 'undefined' ? window.ethereum : undefined
-    if (!provider) return false
+    // Collect all candidate providers: EIP-6963 discoveries + window.ethereum
+    const candidates = []
+    for (const { provider } of _eip6963Map.values()) {
+      if (!candidates.includes(provider)) candidates.push(provider)
+    }
+    if (window.ethereum && !candidates.includes(window.ethereum)) {
+      candidates.push(window.ethereum)
+    }
+    if (!candidates.length) return false
 
-    try {
-      const accounts = await provider.request({ method: 'eth_accounts' })
-      if (
-        Array.isArray(accounts) &&
-        accounts.some((a) => a.toLowerCase() === stored.toLowerCase())
-      ) {
-        // Still authorised — restore state silently without any wallet popup
-        _chosenProvider = provider
-        _client = null
-        const tag = '__genjuryWired'
-        if (!provider[tag]) {
-          provider[tag] = true
-          provider.on?.('accountsChanged', (accs) => {
-            rememberInjected(accs?.[0] ?? null)
-            _client = null
-            notify()
-          })
-          provider.on?.('chainChanged', () => {
-            _client = null
-            notify()
-          })
+    for (const provider of candidates) {
+      try {
+        const accounts = await provider.request({ method: 'eth_accounts' })
+        if (
+          Array.isArray(accounts) &&
+          accounts.some((a) => a.toLowerCase() === stored.toLowerCase())
+        ) {
+          // Still authorised — restore state silently without any wallet popup
+          _chosenProvider = provider
+          _client = null
+          const tag = '__genjuryWired'
+          if (!provider[tag]) {
+            provider[tag] = true
+            provider.on?.('accountsChanged', (accs) => {
+              rememberInjected(accs?.[0] ?? null)
+              _client = null
+              notify()
+            })
+            provider.on?.('chainChanged', () => {
+              _client = null
+              notify()
+            })
+          }
+          notify()
+          return true
         }
-        notify()
-        return true
+      } catch {
+        // Provider not ready — try next one
       }
-    } catch {
-      // Wallet not ready or permission revoked
     }
 
     // Permission revoked — clear stored address

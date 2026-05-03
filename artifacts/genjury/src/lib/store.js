@@ -639,6 +639,23 @@ const useGameStore = create((set, get) => ({
           fee,
           fee > 0n ? `Take seat in ${code} (stake ${formatGen(fee)} ${sym})` : `Take seat in ${code}`,
         )
+        // Re-fetch state after the join tx so the player already appears in
+        // the player list when the lobby first renders.
+        try {
+          const freshRaw = await readView(requireContractAddress(), 'get_room_state', [code])
+          const freshParsed = parseContractPayload(freshRaw)
+          if (freshParsed) {
+            rememberJoinedRoom(code)
+            set({ roomCode: code, myId: me, activeTab: 'lobby' })
+            applyContractState(get, freshParsed)
+            startPolling(get)
+            pushToast('success', `You're seated in ${code}`)
+            set({ loading: false })
+            return
+          }
+        } catch {
+          // Fall through to the original path on network error
+        }
       }
 
       rememberJoinedRoom(code)

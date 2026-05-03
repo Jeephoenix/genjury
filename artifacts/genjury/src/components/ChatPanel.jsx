@@ -19,6 +19,7 @@ export default function ChatPanel() {
   const [text, setText]     = useState('')
   const [unread, setUnread]  = useState(0)
     const [apiOk,  setApiOk]   = useState(true)
+  const apiOkRef             = React.useRef(true)
   const [hoveredId, setHoveredId] = useState(null)
   const [, force]           = useState(0)
   const scrollRef           = useRef(null)
@@ -53,7 +54,7 @@ export default function ChatPanel() {
           const fresh = await fetchSince(roomCode, since)
           if (cancelled) return
           failCount = 0
-          if (!apiOk) setApiOk(true)
+          if (!apiOkRef.current) { apiOkRef.current = true; setApiOk(true) }
           if (!fresh.length) return
           since = Number(fresh[fresh.length - 1].ts) || since
           for (const m of fresh) {
@@ -73,7 +74,7 @@ export default function ChatPanel() {
         } catch {
           if (!cancelled) {
             failCount++
-            if (failCount >= 3) setApiOk(false)
+            if (failCount >= 3) { apiOkRef.current = false; setApiOk(false) }
           }
         }
       }
