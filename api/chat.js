@@ -24,6 +24,7 @@ function memPost(roomCode, msg) {
       text:        String(msg.text       || '').slice(0, 280),
       kind:        msg.kind === 'objection' ? 'objection' : 'taunt',
       ts:          Number(msg.ts) || Date.now(),
+      reply_to:    msg.replyTo ? JSON.stringify(msg.replyTo) : null,
     })
     if (msgs.length > 500) msgs.splice(0, msgs.length - 500)
     _mem.set(roomCode, msgs)
@@ -50,6 +51,7 @@ async function ensureSchema() {
       author_name TEXT NOT NULL DEFAULT 'Player', avatar TEXT DEFAULT '',
       color TEXT DEFAULT '', text TEXT NOT NULL,
       kind TEXT NOT NULL DEFAULT 'taunt', ts BIGINT NOT NULL,
+      reply_to TEXT DEFAULT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     )`
     await db`CREATE INDEX IF NOT EXISTS chat_room_ts_idx ON chat_messages (room_code, ts)`
@@ -57,8 +59,15 @@ async function ensureSchema() {
       msg_id TEXT NOT NULL, emoji TEXT NOT NULL, user_id TEXT NOT NULL,
       PRIMARY KEY (msg_id, emoji, user_id)
     )`
+    // Add reply_to column if upgrading an existing table
+    await db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to TEXT DEFAULT NULL`
   })().catch(e => { dbReady = null; throw e })
   return dbReady
+}
+
+function parseReplyTo(raw) {
+  if (!raw) return null
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return null }
 }
 
 function parseBody(req) {
@@ -85,7 +94,7 @@ module.exports = async function handler(req, res) {
         const db = await getSQL()
         await ensureSchema()
         const rows = await db`
-          SELECT id, author_id, author_name, avatar, color, text, kind, ts
+          SELECT id, author_id, author_name, avatar, color, text, kind, ts, reply_to
           FROM chat_messages WHERE room_code = ${room} AND ts > ${since}
           ORDER BY ts ASC LIMIT 100
         `
@@ -99,7 +108,11 @@ module.exports = async function handler(req, res) {
             if (!rxMap[rx.msg_id][rx.emoji]) rxMap[rx.msg_id][rx.emoji] = []
             rxMap[rx.msg_id][rx.emoji].push(rx.user_id)
           }
-          messages = rows.map(r => ({ ...r, reactions: rxMap[r.id] || {} }))
+          messages = rows.map(r => ({
+            ...r,
+            reactions: rxMap[r.id] || {},
+            reply_to:  parseReplyTo(r.reply_to),
+          }))
         }
         return res.status(200).json({ messages })
       }
@@ -114,12 +127,13 @@ module.exports = async function handler(req, res) {
         const db = await getSQL()
         await ensureSchema()
         await db`INSERT INTO chat_messages
-          (id, room_code, author_id, author_name, avatar, color, text, kind, ts)
+          (id, room_code, author_id, author_name, avatar, color, text, kind, ts, reply_to)
           VALUES (${String(msg.id)}, ${roomCode}, ${msg.authorId},
             ${msg.authorName || 'Player'}, ${msg.avatar || ''}, ${msg.color || ''},
             ${String(msg.text).slice(0, 280)},
             ${msg.kind === 'objection' ? 'objection' : 'taunt'},
-            ${Number(msg.ts) || Date.now()})
+            ${Number(msg.ts) || Date.now()},
+            ${msg.replyTo ? JSON.stringify(msg.replyTo) : null})
           ON CONFLICT (id) DO NOTHING`
       } else {
         memPost(roomCode, msg)
