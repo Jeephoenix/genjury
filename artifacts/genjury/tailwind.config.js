@@ -16,7 +16,7 @@ export default {
         edge: '#12121e',
         neon: '#7fff6e',
         plasma: '#a259ff',
-        signal: '#ff6b35',
+        signal: '#c05b30',
         ice: '#38d9f5',
         gold: '#f5c842',
         crimson: '#a0324b',
