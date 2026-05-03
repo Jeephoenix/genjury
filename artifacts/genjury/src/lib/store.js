@@ -627,12 +627,10 @@ const useGameStore = create((set, get) => ({
       }
 
       const fee = safeBigInt(parsed?.entryFee)
-      set({ roomCode: code, myId: me, activeTab: 'lobby' })
-      rememberJoinedRoom(code)
-      applyContractState(get, parsed)
-      startPolling(get)
 
       if (!alreadyIn) {
+        // Submit the join tx BEFORE navigating so the player list is already
+        // updated on-chain by the time the lobby page starts polling.
         const sym = getChainNativeSymbol()
         await callMethod(
           requireContractAddress(),
@@ -642,6 +640,11 @@ const useGameStore = create((set, get) => ({
           fee > 0n ? `Take seat in ${code} (stake ${formatGen(fee)} ${sym})` : `Take seat in ${code}`,
         )
       }
+
+      rememberJoinedRoom(code)
+      set({ roomCode: code, myId: me, activeTab: 'lobby' })
+      applyContractState(get, parsed)
+      startPolling(get)
       pushToast('success', `You're seated in ${code}`)
       set({ loading: false })
     } catch (e) {

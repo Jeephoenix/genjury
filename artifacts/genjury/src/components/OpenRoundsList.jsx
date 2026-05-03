@@ -12,6 +12,7 @@ import {
   isWalletConnected,
   hasContractAddress,
 } from '../lib/genlayer'
+import { getProfile } from '../lib/profile'
 
 const FINISHED_PHASES = new Set(['scoreboard', 'completed', 'finished'])
 
@@ -161,7 +162,8 @@ export default function OpenRoundsList({
     if (myAlready) {
       enterRoom(room.code)
     } else {
-      joinRoom(room.code)
+      const name = getProfile().name
+      joinRoom(room.code, name)
     }
   }
 
