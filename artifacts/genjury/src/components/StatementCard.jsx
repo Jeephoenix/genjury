@@ -19,7 +19,7 @@ export default function StatementCard({
 
   const borderColor = () => {
     if (revealed && isLie) return '#c05b30'
-    if (revealed)          return selected ? 'rgba(127,255,110,0.3)' : 'rgba(255,255,255,0.07)'
+    if (revealed)          return selected ? 'rgba(61,184,122,0.22)' : 'rgba(255,255,255,0.07)'
     if (selected)          return '#a259ff'
     return 'rgba(255,255,255,0.07)'
   }
@@ -56,7 +56,7 @@ export default function StatementCard({
           className="absolute inset-y-0 left-0 opacity-[0.07] transition-all duration-700"
           style={{
             width:      `${votePercent}%`,
-            background: isLie ? '#c05b30' : '#7fff6e',
+            background: isLie ? '#c05b30' : '#3db87a',
           }}
         />
       )}
