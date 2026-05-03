@@ -96,8 +96,8 @@ export default function TopNav() {
 
           <div className="flex-1" />
 
-          {/* Right cluster */}
-          <div className="flex items-center gap-2">
+          {/* Right cluster — flush right */}
+          <div className="flex items-center">
             <div className="hidden md:block">
               <WalletButton />
             </div>
