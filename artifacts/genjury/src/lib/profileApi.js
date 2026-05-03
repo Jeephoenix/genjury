@@ -1,6 +1,10 @@
 // API client for the persistent player profile registry.
 // The registry is stored server-side, keyed by wallet address.
 // Username claims are one-time and permanent.
+//
+// Graceful degradation: if the API server is unreachable (e.g. frontend
+// deployed without the backend), the check is skipped optimistically and
+// claims fall back to localStorage-only storage so the UI still works.
 
 const BASE = '/api/profile'
 
@@ -17,15 +21,20 @@ export function subscribeProfileApi(fn) {
 }
 
 // Fetch the server profile for a given address.
-// Returns null if not found, or the profile object.
+// Returns null if not found or if the server is unreachable.
 export async function fetchServerProfile(address) {
   if (!address) return null
   const key = address.toLowerCase()
+  let resp
   try {
-    const r = await fetch(`${BASE}/${encodeURIComponent(key)}`)
-    if (r.status === 404) return null
-    if (!r.ok) throw new Error('fetch failed')
-    const data = await r.json()
+    resp = await fetch(`${BASE}/${encodeURIComponent(key)}`)
+  } catch {
+    return null
+  }
+  if (resp.status === 404) return null
+  if (!resp.ok) return null
+  try {
+    const data = await resp.json()
     _cache[key] = data
     notify()
     return data
@@ -34,45 +43,91 @@ export async function fetchServerProfile(address) {
   }
 }
 
-// Check availability of a username. Returns { available, error? }
+// Check availability of a username.
+// Returns { available: true/false, error?: string }.
+// If the server is unreachable or the endpoint doesn't exist, returns
+// { available: true } so the UI doesn't block the user.
 export async function checkUsername(username) {
-  if (!username || username.trim().length < 5) {
+  const trimmed = (username || '').trim()
+  if (trimmed.length < 5) {
     return { available: false, error: 'At least 5 characters required.' }
   }
+  if (!/^[\w\s\-]{5,24}$/.test(trimmed)) {
+    return { available: false, error: 'Letters, numbers, spaces, _ or - only.' }
+  }
+
+  let resp
   try {
-    const r = await fetch(`${BASE}/check?username=${encodeURIComponent(username.trim())}`)
-    if (!r.ok) throw new Error('check failed')
-    return await r.json()
+    resp = await fetch(`${BASE}/check?username=${encodeURIComponent(trimmed)}`)
   } catch {
-    return { available: false, error: 'Could not verify — try again.' }
+    // Network error — server not deployed or unreachable; allow optimistically
+    return { available: true }
+  }
+
+  // Endpoint missing (API server not deployed yet) — skip check
+  if (!resp.ok) return { available: true }
+
+  try {
+    return await resp.json()
+  } catch {
+    return { available: true }
   }
 }
 
 // Claim a permanent identity. Returns { ok, username } or throws.
+// If the server is unreachable, falls back to localStorage-only so the
+// user can still play. Real API errors (e.g. "Username already taken")
+// are always surfaced to the caller.
 export async function claimIdentity(address, username, avatarUrl = '', color = '#a259ff') {
-  const r = await fetch(`${BASE}/claim`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ address: address.toLowerCase(), username: username.trim(), avatarUrl, color }),
-  })
-  const data = await r.json()
-  if (!r.ok) throw new Error(data.error || 'Claim failed.')
   const key = address.toLowerCase()
-  _cache[key] = { address: key, username: data.username, avatarUrl, color }
+  const trimmed = username.trim()
+
+  let resp
+  try {
+    resp = await fetch(`${BASE}/claim`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ address: key, username: trimmed, avatarUrl, color }),
+    })
+  } catch {
+    // Server unreachable — save identity locally only
+    _cache[key] = { address: key, username: trimmed, avatarUrl, color }
+    notify()
+    return { ok: true, username: trimmed, local: true }
+  }
+
+  // Server responded — parse and respect the result
+  let data
+  try { data = await resp.json() } catch { data = {} }
+  if (!resp.ok) throw new Error(data.error || 'Claim failed.')
+
+  _cache[key] = { address: key, username: data.username ?? trimmed, avatarUrl, color }
   notify()
   return data
 }
 
 // Update avatar only (username stays locked forever).
 export async function updateAvatar(address, avatarUrl) {
-  const r = await fetch(`${BASE}/avatar`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ address: address.toLowerCase(), avatarUrl }),
-  })
-  const data = await r.json()
-  if (!r.ok) throw new Error(data.error || 'Update failed.')
   const key = address.toLowerCase()
+
+  let resp
+  try {
+    resp = await fetch(`${BASE}/avatar`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ address: key, avatarUrl }),
+    })
+  } catch {
+    // Server unreachable — update cache only
+    if (_cache[key]) _cache[key] = { ..._cache[key], avatarUrl }
+    notify()
+    return { ok: true, local: true }
+  }
+
+  let data
+  try { data = await resp.json() } catch { data = {} }
+  if (!resp.ok) throw new Error(data.error || 'Update failed.')
+
   if (_cache[key]) _cache[key] = { ..._cache[key], avatarUrl }
   notify()
   return data
