@@ -158,7 +158,7 @@ export default function MistrialPage() {
         <div className="flex items-center justify-center mb-7">
           <div className="relative">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-crimson/[0.09] border border-crimson/25 flex items-center justify-center text-crimson"
-              style={{ boxShadow: '0 0 40px rgba(232,0,45,0.18), inset 0 1px 0 rgba(232,0,45,0.15)' }}>
+              style={{ boxShadow: '0 0 32px rgba(160,50,75,0.12), inset 0 1px 0 rgba(160,50,75,0.10)' }}>
               <MistrialMark className="w-14 h-14 sm:w-16 sm:h-16" />
             </div>
             {/* Animated pulse ring */}
