@@ -171,7 +171,7 @@ export default function ObjectionPhase() {
             </button>
 
             <button
-              className="vote-btn border-signal/35 bg-signal/8 text-signal hover:bg-signal/15 hover:border-signal/55 hover:shadow-[0_0_30px_rgba(255,107,53,0.15)]"
+              className="vote-btn border-signal/35 bg-signal/8 text-signal hover:bg-signal/15 hover:border-signal/55 hover:shadow-[0_0_24px_rgba(192,91,48,0.12)]"
               onClick={() => castObjectionVote(myId, 'overrule')}
             >
               <div className="w-10 h-10 rounded-xl bg-signal/15 border border-signal/30 flex items-center justify-center">
